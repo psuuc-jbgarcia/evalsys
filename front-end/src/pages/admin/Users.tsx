@@ -34,11 +34,58 @@ export default function Users() {
     load();
   };
 
+  const downloadTemplate = () => {
+    const csvContent = "name,email,password,role\nJuan Dela Cruz,juan@example.com,password123,panel\nMaria Clara,maria@example.com,password123,admin";
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = "user_import_template.csv";
+    link.click();
+  };
+
+  const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const text = event.target?.result as string;
+      const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+      
+      // Skip header
+      const data = lines.slice(1).map(line => {
+        const [name, email, password, role] = line.split(',').map(s => s.trim());
+        return { name, email, password, role };
+      });
+
+      try {
+        const res = await api.post('/users/bulk', { users: data });
+        alert(`Import Complete!\nCreated: ${res.data.created}\nSkipped: ${res.data.skipped}`);
+        load();
+      } catch (err: any) {
+        alert(err.response?.data?.message || 'Error during bulk import');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = ''; // Reset input
+  };
+
   return (
     <div>
-      <div className="mb-6">
-        <h2 className="evl-page-title">Panel Accounts</h2>
-        <p className="evl-page-subtitle">Create and manage evaluator panel accounts.</p>
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h2 className="evl-page-title">Panel Accounts</h2>
+          <p className="evl-page-subtitle">Create and manage evaluator panel accounts.</p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={downloadTemplate} className="evl-btn-secondary !text-xs !py-1.5">
+            Download Template
+          </button>
+          <label className="evl-btn-primary !text-xs !py-1.5 cursor-pointer">
+            Bulk Import (CSV)
+            <input type="file" accept=".csv" onChange={handleBulkUpload} className="hidden" />
+          </label>
+        </div>
       </div>
 
       {/* Add form */}
@@ -105,6 +152,15 @@ export default function Users() {
                     <button onClick={() => handleToggle(u._id)}
                       className="evl-btn-ghost text-primary hover:bg-primary/5">
                       {u.isActive ? 'Block' : 'Unblock'}
+                    </button>
+                    <button onClick={async () => {
+                      const pass = prompt('Enter new password for ' + u.name);
+                      if (!pass) return;
+                      await api.patch(`/users/${u._id}/reset-password`, { newPassword: pass });
+                      alert('Password updated!');
+                    }}
+                      className="evl-btn-ghost text-primary hover:bg-primary/5">
+                      Reset
                     </button>
                     <button onClick={() => handleDelete(u._id)}
                       className="evl-btn-ghost text-danger hover:text-danger hover:bg-danger/5">

@@ -67,10 +67,19 @@ export default function Login() {
                 placeholder="••••••••"
               />
             </div>
+            <div className="flex justify-end mt-2">
+              <button 
+                type="button" 
+                onClick={() => alert('Please contact the System Administrator to reset your password.')}
+                className="text-xs text-primary font-bold hover:underline"
+              >
+                Forgot password?
+              </button>
+            </div>
             <button
               type="submit"
               disabled={loading}
-              className="evl-btn-primary w-full py-3"
+              className="evl-btn-primary w-full py-3 mt-4"
             >
               {loading ? (
                 <span className="flex items-center gap-2">

@@ -9,6 +9,7 @@ interface GroupResult {
   evaluatedBy?: string[];
   missingPanels?: string[];
   isIncomplete?: boolean;
+  comments?: { panel: string; text: string }[];
 }
 
 const LABELS: Record<string, string> = {
@@ -43,6 +44,7 @@ export default function Results() {
   const [sections, setSections] = useState<Section[]>([]);
   const [selected, setSelected] = useState<Section | null>(null);
   const [results, setResults] = useState<GroupResult[]>([]);
+  const [viewFeedback, setViewFeedback] = useState<{ group: string, items: { panel: string, text: string }[] } | null>(null);
 
   useEffect(() => { api.get('/sections').then((r) => setSections(r.data)); }, []);
 
@@ -55,7 +57,7 @@ export default function Results() {
   const downloadCSV = () => {
     if (!selected || !results.length) return;
 
-    const headers = ['Group', 'Members', ...Object.values(LABELS), 'Final Total', 'Evaluated By', 'Missing Panels'];
+    const headers = ['Group', 'Members', ...Object.values(LABELS), 'Final Total', 'Evaluated By', 'Missing Panels', 'Comments'];
     const rows = results.map((r) => [
       r.group.name,
       r.group.members.join('; '),
@@ -65,6 +67,7 @@ export default function Results() {
       r.finalTotal !== null ? r.finalTotal.toFixed(2) : 'Pending',
       r.evaluatedBy?.join('; ') ?? '',
       r.missingPanels?.join('; ') ?? '',
+      r.comments?.map(c => `[${c.panel}]: ${c.text}`).join(' | ') ?? '',
     ]);
 
     const csvContent = [
@@ -130,20 +133,30 @@ export default function Results() {
                 </tr>
               </thead>
               <tbody>
-                {results.map(({ group, averaged, finalTotal, evaluatedBy, missingPanels, isIncomplete }) => (
+                {results.map(({ group, averaged, finalTotal, evaluatedBy, missingPanels, isIncomplete, comments }) => (
                   <tr key={group._id}>
                     <td className="whitespace-nowrap">
-                      <p className="font-semibold text-text">{group.name}</p>
-                      {evaluatedBy && evaluatedBy.length > 0 && (
-                        <p className="text-[10px] text-success/80 font-semibold tracking-wide uppercase mt-1">
-                          Eval by: {evaluatedBy.join(', ')}
-                        </p>
-                      )}
-                      {isIncomplete && missingPanels && missingPanels.length > 0 && (
-                        <p className="text-[10px] text-danger font-bold tracking-wide uppercase mt-0.5">
-                          Missing: {missingPanels.join(', ')}
-                        </p>
-                      )}
+                      <div className="flex flex-col">
+                        <p className="font-semibold text-text">{group.name}</p>
+                        {evaluatedBy && evaluatedBy.length > 0 && (
+                          <p className="text-[10px] text-success/80 font-semibold tracking-wide uppercase mt-1">
+                            Eval by: {evaluatedBy.join(', ')}
+                          </p>
+                        )}
+                        {isIncomplete && missingPanels && missingPanels.length > 0 && (
+                          <p className="text-[10px] text-danger font-bold tracking-wide uppercase mt-0.5">
+                            Missing: {missingPanels.join(', ')}
+                          </p>
+                        )}
+                        {comments && comments.length > 0 && (
+                          <button 
+                            onClick={() => setViewFeedback({ group: group.name, items: comments })}
+                            className="text-[9px] font-bold text-primary uppercase text-left mt-2 hover:underline"
+                          >
+                            👁 View {comments.length} Comments
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td className="text-text/50 text-xs max-w-[200px]">{group.members.join(', ') || '—'}</td>
                     {Object.keys(LABELS).map((k) => (
@@ -163,6 +176,32 @@ export default function Results() {
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+      {/* Feedback modal */}
+      {viewFeedback && (
+        <div className="fixed inset-0 bg-dark/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-surface w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="px-6 py-4 border-b border-muted/30 flex justify-between items-center bg-bg">
+              <h3 className="font-bold text-text">Feedback for {viewFeedback.group}</h3>
+              <button onClick={() => setViewFeedback(null)} className="text-text/40 hover:text-text text-xl">×</button>
+            </div>
+            <div className="p-6 max-h-[70vh] overflow-y-auto space-y-4">
+              {viewFeedback.items.map((item, i) => (
+                <div key={i} className="bg-bg p-4 rounded-xl border border-muted/20">
+                  <p className="text-[10px] font-extrabold text-primary uppercase tracking-widest mb-1">
+                    Panel: {item.panel}
+                  </p>
+                  <p className="text-text/80 text-sm italic leading-relaxed">
+                    "{item.text}"
+                  </p>
+                </div>
+              ))}
+            </div>
+            <div className="px-6 py-4 bg-bg border-t border-muted/30 flex justify-end">
+              <button onClick={() => setViewFeedback(null)} className="evl-btn-secondary !py-1.5 !text-xs">Close</button>
+            </div>
           </div>
         </div>
       )}

@@ -46,29 +46,34 @@ export default function ScoreInput({ label, max, value, onChange, levels }: Prop
               const [min] = l.range.split('–').map(Number);
               onChange(min);
             }}
-            className={`text-[11px] px-3 py-1.5 rounded-lg border font-semibold transition-all duration-150 ${l.color} border-transparent hover:opacity-80`}
+            className={`flex-1 min-w-[80px] text-[10px] sm:text-[11px] px-2 sm:px-3 py-2 sm:py-1.5 rounded-lg border font-bold transition-all duration-150 ${l.color} border-transparent hover:scale-105 active:scale-95`}
           >
-            {l.label} ({l.range})
+            {l.label}
           </button>
         ))}
       </div>
 
       {level?.description && (
-        <p className="text-xs text-text/50 mb-3 leading-relaxed">{level.description}</p>
+        <div className="mb-4 p-3 bg-muted/20 rounded-lg">
+          <p className="text-[11px] text-text/60 leading-relaxed italic">{level.description}</p>
+        </div>
       )}
 
-      <input
-        type="number"
-        min={0}
-        max={max}
-        value={value}
-        onChange={(e) => {
-          const v = Math.min(Math.max(Math.round(Number(e.target.value)), 0), max);
-          onChange(v);
-        }}
-        className="evl-input"
-        placeholder={`0 – ${max}`}
-      />
+      <div className="relative group">
+        <input
+          type="number"
+          min={0}
+          max={max}
+          value={value}
+          onChange={(e) => {
+            const v = Math.min(Math.max(Math.round(Number(e.target.value)), 0), max);
+            onChange(v);
+          }}
+          className="evl-input !py-3 !text-lg font-bold text-center"
+          placeholder={`Score (0 – ${max})`}
+        />
+        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-text/20 group-focus-within:text-primary/40">/ {max}</span>
+      </div>
     </div>
   );
 }
