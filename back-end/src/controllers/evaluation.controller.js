@@ -26,7 +26,7 @@ exports.submitEvaluation = async (req, res) => {
 
   const evaluation = await Evaluation.findOneAndUpdate(
     { group: groupId, panel: req.user._id },
-    { scores, rubric: rubricId, isSubmitted: true },
+    { scores, rubric: rubricId, comments: req.body.comments || '', isSubmitted: true },
     { new: true, upsert: true, runValidators: true }
   );
 
@@ -89,7 +89,12 @@ exports.getGroupResult = async (req, res) => {
     Object.values(averaged).reduce((a, b) => a + b, 0) * 100
   ) / 100;
 
-  res.json({ evaluations, averaged, finalTotal });
+  const comments = evaluations.map(ev => ({
+    panel: ev.panel?.name || 'Unknown',
+    text: ev.comments || ''
+  })).filter(c => c.text);
+
+  res.json({ evaluations, averaged, finalTotal, comments });
 };
 
 // Admin: get results for all groups in a section
@@ -101,7 +106,7 @@ exports.getSectionResults = async (req, res) => {
         group: group._id,
         isSubmitted: true,
       }).populate('panel', 'name email');
-      
+
       if (!evaluations.length) return { group, averaged: null, finalTotal: null };
 
       // Get the group to find the correct divisor (number of panels assigned to the block)
@@ -110,7 +115,7 @@ exports.getSectionResults = async (req, res) => {
       const groupDoc = await Group.findById(group._id)
         .populate({ path: 'section', populate: { path: 'assignedPanels', select: 'name email' } })
         .populate('assignedPanels', 'name email');
-        
+
       if (groupDoc) {
         if (groupDoc.section && groupDoc.section.assignedPanels && groupDoc.section.assignedPanels.length > 0) {
           assignedPanelDocs = groupDoc.section.assignedPanels;
@@ -127,7 +132,7 @@ exports.getSectionResults = async (req, res) => {
       const missingPanels = assignedPanelDocs
         .filter(p => p && !evaluatedPanelIds.includes(p._id.toString()))
         .map(p => p.name || 'Unknown');
-      
+
       const isIncomplete = missingPanels.length > 0;
 
       const averaged = {};
@@ -151,7 +156,12 @@ exports.getSectionResults = async (req, res) => {
 
       const finalTotal = Math.round(Object.values(averaged).reduce((a, b) => a + b, 0) * 100) / 100;
       const evaluatedBy = evaluations.map(ev => ev.panel?.name || 'Unknown');
-      return { group, averaged, finalTotal, evaluatedBy, missingPanels, isIncomplete };
+      const comments = evaluations.map(ev => ({
+        panel: ev.panel?.name || 'Unknown',
+        text: ev.comments || ''
+      })).filter(c => c.text);
+
+      return { group, averaged, finalTotal, evaluatedBy, missingPanels, isIncomplete, comments };
     })
   );
   res.json(results);

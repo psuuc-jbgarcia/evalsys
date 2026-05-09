@@ -8,6 +8,56 @@ exports.createGroup = async (req, res) => {
   res.status(201).json(group);
 };
 
+// Bulk create groups (for CSV import)
+exports.bulkCreateGroups = async (req, res) => {
+  const { groups } = req.body;
+  if (!Array.isArray(groups)) return res.status(400).json({ message: 'Groups array required' });
+
+  const results = { created: 0, skipped: 0, errors: [] };
+
+  // Cache sections for performance
+  const sectionMap = {};
+  const allSections = await Section.find();
+  allSections.forEach(s => {
+    sectionMap[s.block.toLowerCase()] = s._id;
+  });
+
+  for (const g of groups) {
+    try {
+      const { name, block, members } = g;
+      if (!name || !block) {
+        results.skipped++;
+        continue;
+      }
+
+      const sectionId = sectionMap[block.toLowerCase()];
+      if (!sectionId) {
+        results.errors.push(`Section block "${block}" not found for group "${name}"`);
+        results.skipped++;
+        continue;
+      }
+
+      // Check if group already exists in that section
+      const exists = await Group.findOne({ name, section: sectionId });
+      if (exists) {
+        results.skipped++;
+        continue;
+      }
+
+      await Group.create({
+        name,
+        section: sectionId,
+        members: members ? members.split(';').map(m => m.trim()) : []
+      });
+      results.created++;
+    } catch (err) {
+      results.errors.push(err.message);
+    }
+  }
+
+  res.json(results);
+};
+
 exports.getGroups = async (req, res) => {
   const filter = req.query.section ? { section: req.query.section } : {};
 
@@ -30,6 +80,12 @@ exports.getGroups = async (req, res) => {
     const strSectionIds = sectionIds.map(id => id.toString());
     const panelIdStr = req.user._id.toString();
 
+    const evaluations = await require('../models/Evaluation').find({
+      panel: req.user._id,
+      isSubmitted: true
+    }).select('group');
+    const gradedGroupIds = evaluations.map(ev => ev.group.toString());
+
     const groups = allGroups.filter(g => {
       const gSecId = g.section ? g.section._id.toString() : null;
       const isInSection = gSecId && strSectionIds.includes(gSecId);
@@ -38,6 +94,10 @@ exports.getGroups = async (req, res) => {
       const isAssignedDirectly = gPanels.some(p => (p._id || p).toString() === panelIdStr);
       
       return isInSection || isAssignedDirectly;
+    }).map(g => {
+      const gObj = g.toObject();
+      gObj.isGraded = gradedGroupIds.includes(g._id.toString());
+      return gObj;
     });
       
     console.log(`Returning ${groups.length} groups to panel.`);

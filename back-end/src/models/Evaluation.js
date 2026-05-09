@@ -10,6 +10,7 @@ const evaluationSchema = new mongoose.Schema({
     required: true,
   },
   total: { type: Number }, // auto-computed
+  comments: { type: String, default: '' },
   isSubmitted: { type: Boolean, default: false },
 }, { timestamps: true });
 
