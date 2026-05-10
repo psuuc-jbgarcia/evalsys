@@ -37,7 +37,13 @@ export default function RegisterGroup() {
     setError('');
     
     try {
-      const members = form.members.split(',').map(m => m.trim()).filter(Boolean);
+      let members = form.members.split(',').map(m => m.trim()).filter(Boolean);
+      
+      // If individual, put the group name (which is the student name) into members list
+      if (form.members.trim().toUpperCase() === 'N/A') {
+        members = [form.name.trim()];
+      }
+
       await api.post('/groups/register', { ...form, members });
       setSuccess(true);
     } catch (err: any) {
@@ -82,11 +88,11 @@ export default function RegisterGroup() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label className="evl-label block mb-1">
-                Group Name / Name / Group Number
+                Group Name / Student Name
               </label>
               <div className="mb-2">
                 <span className="text-[11px] font-bold text-danger bg-danger/5 px-2 py-1 rounded border border-danger/20 inline-block">
-                  Note: Put <span className="underline">N/A</span> if Individual Student
+                  Note: Put your <span className="underline">Full Name</span> if Individual (No Group)
                 </span>
               </div>
               <input 
@@ -94,7 +100,7 @@ export default function RegisterGroup() {
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 required
                 className="evl-input !py-3 !text-lg font-bold"
-                placeholder="e.g. Group Omega or N/A" 
+                placeholder="e.g. Group Omega or Juan Dela Cruz" 
               />
             </div>
 
@@ -117,7 +123,7 @@ export default function RegisterGroup() {
               <label className="evl-label block mb-1">Members (Names)</label>
               <div className="mb-2">
                 <span className="text-[11px] font-bold text-danger bg-danger/5 px-2 py-1 rounded border border-danger/20 inline-block">
-                  Note: Separate names with <span className="underline">commas</span> (e.g. Juan, Maria)
+                  Note: Put <span className="underline">N/A</span> if Individual. For groups, separate with <span className="underline">commas</span>.
                 </span>
               </div>
               <textarea 
@@ -126,7 +132,7 @@ export default function RegisterGroup() {
                 required
                 rows={3}
                 className="evl-input !py-3 resize-none"
-                placeholder="Juan Dela Cruz, Maria Clara, etc." 
+                placeholder="Juan Dela Cruz, Maria Clara, or N/A" 
               />
             </div>
 
