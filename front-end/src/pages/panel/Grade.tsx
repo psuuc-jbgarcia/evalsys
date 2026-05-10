@@ -269,12 +269,12 @@ export default function Grade() {
                 {visibleGroups.length > 0 ? (
                   visibleGroups.map((g) => (
                     <button key={g._id} onClick={() => selectGroup(g)}
-                      className={`text-left px-4 py-3 rounded-lg transition-all duration-150 border ${
+                      className={`text-left px-4 py-3 rounded-lg transition-all duration-150 border min-w-0 w-full ${
                         selectedGroup?._id === g._id
                           ? 'bg-primary text-white border-primary shadow-sm shadow-primary/20'
                           : 'bg-surface text-text/70 hover:text-text hover:border-primary/30 border-muted/30'
                       }`}>
-                      <p className="font-bold text-sm leading-tight">{g.name}</p>
+                      <p className="font-bold text-sm leading-tight truncate">{g.name}</p>
                       <p className={`text-[11px] mt-1 truncate ${selectedGroup?._id === g._id ? 'text-white/70' : 'text-text/40'}`}>
                         {g.members.length ? g.members.join(', ') : 'No members'}
                       </p>

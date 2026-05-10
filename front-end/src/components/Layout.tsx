@@ -62,7 +62,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           ${collapsed ? 'lg:w-[68px]' : 'lg:w-60'} 
           ${mobileOpen ? 'translate-x-0 w-64' : '-translate-x-full w-64'}
           lg:translate-x-0 lg:flex
-          fixed lg:static top-0 bottom-0 left-0
+          fixed lg:sticky top-0 h-screen left-0
           bg-dark flex flex-col shrink-0 transition-all duration-200 z-50
         `}
       >
