@@ -102,7 +102,7 @@ export default function Results() {
                 ? 'bg-primary text-white border-primary'
                 : 'border-muted text-text/50 bg-surface hover:text-text hover:border-text/20'
             }`}>
-            {s.name} — {s.block}
+            {s.name === s.block ? s.block : `${s.name} — ${s.block}`}
           </button>
         ))}
         {!sections.length && <p className="text-text/50 text-sm">No sections available.</p>}
@@ -112,7 +112,9 @@ export default function Results() {
       {selected && (
         <div className="evl-card overflow-hidden">
           <div className="px-6 py-4 border-b border-muted/40 flex justify-between items-center">
-            <h3 className="text-text font-bold text-sm">{selected.name} — {selected.block}</h3>
+            <h3 className="text-text font-bold text-sm">
+              {selected.name === selected.block ? selected.block : `${selected.name} — ${selected.block}`}
+            </h3>
             <button
               onClick={downloadCSV}
               className="evl-btn-primary !py-1.5 !text-xs flex items-center gap-2"

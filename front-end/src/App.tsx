@@ -10,6 +10,7 @@ import Results from './pages/admin/Results';
 import Rubrics from './pages/admin/Rubrics';
 import AssignPanels from './pages/admin/AssignPanels';
 import Grade from './pages/panel/Grade';
+import RegisterGroup from './pages/RegisterGroup';
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<RegisterGroup />} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
 
           {/* Admin routes */}

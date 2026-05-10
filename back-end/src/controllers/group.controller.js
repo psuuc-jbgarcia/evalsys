@@ -4,6 +4,13 @@ const Section = require('../models/Section');
 exports.createGroup = async (req, res) => {
   const { name, section, members, assignedPanels } = req.body;
   if (!name || !section) return res.status(400).json({ message: 'Name and section required' });
+  
+  // Check for duplication in the same section
+  const existing = await Group.findOne({ name: { $regex: new RegExp(`^${name}$`, 'i') }, section });
+  if (existing) {
+    return res.status(400).json({ message: `A group with the name "${name}" already exists in this block.` });
+  }
+
   const group = await Group.create({ name, section, members: members || [], assignedPanels: assignedPanels || [] });
   res.status(201).json(group);
 };
@@ -120,6 +127,24 @@ exports.getGroup = async (req, res) => {
 };
 
 exports.updateGroup = async (req, res) => {
+  const { name, section } = req.body;
+  
+  if (name || section) {
+    const current = await Group.findById(req.params.id);
+    const checkName = name || current.name;
+    const checkSection = section || current.section;
+    
+    const existing = await Group.findOne({ 
+      _id: { $ne: req.params.id }, 
+      name: { $regex: new RegExp(`^${checkName}$`, 'i') }, 
+      section: checkSection 
+    });
+    
+    if (existing) {
+      return res.status(400).json({ message: `Another group with the name "${checkName}" already exists in this block.` });
+    }
+  }
+
   const group = await Group.findByIdAndUpdate(req.params.id, req.body, { new: true });
   if (!group) return res.status(404).json({ message: 'Group not found' });
   res.json(group);

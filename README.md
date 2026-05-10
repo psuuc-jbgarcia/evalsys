@@ -4,18 +4,20 @@ EvalSys is a modern, block-based automated rubric evaluation platform designed t
 
 ## 🚀 Key Features
 
+- **Student Self-Registration**: Public registration page with data privacy agreement for student self-enrollment.
 - **Block-Based Architecture**: Organize groups into specific "Blocks" (e.g., 21-ITE-04) for easier management.
 - **Panel-to-Block Assignment**: Assign panel judges to entire blocks in bulk rather than individual groups.
-- **Bulk CSV/Excel Import**: Rapidly populate the system with 100+ groups or panel accounts using simple CSV templates that open in Excel.
-- **Dynamic Rubric System**: Create custom rubrics with multiple criteria and dynamic weightings. Panels can select the specific rubric they want to use for each group.
-- **Qualitative Feedback System**: Panels can leave constructive text-based comments alongside numerical scores, which are automatically included in the final results and exports.
-- **Global Grading Lock**: Admins can instantly "freeze" all grading across the entire platform with a single toggle, preventing any changes once an event is over.
-- **Smart Result Computation**: Scores are automatically averaged based on the number of panel judges assigned to a block, ensuring fairness even if a judge hasn't submitted yet.
-- **Panel Completion Tracking**: Judges see a live "checklist" view on their dashboard with green checkmarks and status badges indicating which groups are graded vs. pending.
-- **Submission Review & Safety**: A built-in confirmation system reviews scores and warns judges of incomplete criteria before final submission to prevent errors.
-- **Auto-Save & Offline Backup**: Active grading sessions are auto-saved locally. Judges can even generate a print-ready offline backup if internet connection is lost during a presentation.
-- **Export to CSV**: Download professional evaluation results as CSV files including final scores, member lists, and all panel feedback.
-- **Premium UI/UX**: A sleek, responsive dashboard built with a modern dark/light aesthetic, micro-animations, and tabbed navigation for high-volume data management.
+- **Admin Group Management**: Edit existing group details, names, and member lists directly from the dashboard.
+- **Bulk CSV/Excel Import**: Rapidly populate the system with 100+ groups or panel accounts using simple CSV templates.
+- **Dynamic Rubric System**: Create custom rubrics with multiple criteria and dynamic weightings.
+- **Master Export & Maintenance**: Download a global CSV of ALL results and perform a "Master Reset" while preserving accounts.
+- **Qualitative Feedback System**: Panels can leave constructive text-based comments alongside numerical scores.
+- **Global Grading Lock**: Admins can instantly "freeze" all grading across the entire platform.
+- **Smart Result Computation**: Scores are automatically averaged based on assigned panels, ensuring fairness.
+- **Panel Completion Tracking**: Live checklist view with green checkmarks and status badges for judges.
+- **Submission Review & Safety**: Built-in confirmation system to prevent incomplete or erroneous submissions.
+- **Auto-Save & Offline Backup**: Active grading sessions are auto-saved; supports print-ready offline backups.
+- **Premium UI/UX**: Responsive dashboard with dark/light aesthetics, micro-animations, and tabbed navigation.
 
 ## 🛠 Tech Stack
 

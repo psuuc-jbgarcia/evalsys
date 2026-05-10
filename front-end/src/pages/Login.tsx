@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
@@ -91,6 +91,16 @@ export default function Login() {
               )}
             </button>
           </form>
+        </div>
+        <div className="mt-8 text-center">
+          <p className="text-text/40 text-xs mb-3 font-medium tracking-wide uppercase">Are you a student?</p>
+          <Link to="/register" className="evl-btn-secondary w-full py-3 inline-block">
+            Register your Group →
+          </Link>
+        </div>
+        <div className="mt-8 text-center border-t border-muted/20 pt-8">
+          <p className="text-text/20 text-[10px] font-bold uppercase tracking-widest mb-1">Developed & Maintained by</p>
+          <p className="text-text/40 text-sm font-black tracking-tight">Jerico B. Garcia</p>
         </div>
       </div>
     </div>

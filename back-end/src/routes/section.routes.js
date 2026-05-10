@@ -8,6 +8,8 @@ const {
 } = require('../controllers/section.controller');
 const { protect, adminOnly } = require('../middleware/auth.middleware');
 
+router.get('/public', getSections); // Allow public to see blocks for registration
+
 router.use(protect);
 
 router.get('/', getSections);

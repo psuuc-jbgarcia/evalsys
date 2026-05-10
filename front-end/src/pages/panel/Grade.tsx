@@ -32,6 +32,8 @@ export default function Grade() {
   const [error, setError] = useState('');
 
   const [sections, setSections] = useState<Section[]>([]);
+  const [gradingLocked, setGradingLocked] = useState(false);
+
   const [searchParams] = useSearchParams();
   const urlGroupId = searchParams.get('groupId');
 
@@ -66,6 +68,10 @@ export default function Grade() {
           if (sId) setSelectedSidebarSectionId(sId);
         }
       }
+    });
+
+    api.get('/settings').then((r) => {
+      setGradingLocked(r.data.isGradingLocked);
     });
   }, []);
 
@@ -379,6 +385,16 @@ export default function Grade() {
             )}
             {success && <div className="evl-alert-success mb-4">{success}</div>}
             {error && <div className="evl-alert-error mb-4">{error}</div>}
+            
+            {gradingLocked && (
+              <div className="evl-alert-error bg-danger/5 border border-danger/20 text-danger mb-6 flex items-center gap-3">
+                <span className="text-xl">🔒</span>
+                <div>
+                  <p className="font-bold">Grading is Locked</p>
+                  <p className="text-sm opacity-80">An administrator has temporarily disabled grading submissions. You can still view or prepare scores, but saving is disabled.</p>
+                </div>
+              </div>
+            )}
 
             {/* Score inputs */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-6">
@@ -414,7 +430,11 @@ export default function Grade() {
               />
             </div>
 
-            <button type="submit" className="evl-btn-primary px-8 py-3">
+            <button 
+              type="submit" 
+              disabled={gradingLocked}
+              className={`evl-btn-primary px-8 py-3 ${gradingLocked ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
+            >
               {existing ? 'Update Scores & Feedback' : 'Submit Scores & Feedback'}
             </button>
           </form>

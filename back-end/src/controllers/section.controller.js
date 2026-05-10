@@ -9,7 +9,7 @@ exports.createSection = async (req, res) => {
 
 exports.getSections = async (req, res) => {
   let filter = {};
-  if (req.user.role === 'panel') {
+  if (req.user && req.user.role === 'panel') {
     filter = { assignedPanels: req.user._id };
   }
   

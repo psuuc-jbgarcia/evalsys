@@ -2,6 +2,8 @@ const router = require('express').Router();
 const { createGroup, getGroups, getGroup, updateGroup, deleteGroup, bulkCreateGroups } = require('../controllers/group.controller');
 const { protect, adminOnly } = require('../middleware/auth.middleware');
 
+router.post('/register', createGroup); // Reuse createGroup logic for registration
+
 router.use(protect);
 router.get('/', getGroups);
 router.get('/:id', getGroup);

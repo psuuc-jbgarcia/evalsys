@@ -97,6 +97,71 @@ function AdminDashboard({ name }: { name: string }) {
           </Link>
         ))}
       </div>
+
+      {/* System Maintenance Section */}
+      <div className="mt-12 pt-8 border-t border-muted/30">
+        <div className="mb-6">
+          <h3 className="text-text font-black text-lg tracking-tight">System Maintenance</h3>
+          <p className="text-text/50 text-sm italic">Archive data or reset the system for a new event.</p>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {/* Archive Card */}
+          <div className="evl-card p-6 border-primary/20 bg-primary/5">
+            <h4 className="text-primary font-bold text-sm mb-2 uppercase tracking-widest">1. Archive & Backup</h4>
+            <p className="text-text/60 text-xs mb-6 leading-relaxed">
+              Download a master report containing ALL group results, scores, and comments from ALL blocks. 
+              Always do this before a Master Reset.
+            </p>
+            <button 
+              onClick={async () => {
+                const res = await api.get('/evaluations/export-all');
+                const csvContent = "data:text/csv;charset=utf-8," 
+                  + ["Section,GroupName,Members,AverageScore,EvaluatedBy,Comments", 
+                     ...res.data.map((r: any) => `${r.Section},${r.GroupName},"${r.Members}",${r.AverageScore},"${r.EvaluatedBy}","${r.Comments}"`)
+                    ].join("\n");
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `Master_Results_Backup_${new Date().toLocaleDateString()}.csv`);
+                document.body.appendChild(link);
+                link.click();
+              }}
+              className="evl-btn-primary w-full py-3"
+            >
+              Download Master Results (CSV)
+            </button>
+          </div>
+
+          {/* Reset Card */}
+          <div className="evl-card p-6 border-danger/20 bg-danger/5">
+            <h4 className="text-danger font-bold text-sm mb-2 uppercase tracking-widest">2. Master Reset System</h4>
+            <p className="text-text/60 text-xs mb-6 leading-relaxed">
+              Wipe all Evaluations, Groups, and Blocks. 
+              <span className="font-bold text-danger"> This action cannot be undone.</span> Admin and Panel accounts will be preserved.
+            </p>
+            <button 
+              onClick={async () => {
+                const confirmText = window.prompt("To proceed, type 'RESET' in all caps:");
+                if (confirmText === 'RESET') {
+                  try {
+                    await api.post('/evaluations/master-reset', { confirmText });
+                    alert('System reset successful. All event data has been cleared.');
+                    window.location.reload();
+                  } catch (err: any) {
+                    alert(err.response?.data?.message || 'Reset failed');
+                  }
+                } else if (confirmText !== null) {
+                  alert('Invalid confirmation. Reset cancelled.');
+                }
+              }}
+              className="evl-btn-secondary !bg-danger !text-white !border-danger w-full py-3 hover:opacity-90"
+            >
+              Wipe All Event Data
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -107,18 +172,22 @@ function PanelDashboard({ name }: { name: string }) {
   const [sections, setSections] = useState<Section[]>([]);
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [locked, setLocked] = useState(false);
+
 
   useEffect(() => {
     Promise.all([
       api.get('/sections'),
-      api.get('/groups')
-    ]).then(([secRes, grpRes]) => {
+      api.get('/groups'),
+      api.get('/settings')
+    ]).then(([secRes, grpRes, setRes]) => {
       const fetchedSections = secRes.data;
       setSections(fetchedSections);
       if (fetchedSections.length > 0) {
         setSelectedSection(fetchedSections[0]._id);
       }
       setGroups(grpRes.data);
+      setLocked(setRes.data.isGradingLocked);
     })
     .catch((err) => console.error(err))
     .finally(() => setLoading(false));
@@ -138,6 +207,11 @@ function PanelDashboard({ name }: { name: string }) {
         <p className="evl-page-subtitle">
           Select a block below and grade the groups assigned to you.
         </p>
+        {locked && (
+          <div className="mt-4 p-3 bg-danger/10 border border-danger/20 rounded-lg flex items-center gap-2 text-danger text-sm font-bold">
+            <span>🔒 GRADING IS CURRENTLY LOCKED</span>
+          </div>
+        )}
       </div>
 
       {loading ? (
