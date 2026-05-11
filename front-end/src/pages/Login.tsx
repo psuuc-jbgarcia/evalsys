@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import api from '../services/api';
 
 export default function Login() {
   const { login } = useAuth();
@@ -9,6 +10,22 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const [isWakingUp, setIsWakingUp] = useState(false);
+
+  useEffect(() => {
+    const wakeServer = async () => {
+      try {
+        setIsWakingUp(true);
+        await api.get('/health');
+      } catch (err) {
+        console.error('Server wake up failed', err);
+      } finally {
+        setIsWakingUp(false);
+      }
+    };
+    wakeServer();
+  }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -40,6 +57,13 @@ export default function Login() {
         <div className="evl-card p-8">
           {error && (
             <div className="evl-alert-error mb-5 text-center">{error}</div>
+          )}
+          
+          {isWakingUp && !error && (
+            <div className="bg-primary/10 text-primary text-[11px] font-bold py-2 px-3 rounded-lg mb-5 text-center flex items-center justify-center gap-2 animate-pulse">
+              <span className="w-2 h-2 bg-primary rounded-full animate-bounce" />
+              Initializing system… (Server is waking up)
+            </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">

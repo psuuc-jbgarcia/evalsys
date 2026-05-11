@@ -12,11 +12,20 @@ export default function RegisterGroup() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
 
+  const [isWakingUp, setIsWakingUp] = useState(false);
+
   useEffect(() => {
     // Fetch sections from the new public endpoint
+    setIsWakingUp(true);
     api.get('/sections/public') 
-      .then((res) => setSections(res.data))
-      .catch(() => setError('Failed to load sections. Please try again later.'));
+      .then((res) => {
+        setSections(res.data);
+        setIsWakingUp(false);
+      })
+      .catch(() => {
+        setError('Failed to load sections. Please try again later.');
+        setIsWakingUp(false);
+      });
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -150,6 +159,13 @@ export default function RegisterGroup() {
                 </span>
               </label>
             </div>
+
+            {isWakingUp && !error && (
+              <div className="bg-primary/10 text-primary text-[11px] font-bold py-2 px-3 rounded-lg mb-5 text-center flex items-center justify-center gap-2 animate-pulse">
+                <span className="w-2 h-2 bg-primary rounded-full animate-bounce" />
+                Initializing system… (Server is waking up)
+              </div>
+            )}
 
             {error && (
               <div className="evl-alert-error text-xs py-3">

@@ -18,6 +18,29 @@ EvalSys is a modern, block-based automated rubric evaluation platform designed t
 - **Submission Review & Safety**: Built-in confirmation system to prevent incomplete or erroneous submissions.
 - **Auto-Save & Offline Backup**: Active grading sessions are auto-saved; supports print-ready offline backups.
 - **Premium UI/UX**: Responsive dashboard with dark/light aesthetics, micro-animations, and tabbed navigation.
+- **Premium UI/UX**: Responsive dashboard with dark/light aesthetics, micro-animations, and tabbed navigation.
+
+## 🚀 System Performance & Optimization
+
+To ensure a smooth experience on free-tier hosting (like Render and MongoDB Atlas), the following optimizations have been implemented:
+
+### 1. Cold Start Mitigation
+Free-tier instances on Render "sleep" after 15 minutes of inactivity. To fix the 30-second login delay:
+- **Pre-emptive Wake-up**: The frontend (Login and Registration pages) sends a "wake-up" ping to `/api/health` the moment the user lands on the page.
+- **Visual Status**: A pulse animation with the message *"Initializing system… (Server is waking up)"* provides immediate feedback during the cold start.
+
+### 2. Database Connection Pooling
+In `back-end/src/config/db.js`, the connection is optimized for rapid recovery:
+- `maxPoolSize: 10`: Reuses database connections to handle concurrent logins faster.
+- `family: 4`: Forces IPv4 to skip DNS resolution delays (common on some networks).
+- `serverSelectionTimeoutMS: 5000`: Ensures the app doesn't hang if the DB is also waking up.
+
+### 3. Recommended Keep-Alive (Cron Job)
+To keep the server awake 24/7, set up a free cron job at [Cron-job.org](https://cron-job.org/):
+- **Name**: EvalSys Keep-Alive
+- **URL**: `https://<your-backend-url>.onrender.com/api/health`
+- **Schedule**: Every 10 or 14 minutes.
+- **Note**: Replace `<your-backend-url>` with your actual Render service URL (e.g., `evalsys-api.onrender.com`).
 
 ## 🛠 Tech Stack
 
