@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../../services/api';
+import { TableSkeleton } from '../../components/LoadingSkeleton';
 
 interface User { _id: string; name: string; email: string; role: string; isActive: boolean; }
 
@@ -7,8 +8,14 @@ export default function Users() {
   const [users, setUsers] = useState<User[]>([]);
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'panel' });
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
 
-  const load = () => api.get('/users').then((r) => setUsers(r.data));
+  const load = () => {
+    setLoading(true);
+    api.get('/users')
+      .then((r) => setUsers(r.data))
+      .finally(() => setLoading(false));
+  };
   useEffect(() => { load(); }, []);
 
   const handleAdd = async (e: React.FormEvent) => {
@@ -125,57 +132,61 @@ export default function Users() {
       </div>
 
       {/* Table */}
-      <div className="evl-card overflow-hidden">
-        <table className="evl-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Role</th>
-              <th>Status</th>
-              <th className="text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u._id}>
-                <td className="font-semibold text-text">{u.name}</td>
-                <td className="text-text/50">{u.email}</td>
-                <td className="capitalize text-text">{u.role}</td>
-                <td>
-                  <span className={u.isActive ? 'evl-badge-success' : 'evl-badge-danger'}>
-                    {u.isActive ? 'Active' : 'Blocked'}
-                  </span>
-                </td>
-                <td className="text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    <button onClick={() => handleToggle(u._id)}
-                      className="evl-btn-ghost text-primary hover:bg-primary/5">
-                      {u.isActive ? 'Block' : 'Unblock'}
-                    </button>
-                    <button onClick={async () => {
-                      const pass = prompt('Enter new password for ' + u.name);
-                      if (!pass) return;
-                      await api.patch(`/users/${u._id}/reset-password`, { newPassword: pass });
-                      alert('Password updated!');
-                    }}
-                      className="evl-btn-ghost text-primary hover:bg-primary/5">
-                      Reset
-                    </button>
-                    <button onClick={() => handleDelete(u._id)}
-                      className="evl-btn-ghost text-danger hover:text-danger hover:bg-danger/5">
-                      Delete
-                    </button>
-                  </div>
-                </td>
+      {loading ? (
+        <TableSkeleton rows={5} cols={5} />
+      ) : (
+        <div className="evl-card overflow-hidden">
+          <table className="evl-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th className="text-right">Actions</th>
               </tr>
-            ))}
-            {!users.length && (
-              <tr><td colSpan={5} className="text-center text-text/50 py-12">No accounts yet. Create one above.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {users.map((u) => (
+                <tr key={u._id}>
+                  <td className="font-semibold text-text">{u.name}</td>
+                  <td className="text-text/50">{u.email}</td>
+                  <td className="capitalize text-text">{u.role}</td>
+                  <td>
+                    <span className={u.isActive ? 'evl-badge-success' : 'evl-badge-danger'}>
+                      {u.isActive ? 'Active' : 'Blocked'}
+                    </span>
+                  </td>
+                  <td className="text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <button onClick={() => handleToggle(u._id)}
+                        className="evl-btn-ghost text-primary hover:bg-primary/5">
+                        {u.isActive ? 'Block' : 'Unblock'}
+                      </button>
+                      <button onClick={async () => {
+                        const pass = prompt('Enter new password for ' + u.name);
+                        if (!pass) return;
+                        await api.patch(`/users/${u._id}/reset-password`, { newPassword: pass });
+                        alert('Password updated!');
+                      }}
+                        className="evl-btn-ghost text-primary hover:bg-primary/5">
+                        Reset
+                      </button>
+                      <button onClick={() => handleDelete(u._id)}
+                        className="evl-btn-ghost text-danger hover:text-danger hover:bg-danger/5">
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {!users.length && (
+                <tr><td colSpan={5} className="text-center text-text/50 py-12">No accounts yet. Create one above.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

@@ -87,92 +87,110 @@ export default function RegisterGroup() {
 
   return (
     <div className="min-h-screen bg-bg flex items-center justify-center p-4 py-12">
-      <div className="w-full max-w-lg">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-black text-text tracking-tight mb-2">Group Registration</h1>
-          <p className="text-text/50 font-medium italic">EvalSys: Automated Rubric Evaluation System</p>
+      <div className="w-full max-w-2xl">
+        {/* Header */}
+        <div className="text-center mb-10">
+          <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center text-white text-2xl font-extrabold mx-auto mb-5 shadow-lg shadow-primary/20">
+            E
+          </div>
+          <h1 className="text-3xl md:text-4xl font-black text-text tracking-tight mb-2">Group Registration</h1>
+          <p className="text-text/40 text-sm font-medium">EvalSys · Automated Rubric Evaluation System</p>
         </div>
 
-        <div className="evl-card p-8 md:p-10 shadow-2xl shadow-primary/5">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label className="evl-label block mb-1">
-                Group Name / Student Name
-              </label>
-              <div className="mb-2">
-                <span className="text-[11px] font-bold text-danger bg-danger/5 px-2 py-1 rounded border border-danger/20 inline-block">
-                  Note: Put your <span className="underline">Full Name</span> if Individual (No Group)
-                </span>
+        {/* Instructions Card */}
+        <div className="evl-card p-5 mb-6 bg-primary/[0.03] border-primary/10">
+          <h3 className="text-xs font-extrabold text-primary uppercase tracking-widest mb-3">📋 How to Register</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="flex items-start gap-2.5">
+              <span className="w-5 h-5 rounded-md bg-primary/10 text-primary text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">1</span>
+              <p className="text-[11px] text-text/60 leading-relaxed"><strong className="text-text/80">Group?</strong> Enter your group name and list all members separated by commas.</p>
+            </div>
+            <div className="flex items-start gap-2.5">
+              <span className="w-5 h-5 rounded-md bg-primary/10 text-primary text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">2</span>
+              <p className="text-[11px] text-text/60 leading-relaxed"><strong className="text-text/80">Individual?</strong> Enter your full name as the group name and type <strong className="text-danger">N/A</strong> for members.</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Form Card */}
+        <div className="evl-card p-6 md:p-8 shadow-2xl shadow-primary/5">
+
+          {isWakingUp && !error && (
+            <div className="bg-primary/10 text-primary text-[11px] font-bold py-2.5 px-4 rounded-lg mb-6 text-center flex items-center justify-center gap-2 animate-pulse">
+              <span className="w-2 h-2 bg-primary rounded-full animate-bounce" />
+              Initializing system… (Server is waking up)
+            </div>
+          )}
+
+          {error && (
+            <div className="evl-alert-error text-xs py-3 mb-6">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Row 1: Name + Block side by side on desktop */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div>
+                <label className="evl-label block mb-1.5">
+                  Group Name / Student Name
+                </label>
+                <input 
+                  value={form.name} 
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  required
+                  className="evl-input !py-3"
+                  placeholder="e.g. Group Omega or Juan Dela Cruz" 
+                />
               </div>
-              <input 
-                value={form.name} 
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                required
-                className="evl-input !py-3 !text-lg font-bold"
-                placeholder="e.g. Group Omega or Juan Dela Cruz" 
-              />
+
+              <div>
+                <label className="evl-label block mb-1.5">Assigned Block</label>
+                <select 
+                  value={form.section} 
+                  onChange={(e) => setForm({ ...form, section: e.target.value })}
+                  required
+                  className="evl-select !py-3"
+                >
+                  <option value="">-- Select your block --</option>
+                  {sections.map(s => (
+                    <option key={s._id} value={s._id}>{s.block}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
+            {/* Row 2: Members */}
             <div>
-              <label className="evl-label">Assigned Section / Block</label>
-              <select 
-                value={form.section} 
-                onChange={(e) => setForm({ ...form, section: e.target.value })}
-                required
-                className="evl-select !py-3"
-              >
-                <option value="">-- Select your block --</option>
-                {sections.map(s => (
-                  <option key={s._id} value={s._id}>{s.block}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="evl-label block mb-1">Members (Names)</label>
-              <div className="mb-2">
-                <span className="text-[11px] font-bold text-danger bg-danger/5 px-2 py-1 rounded border border-danger/20 inline-block">
-                  Note: Put <span className="underline">N/A</span> if Individual. For groups, separate with <span className="underline">commas</span>.
-                </span>
-              </div>
+              <label className="evl-label block mb-1.5">Members</label>
               <textarea 
                 value={form.members} 
                 onChange={(e) => setForm({ ...form, members: e.target.value })}
                 required
                 rows={3}
                 className="evl-input !py-3 resize-none"
-                placeholder="Juan Dela Cruz, Maria Clara, or N/A" 
+                placeholder="Juan Dela Cruz, Maria Clara, Jose Rizal   —or—   N/A if individual" 
               />
+              <p className="text-[10px] text-text/30 mt-1.5 font-medium">Separate names with commas. Type <strong className="text-danger/60">N/A</strong> if registering as individual.</p>
             </div>
 
-            <div className="bg-primary/5 p-4 rounded-xl border border-primary/10">
-              <label className="flex items-start gap-3 cursor-pointer">
+            {/* Privacy Consent */}
+            <div className="bg-surface/50 p-4 rounded-xl border border-muted/20">
+              <label className="flex items-start gap-3 cursor-pointer select-none">
                 <input 
                   type="checkbox" 
                   checked={agreedToPrivacy}
                   onChange={(e) => setAgreedToPrivacy(e.target.checked)}
                   required
-                  className="mt-1 w-4 h-4 rounded border-muted text-primary focus:ring-primary/30 cursor-pointer"
+                  className="mt-0.5 w-4 h-4 rounded border-muted text-primary focus:ring-primary/30 cursor-pointer"
                 />
-                <span className="text-[11px] text-text/60 leading-relaxed">
+                <span className="text-[11px] text-text/50 leading-relaxed">
                   By registering, you agree that the information provided will be used solely for the purpose of project evaluation and grading within the <span className="font-bold text-primary">EvalSys Platform</span>.
                 </span>
               </label>
             </div>
 
-            {isWakingUp && !error && (
-              <div className="bg-primary/10 text-primary text-[11px] font-bold py-2 px-3 rounded-lg mb-5 text-center flex items-center justify-center gap-2 animate-pulse">
-                <span className="w-2 h-2 bg-primary rounded-full animate-bounce" />
-                Initializing system… (Server is waking up)
-              </div>
-            )}
-
-            {error && (
-              <div className="evl-alert-error text-xs py-3">
-                {error}
-              </div>
-            )}
-
+            {/* Submit */}
             <button 
               type="submit" 
               disabled={loading || !agreedToPrivacy}
@@ -185,10 +203,13 @@ export default function RegisterGroup() {
           </form>
         </div>
 
-        <p className="text-center mt-8 text-text/30 text-xs font-medium">
-          &copy; 2026 EvalSys Automated Rubrics Platform <br/>
-          <span className="text-[10px] uppercase tracking-widest mt-1 inline-block opacity-60">Developed & Maintained by Jerico B. Garcia</span>
-        </p>
+        {/* Footer */}
+        <div className="mt-8 flex flex-col items-center gap-3">
+          <Link to="/login" className="text-xs font-bold text-primary hover:underline">← Back to Login</Link>
+          <p className="text-text/20 text-[10px] font-medium">
+            &copy; 2026 EvalSys · <span className="uppercase tracking-widest">Developed by Jerico B. Garcia</span>
+          </p>
+        </div>
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../../services/api';
+import { TableSkeleton } from '../../components/LoadingSkeleton';
 
 interface Section { _id: string; name: string; block: string; }
 
@@ -9,8 +10,14 @@ export default function Sections() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
 
-  const load = () => api.get('/sections').then((r) => setSections(r.data));
+  const load = () => {
+    setLoading(true);
+    api.get('/sections')
+      .then((r) => setSections(r.data))
+      .finally(() => setLoading(false));
+  };
   useEffect(() => { load(); }, []);
 
   const handleAdd = async (e: React.FormEvent) => {
@@ -64,62 +71,66 @@ export default function Sections() {
       </div>
 
       {/* Table */}
-      <div className="evl-card overflow-hidden">
-        <table className="evl-table">
-          <thead>
-            <tr>
-              <th>Block</th>
-              <th className="text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sections.map((s) => (
-              <tr key={s._id}>
-                <td className="font-semibold text-text">
-                  {editingId === s._id ? (
-                    <input 
-                      value={editValue} 
-                      onChange={(e) => setEditValue(e.target.value)}
-                      className="evl-input py-1 h-9"
-                      autoFocus
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleUpdate(s._id);
-                        if (e.key === 'Escape') setEditingId(null);
-                      }}
-                    />
-                  ) : (
-                    s.block
-                  )}
-                </td>
-                <td className="text-right">
-                  {editingId === s._id ? (
-                    <div className="flex justify-end gap-2">
-                      <button onClick={() => handleUpdate(s._id)} className="evl-btn-primary py-1 px-3 text-xs h-9">
-                        Save
-                      </button>
-                      <button onClick={() => setEditingId(null)} className="evl-btn-ghost py-1 px-3 text-xs h-9">
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex justify-end gap-2">
-                      <button onClick={() => { setEditingId(s._id); setEditValue(s.block); }} className="evl-btn-ghost text-primary hover:text-primary hover:bg-primary/5">
-                        Edit
-                      </button>
-                      <button onClick={() => handleDelete(s._id)} className="evl-btn-ghost text-danger hover:text-danger hover:bg-danger/5">
-                        Delete
-                      </button>
-                    </div>
-                  )}
-                </td>
+      {loading ? (
+        <TableSkeleton rows={5} cols={2} />
+      ) : (
+        <div className="evl-card overflow-hidden">
+          <table className="evl-table">
+            <thead>
+              <tr>
+                <th>Block</th>
+                <th className="text-right">Actions</th>
               </tr>
-            ))}
-            {!sections.length && (
-              <tr><td colSpan={2} className="text-center text-text/50 py-12">No blocks yet. Add one above.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {sections.map((s) => (
+                <tr key={s._id}>
+                  <td className="font-semibold text-text">
+                    {editingId === s._id ? (
+                      <input 
+                        value={editValue} 
+                        onChange={(e) => setEditValue(e.target.value)}
+                        className="evl-input py-1 h-9"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleUpdate(s._id);
+                          if (e.key === 'Escape') setEditingId(null);
+                        }}
+                      />
+                    ) : (
+                      s.block
+                    )}
+                  </td>
+                  <td className="text-right">
+                    {editingId === s._id ? (
+                      <div className="flex justify-end gap-2">
+                        <button onClick={() => handleUpdate(s._id)} className="evl-btn-primary py-1 px-3 text-xs h-9">
+                          Save
+                        </button>
+                        <button onClick={() => setEditingId(null)} className="evl-btn-ghost py-1 px-3 text-xs h-9">
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex justify-end gap-2">
+                        <button onClick={() => { setEditingId(s._id); setEditValue(s.block); }} className="evl-btn-ghost text-primary hover:text-primary hover:bg-primary/5">
+                          Edit
+                        </button>
+                        <button onClick={() => handleDelete(s._id)} className="evl-btn-ghost text-danger hover:text-danger hover:bg-danger/5">
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {!sections.length && (
+                <tr><td colSpan={2} className="text-center text-text/50 py-12">No blocks yet. Add one above.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

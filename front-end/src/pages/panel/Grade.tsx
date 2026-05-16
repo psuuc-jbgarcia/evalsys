@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 import ScoreInput from '../../components/ScoreInput';
+import { CardSkeleton } from '../../components/LoadingSkeleton';
 
 interface Level { label: string; minScore: number; maxScore: number; description: string; }
 interface Criteria { key: string; label: string; maxScore: number; levels: Level[]; }
@@ -30,9 +31,11 @@ export default function Grade() {
   const [loadingRubrics, setLoadingRubrics] = useState(true);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
+  const [loadingSidebar, setLoadingSidebar] = useState(true);
 
   const [sections, setSections] = useState<Section[]>([]);
   const [gradingLocked, setGradingLocked] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const [searchParams] = useSearchParams();
   const urlGroupId = searchParams.get('groupId');
@@ -63,12 +66,12 @@ export default function Grade() {
         const found = r.data.find((g: Group) => g._id === urlGroupId);
         if (found) {
           selectGroup(found);
-          // Also set the sidebar section to match this group's section
           const sId = typeof found.section === 'string' ? found.section : found.section?._id;
           if (sId) setSelectedSidebarSectionId(sId);
         }
       }
-    });
+    })
+    .finally(() => setLoadingSidebar(false));
 
     api.get('/settings').then((r) => {
       setGradingLocked(r.data.isGradingLocked);
@@ -134,6 +137,7 @@ export default function Grade() {
     if (!confirm(confirmMsg)) return;
 
     setError(''); setSuccess('');
+    setSubmitting(true);
     try {
       await api.post(`/evaluations/group/${selectedGroup!._id}`, { 
         scores, 
@@ -143,10 +147,11 @@ export default function Grade() {
       setSuccess('Scores and feedback submitted successfully.');
       const res = await api.get(`/evaluations/group/${selectedGroup!._id}/mine`);
       setExisting(res.data);
-      // Remove backup after successful submission
       localStorage.removeItem(`backup_${selectedGroup!._id}`);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Submission failed');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -244,24 +249,38 @@ export default function Grade() {
         <div className="sticky top-0 pr-2 pb-8">
           <h3 className="text-text font-bold text-base mb-4 px-1">Assigned Blocks</h3>
           
-          <div className="flex gap-2 overflow-x-auto pb-4 mb-4 lg:flex-col lg:overflow-visible lg:pb-0 scrollbar-hide">
-            {sections.map((section) => (
-              <button
-                key={section._id}
-                onClick={() => setSelectedSidebarSectionId(section._id)}
-                className={`whitespace-nowrap lg:whitespace-normal text-left px-4 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150 border ${
-                  selectedSidebarSectionId === section._id
-                    ? 'bg-primary text-white border-primary shadow-sm shadow-primary/20'
-                    : 'bg-surface text-text/60 border-muted/40 hover:text-text hover:border-primary/30'
-                }`}
-              >
-                {section.block}
-              </button>
-            ))}
-          </div>
+          {loadingSidebar ? (
+            <div className="space-y-3">
+              {Array(3).fill(0).map((_, i) => (
+                <div key={i} className="h-10 rounded-lg bg-surface border border-muted/40 animate-pulse" />
+              ))}
+            </div>
+          ) : (
+            <div className="flex gap-2 overflow-x-auto pb-4 mb-4 lg:flex-col lg:overflow-visible lg:pb-0 scrollbar-hide">
+              {sections.map((section) => (
+                <button
+                  key={section._id}
+                  onClick={() => setSelectedSidebarSectionId(section._id)}
+                  className={`whitespace-nowrap lg:whitespace-normal text-left px-4 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150 border ${
+                    selectedSidebarSectionId === section._id
+                      ? 'bg-primary text-white border-primary shadow-sm shadow-primary/20'
+                      : 'bg-surface text-text/60 border-muted/40 hover:text-text hover:border-primary/30'
+                  }`}
+                >
+                  {section.block}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="flex flex-col gap-1 max-h-[50vh] lg:max-h-[60vh] overflow-y-auto pr-2">
-            {sections.length > 0 && selectedSidebarSectionId && (
+            {loadingSidebar ? (
+              <div className="space-y-2 mt-4">
+                {Array(4).fill(0).map((_, i) => (
+                  <div key={i} className="h-14 rounded-lg bg-surface border border-muted/30 animate-pulse" />
+                ))}
+              </div>
+            ) : sections.length > 0 && selectedSidebarSectionId && (
               <>
                 <h4 className="text-[10px] font-extrabold text-text/40 uppercase tracking-widest mb-2 px-1 mt-2">
                   Groups in Block
@@ -287,7 +306,7 @@ export default function Grade() {
                 )}
               </>
             )}
-            {!sections.length && <p className="text-text/50 text-sm px-1">No blocks assigned</p>}
+            {!loadingSidebar && !sections.length && <p className="text-text/50 text-sm px-1">No blocks assigned</p>}
           </div>
         </div>
       </div>
@@ -302,8 +321,11 @@ export default function Grade() {
             </div>
           </div>
         ) : loadingRubrics ? (
-          <div className="flex items-center justify-center h-64">
-            <p className="text-text/40 text-sm">Loading rubric…</p>
+          <div className="space-y-6">
+            <CardSkeleton />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {Array(4).fill(0).map((_, i) => <CardSkeleton key={i} />)}
+            </div>
           </div>
         ) : !activeRubric ? (
           <div className="flex items-center justify-center h-64">
@@ -432,10 +454,10 @@ export default function Grade() {
 
             <button 
               type="submit" 
-              disabled={gradingLocked}
-              className={`evl-btn-primary px-8 py-3 ${gradingLocked ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
+              disabled={gradingLocked || submitting}
+              className={`evl-btn-primary px-8 py-3 ${(gradingLocked || submitting) ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
             >
-              {existing ? 'Update Scores & Feedback' : 'Submit Scores & Feedback'}
+              {submitting ? 'Submitting...' : (existing ? 'Update Scores & Feedback' : 'Submit Scores & Feedback')}
             </button>
           </form>
         )}

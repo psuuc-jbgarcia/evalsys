@@ -116,7 +116,7 @@ exports.getSectionResults = async (req, res) => {
         isSubmitted: true,
       }).populate('panel', 'name email');
 
-      if (!evaluations.length) return { group, averaged: null, finalTotal: null };
+      // if (!evaluations.length) return { group, averaged: null, finalTotal: null };
 
       // Get the group to find the correct divisor (number of panels assigned to the block)
       let divisor = evaluations.length;
@@ -144,26 +144,32 @@ exports.getSectionResults = async (req, res) => {
 
       const isIncomplete = missingPanels.length > 0;
 
-      const averaged = {};
+      const hasEvaluations = evaluations.length > 0;
+      const averaged = hasEvaluations ? {} : null;
       const categorySums = {};
 
-      evaluations.forEach(ev => {
-        if (ev.scores instanceof Map) {
-          ev.scores.forEach((val, key) => {
-            categorySums[key] = (categorySums[key] || 0) + val;
-          });
-        } else {
-          for (const [key, val] of Object.entries(ev.scores)) {
-            categorySums[key] = (categorySums[key] || 0) + val;
+      if (hasEvaluations) {
+        evaluations.forEach(ev => {
+          if (ev.scores instanceof Map) {
+            ev.scores.forEach((val, key) => {
+              categorySums[key] = (categorySums[key] || 0) + val;
+            });
+          } else {
+            for (const [key, val] of Object.entries(ev.scores)) {
+              categorySums[key] = (categorySums[key] || 0) + val;
+            }
           }
-        }
-      });
+        });
 
-      for (const key in categorySums) {
-        averaged[key] = Math.round((categorySums[key] / divisor) * 100) / 100;
+        for (const key in categorySums) {
+          averaged[key] = Math.round((categorySums[key] / divisor) * 100) / 100;
+        }
       }
 
-      const finalTotal = Math.round(Object.values(averaged).reduce((a, b) => a + b, 0) * 100) / 100;
+      const finalTotal = hasEvaluations 
+        ? Math.round(Object.values(averaged).reduce((a, b) => a + b, 0) * 100) / 100
+        : null;
+
       const evaluatedBy = evaluations.map(ev => ev.panel?.name || 'Unknown');
       const comments = evaluations.map(ev => ({
         panel: ev.panel?.name || 'Unknown',

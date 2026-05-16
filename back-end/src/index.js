@@ -3,9 +3,21 @@ const dns = require('dns');
 dns.setServers(['1.1.1.1', '8.8.8.8']);
 const express = require('express');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const connectDB = require('./config/db');
 
 const app = express();
+
+// Rate limiting: 300 requests per 15 minutes per IP
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  message: { message: 'Too many requests from this IP, please try again after 15 minutes' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use(limiter);
 connectDB();
 
 app.use(cors());

@@ -26,7 +26,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (token) {
       api.get('/auth/me')
         .then((res) => setUser(res.data))
-        .catch(() => localStorage.removeItem('token'))
+        .catch((err) => {
+          // Only clear token if it's actually invalid (401/403)
+          // If it's 429 (Rate Limit), keep the token and maybe show an alert
+          if (err.response?.status !== 429) {
+            localStorage.removeItem('token');
+          } else {
+            alert('Too many requests. Please wait a moment before refreshing again.');
+          }
+        })
         .finally(() => setLoading(false));
     } else {
       setLoading(false);

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../../services/api';
+import { CardSkeleton } from '../../components/LoadingSkeleton';
 
 interface Level {
   label: string;
@@ -88,8 +89,14 @@ export default function Rubrics() {
   const [criteria, setCriteria] = useState<Criteria[]>(DEFAULT_CRITERIA);
   const [error, setError] = useState('');
   const [expandedRubric, setExpandedRubric] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const load = () => api.get('/rubrics').then((r) => setRubrics(r.data));
+  const load = () => {
+    setLoading(true);
+    api.get('/rubrics')
+      .then((r) => setRubrics(r.data))
+      .finally(() => setLoading(false));
+  };
   useEffect(() => { load(); }, []);
 
   const resetForm = () => {
@@ -326,73 +333,79 @@ export default function Rubrics() {
 
       {/* Rubric list */}
       <div className="space-y-4">
-        {rubrics.map((r) => (
-          <div key={r._id} className="evl-card overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-5">
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-bold text-sm shrink-0">
-                  R
-                </div>
-                <div>
-                  <div className="flex items-center gap-2.5">
-                    <p className="font-bold text-text">{r.title}</p>
-                    {r.isActive && <span className="evl-badge-success">Active</span>}
-                  </div>
-                  <p className="text-text/50 text-xs mt-0.5">
-                    {r.criteria.length} criteria · Created {new Date(r.createdAt).toLocaleDateString()}
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-2 items-center">
-                <button onClick={() => setExpandedRubric(expandedRubric === r._id ? null : r._id)}
-                  className="evl-btn-ghost">
-                  {expandedRubric === r._id ? 'Hide' : 'View'}
-                </button>
-                <button onClick={() => startEdit(r)}
-                  className="evl-btn-ghost text-primary hover:bg-primary/5">
-                  Edit
-                </button>
-                {!r.isActive && (
-                  <button onClick={() => handleActivate(r._id)} className="evl-btn-ghost text-success hover:bg-success/5">
-                    Set Active
-                  </button>
-                )}
-                {!r.isActive && (
-                  <button onClick={() => handleDelete(r._id)} className="evl-btn-ghost text-danger hover:bg-danger/5">
-                    Delete
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {expandedRubric === r._id && (
-              <div className="border-t border-muted/40 px-6 py-5">
-                <div className="space-y-6">
-                  {r.criteria.map((c) => (
-                    <div key={c.key}>
-                      <div className="flex justify-between items-center mb-3">
-                        <p className="font-bold text-text">{c.label}</p>
-                        <span className="text-text/50 text-xs font-semibold">{c.maxScore} pts</span>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-                        {c.levels.map((l) => (
-                          <div key={l.label} className={`rounded-lg p-4 border ${levelBg(l.label)}`}>
-                            <div className="flex items-center justify-between mb-2">
-                              <span className={levelColor(l.label)}>{l.label}</span>
-                              <span className="text-text/40 text-[11px] font-semibold">{l.minScore}–{l.maxScore}</span>
-                            </div>
-                            <p className="text-text/60 text-xs leading-relaxed">{l.description}</p>
-                          </div>
-                        ))}
-                      </div>
+        {loading ? (
+          Array(3).fill(0).map((_, i) => <CardSkeleton key={i} />)
+        ) : (
+          <>
+            {rubrics.map((r) => (
+              <div key={r._id} className="evl-card overflow-hidden">
+                <div className="flex items-center justify-between px-6 py-5">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-bold text-sm shrink-0">
+                      R
                     </div>
-                  ))}
+                    <div>
+                      <div className="flex items-center gap-2.5">
+                        <p className="font-bold text-text">{r.title}</p>
+                        {r.isActive && <span className="evl-badge-success">Active</span>}
+                      </div>
+                      <p className="text-text/50 text-xs mt-0.5">
+                        {r.criteria.length} criteria · Created {new Date(r.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <button onClick={() => setExpandedRubric(expandedRubric === r._id ? null : r._id)}
+                      className="evl-btn-ghost">
+                      {expandedRubric === r._id ? 'Hide' : 'View'}
+                    </button>
+                    <button onClick={() => startEdit(r)}
+                      className="evl-btn-ghost text-primary hover:bg-primary/5">
+                      Edit
+                    </button>
+                    {!r.isActive && (
+                      <button onClick={() => handleActivate(r._id)} className="evl-btn-ghost text-success hover:bg-success/5">
+                        Set Active
+                      </button>
+                    )}
+                    {!r.isActive && (
+                      <button onClick={() => handleDelete(r._id)} className="evl-btn-ghost text-danger hover:bg-danger/5">
+                        Delete
+                      </button>
+                    )}
+                  </div>
                 </div>
+
+                {expandedRubric === r._id && (
+                  <div className="border-t border-muted/40 px-6 py-5">
+                    <div className="space-y-6">
+                      {r.criteria.map((c) => (
+                        <div key={c.key}>
+                          <div className="flex justify-between items-center mb-3">
+                            <p className="font-bold text-text">{c.label}</p>
+                            <span className="text-text/50 text-xs font-semibold">{c.maxScore} pts</span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+                            {c.levels.map((l) => (
+                              <div key={l.label} className={`rounded-lg p-4 border ${levelBg(l.label)}`}>
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className={levelColor(l.label)}>{l.label}</span>
+                                  <span className="text-text/40 text-[11px] font-semibold">{l.minScore}–{l.maxScore}</span>
+                                </div>
+                                <p className="text-text/60 text-xs leading-relaxed">{l.description}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        ))}
-        {!rubrics.length && <p className="text-text/50 text-sm">No rubrics yet. Create one to get started.</p>}
+            ))}
+            {!rubrics.length && <p className="text-text/50 text-sm">No rubrics yet. Create one to get started.</p>}
+          </>
+        )}
       </div>
     </div>
   );

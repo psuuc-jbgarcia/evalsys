@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../../services/api';
+import { TableSkeleton } from '../../components/LoadingSkeleton';
 
 interface Section { _id: string; name: string; block: string; }
 interface GroupResult {
@@ -45,26 +46,40 @@ export default function Results() {
   const [selected, setSelected] = useState<Section | null>(null);
   const [results, setResults] = useState<GroupResult[]>([]);
   const [viewFeedback, setViewFeedback] = useState<{ group: string, items: { panel: string, text: string }[] } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadingSections, setLoadingSections] = useState(true);
 
-  useEffect(() => { api.get('/sections').then((r) => setSections(r.data)); }, []);
+  useEffect(() => { 
+    setLoadingSections(true);
+    api.get('/sections')
+      .then((r) => setSections(r.data))
+      .finally(() => setLoadingSections(false)); 
+  }, []);
 
   const loadResults = async (section: Section) => {
     setSelected(section);
-    const res = await api.get(`/evaluations/section/${section._id}/results`);
-    setResults(res.data);
+    setLoading(true);
+    try {
+      const res = await api.get(`/evaluations/section/${section._id}/results`);
+      setResults(res.data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const downloadCSV = () => {
     if (!selected || !results.length) return;
 
-    const headers = ['Group', 'Members', ...Object.values(LABELS), 'Final Total', 'Evaluated By', 'Missing Panels', 'Comments'];
+    const headers = ['Group', 'Members', ...Object.values(LABELS), 'Final Total', 'Evaluated By', 'Did Not Evaluate Yet', 'Comments'];
     const rows = results.map((r) => [
       r.group.name,
       r.group.members.join('; '),
       ...Object.keys(LABELS).map((k) => 
-        r.averaged ? (r.averaged[k] || 0).toFixed(2) : '0.00'
+        !r.isIncomplete && r.averaged ? (r.averaged[k] || 0).toFixed(2) : '—'
       ),
-      r.finalTotal !== null ? r.finalTotal.toFixed(2) : 'Pending',
+      (r.isIncomplete || r.finalTotal === null) ? 'Pending Complete Evaluation' : (r.finalTotal?.toFixed(2) ?? 'Pending'),
       r.evaluatedBy?.join('; ') ?? '',
       r.missingPanels?.join('; ') ?? '',
       r.comments?.map(c => `[${c.panel}]: ${c.text}`).join(' | ') ?? '',
@@ -95,21 +110,29 @@ export default function Results() {
 
       {/* Section selector */}
       <div className="flex gap-2 flex-wrap mb-6">
-        {sections.map((s) => (
-          <button key={s._id} onClick={() => loadResults(s)}
-            className={`px-4 py-2.5 rounded-lg text-sm font-semibold border transition-all duration-150 ${
-              selected?._id === s._id
-                ? 'bg-primary text-white border-primary'
-                : 'border-muted text-text/50 bg-surface hover:text-text hover:border-text/20'
-            }`}>
-            {s.name === s.block ? s.block : `${s.name} — ${s.block}`}
-          </button>
-        ))}
-        {!sections.length && <p className="text-text/50 text-sm">No sections available.</p>}
+        {loadingSections ? (
+          Array(4).fill(0).map((_, i) => (
+            <div key={i} className="w-24 h-10 rounded-lg bg-surface border border-muted/40 animate-pulse" />
+          ))
+        ) : (
+          sections.map((s) => (
+            <button key={s._id} onClick={() => loadResults(s)}
+              className={`px-4 py-2.5 rounded-lg text-sm font-semibold border transition-all duration-150 ${
+                selected?._id === s._id
+                  ? 'bg-primary text-white border-primary'
+                  : 'border-muted text-text/50 bg-surface hover:text-text hover:border-text/20'
+              }`}>
+              {s.name === s.block ? s.block : `${s.name} — ${s.block}`}
+            </button>
+          ))
+        )}
+        {!loadingSections && !sections.length && <p className="text-text/50 text-sm">No sections available.</p>}
       </div>
 
       {/* Results table */}
-      {selected && (
+      {loading ? (
+        <TableSkeleton rows={6} cols={8} />
+      ) : selected && (
         <div className="evl-card overflow-hidden">
           <div className="px-6 py-4 border-b border-muted/40 flex justify-between items-center">
             <h3 className="text-text font-bold text-sm">
@@ -147,7 +170,7 @@ export default function Results() {
                         )}
                         {isIncomplete && missingPanels && missingPanels.length > 0 && (
                           <p className="text-[10px] text-danger font-bold tracking-wide uppercase mt-0.5">
-                            Missing: {missingPanels.join(', ')}
+                            Did not evaluate yet: {missingPanels.join(', ')}
                           </p>
                         )}
                         {comments && comments.length > 0 && (
@@ -162,14 +185,20 @@ export default function Results() {
                     </td>
                     <td className="text-text/50 text-xs max-w-[200px]">{group.members.join(', ') || '—'}</td>
                     {Object.keys(LABELS).map((k) => (
-                      <td key={k} className={`text-center ${averaged ? scoreColor(averaged[k], MAX[k]) : 'text-text/40'}`}>
-                        {averaged ? averaged[k] : '—'}
+                      <td key={k} className={`text-center ${!isIncomplete && averaged ? scoreColor(averaged[k], MAX[k]) : 'text-text/40'}`}>
+                        {!isIncomplete && averaged ? averaged[k] : '—'}
                       </td>
                     ))}
                     <td className="text-center">
-                      {finalTotal !== null
-                        ? <span className={`text-lg ${scoreBadge(finalTotal)} !text-base`}>{finalTotal}</span>
-                        : <span className="text-text/40 text-xs">Pending</span>}
+                      {isIncomplete || finalTotal === null ? (
+                        <span className="text-danger font-bold text-[10px] uppercase tracking-tight">
+                          Pending Complete Evaluation
+                        </span>
+                      ) : (
+                        <span className={`text-lg ${scoreBadge(finalTotal)} !text-base`}>
+                          {finalTotal}
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}

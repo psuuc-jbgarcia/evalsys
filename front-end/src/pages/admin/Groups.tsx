@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../../services/api';
+import { TableSkeleton } from '../../components/LoadingSkeleton';
 
 interface Section { _id: string; name: string; block: string; }
 interface Group {
@@ -16,10 +17,16 @@ export default function Groups() {
   const [filterBlock, setFilterBlock] = useState('');
   const [editingGroup, setEditingGroup] = useState<Group | null>(null);
   const [editForm, setEditForm] = useState({ name: '', section: '', members: '' });
+  const [loading, setLoading] = useState(true);
 
 
 
-  const load = () => api.get('/groups').then((r) => setGroups(r.data));
+  const load = () => {
+    setLoading(true);
+    api.get('/groups')
+      .then((r) => setGroups(r.data))
+      .finally(() => setLoading(false));
+  };
 
   useEffect(() => {
     load();
@@ -164,7 +171,12 @@ export default function Groups() {
 
       {/* Table */}
       <div className="flex justify-between items-center mb-4 px-1">
-        <h3 className="text-text font-bold text-sm">Group List</h3>
+        <div className="flex items-center gap-3">
+          <h3 className="text-text font-bold text-sm">Group List</h3>
+          <span className="bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded-full">
+            {filterBlock ? `${filteredGroups.length} of ${groups.length}` : groups.length} Groups
+          </span>
+        </div>
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-bold text-text/40 uppercase tracking-widest">Filter by Block:</span>
           <select 
@@ -177,40 +189,44 @@ export default function Groups() {
           </select>
         </div>
       </div>
-      <div className="evl-card overflow-hidden">
-        <table className="evl-table">
-          <thead>
-            <tr>
-              <th>Group</th>
-              <th>Block</th>
-              <th>Members</th>
-              <th className="text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredGroups.map((g) => (
-              <tr key={g._id}>
-                <td className="font-semibold text-text">{g.name}</td>
-                <td className="text-text/50">{g.section?.block}</td>
-                <td className="text-text/50 text-xs max-w-[200px] truncate">{g.members.join(', ') || '—'}</td>
-                <td className="text-right">
-                  <div className="flex justify-end gap-1">
-                    <button onClick={() => startEdit(g)} className="evl-btn-ghost text-primary hover:bg-primary/5">
-                      Edit
-                    </button>
-                    <button onClick={() => handleDelete(g._id)} className="evl-btn-ghost text-danger hover:text-danger hover:bg-danger/5">
-                      Delete
-                    </button>
-                  </div>
-                </td>
+      {loading ? (
+        <TableSkeleton rows={8} cols={4} />
+      ) : (
+        <div className="evl-card overflow-hidden">
+          <table className="evl-table">
+            <thead>
+              <tr>
+                <th>Group</th>
+                <th>Block</th>
+                <th>Members</th>
+                <th className="text-right">Actions</th>
               </tr>
-            ))}
-            {!filteredGroups.length && (
-              <tr><td colSpan={4} className="text-center text-text/50 py-12">No groups found.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {filteredGroups.map((g) => (
+                <tr key={g._id}>
+                  <td className="font-semibold text-text">{g.name}</td>
+                  <td className="text-text/50">{g.section?.block}</td>
+                  <td className="text-text/50 text-xs max-w-[200px] truncate">{g.members.join(', ') || '—'}</td>
+                  <td className="text-right">
+                    <div className="flex justify-end gap-1">
+                      <button onClick={() => startEdit(g)} className="evl-btn-ghost text-primary hover:bg-primary/5">
+                        Edit
+                      </button>
+                      <button onClick={() => handleDelete(g._id)} className="evl-btn-ghost text-danger hover:text-danger hover:bg-danger/5">
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {!filteredGroups.length && (
+                <tr><td colSpan={4} className="text-center text-text/50 py-12">No groups found.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {editingGroup && (
         <EditModal 

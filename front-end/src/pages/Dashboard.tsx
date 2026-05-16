@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
+import { CardSkeleton } from '../components/LoadingSkeleton';
 
 interface Section { _id: string; name: string; block: string; }
 interface Group { _id: string; name: string; section: Section; members: string[]; isGraded?: boolean; }
@@ -173,6 +174,7 @@ function PanelDashboard({ name }: { name: string }) {
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [locked, setLocked] = useState(false);
+  const [search, setSearch] = useState('');
 
 
   useEffect(() => {
@@ -193,30 +195,63 @@ function PanelDashboard({ name }: { name: string }) {
     .finally(() => setLoading(false));
   }, []);
 
-  const filteredGroups = selectedSection
-    ? groups.filter((g) => {
-        const sId = typeof g.section === 'string' ? g.section : g.section?._id;
-        return sId === selectedSection;
-      })
-    : groups;
+  const filteredGroups = groups
+    .filter((g) => {
+      const sId = typeof g.section === 'string' ? g.section : g.section?._id;
+      const matchesSection = !selectedSection || sId === selectedSection;
+      const matchesSearch = g.name.toLowerCase().includes(search.toLowerCase()) || 
+                            g.members.some(m => m.toLowerCase().includes(search.toLowerCase()));
+      return matchesSection && matchesSearch;
+    })
+    .sort((a, b) => {
+      if (a.isGraded === b.isGraded) return 0;
+      return a.isGraded ? 1 : -1;
+    });
+
+  const gradedCount = groups.filter(g => g.isGraded).length;
+  const totalCount = groups.length;
+  const progressPct = totalCount > 0 ? Math.round((gradedCount / totalCount) * 100) : 0;
 
   return (
     <div>
-      <div className="mb-8">
-        <h2 className="evl-page-title">Welcome back, {name}</h2>
-        <p className="evl-page-subtitle">
-          Select a block below and grade the groups assigned to you.
-        </p>
-        {locked && (
-          <div className="mt-4 p-3 bg-danger/10 border border-danger/20 rounded-lg flex items-center gap-2 text-danger text-sm font-bold">
-            <span>🔒 GRADING IS CURRENTLY LOCKED</span>
+      <div className="mb-8 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+        <div>
+          <h2 className="evl-page-title">Welcome back, {name}</h2>
+          <p className="evl-page-subtitle">
+            Select a block below and grade the groups assigned to you.
+          </p>
+          {locked && (
+            <div className="mt-3 p-2.5 bg-danger/5 border border-danger/20 rounded-lg flex items-center gap-2 text-danger text-[11px] font-bold uppercase tracking-wider">
+              <span>🔒 Grading is currently locked by Admin</span>
+            </div>
+          )}
+        </div>
+
+        {/* Progress Card */}
+        {!loading && totalCount > 0 && (
+          <div className="evl-card px-6 py-4 flex items-center gap-6 min-w-[280px] bg-surface/50 border-primary/20">
+            <div className="flex-1">
+              <div className="flex justify-between items-end mb-1.5">
+                <span className="text-[10px] font-bold text-text/40 uppercase tracking-widest">Your Progress</span>
+                <span className="text-xs font-black text-primary">{gradedCount}/{totalCount} <span className="text-[10px] text-text/40 font-medium">Graded</span></span>
+              </div>
+              <div className="w-full bg-muted/20 rounded-full h-1.5">
+                <div 
+                  className="h-1.5 rounded-full bg-primary transition-all duration-700" 
+                  style={{ width: `${progressPct}%` }}
+                />
+              </div>
+            </div>
+            <div className="w-12 h-12 rounded-full border-4 border-primary/10 flex items-center justify-center relative">
+              <span className="text-[10px] font-black text-primary">{progressPct}%</span>
+            </div>
           </div>
         )}
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center h-40">
-          <div className="w-6 h-6 border-2 border-muted border-t-primary rounded-full animate-spin" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {Array(6).fill(0).map((_, i) => <CardSkeleton key={i} />)}
         </div>
       ) : sections.length === 0 ? (
         <div className="evl-card p-12 text-center">
@@ -225,22 +260,47 @@ function PanelDashboard({ name }: { name: string }) {
         </div>
       ) : (
         <>
-          {/* Section / Block tabs */}
-          <div className="flex gap-2 flex-wrap mb-6">
-            {sections.map((s) => (
-              <button
-                key={s._id}
-                onClick={() => setSelectedSection(s._id)}
-                className={`px-5 py-2.5 rounded-lg text-sm font-semibold border transition-all duration-150 ${
-                  selectedSection === s._id
-                    ? 'bg-primary text-white border-primary'
-                    : 'border-muted text-text/50 bg-surface hover:text-text hover:border-text/20'
-                }`}
-              >
-                {s.block}
-              </button>
-            ))}
-          </div>
+
+      <div className="mb-6 flex flex-col md:flex-row gap-4 items-center">
+        {/* Section / Block tabs */}
+        <div className="flex gap-2 flex-wrap flex-1">
+          <button
+            onClick={() => setSelectedSection(null)}
+            className={`px-4 py-2 rounded-lg text-xs font-bold border transition-all duration-150 ${
+              !selectedSection
+                ? 'bg-primary text-white border-primary shadow-sm shadow-primary/20'
+                : 'border-muted/40 text-text/50 bg-surface hover:text-text'
+            }`}
+          >
+            All Blocks
+          </button>
+          {sections.map((s) => (
+            <button
+              key={s._id}
+              onClick={() => setSelectedSection(s._id)}
+              className={`px-4 py-2 rounded-lg text-xs font-bold border transition-all duration-150 ${
+                selectedSection === s._id
+                  ? 'bg-primary text-white border-primary shadow-sm shadow-primary/20'
+                  : 'border-muted/40 text-text/50 bg-surface hover:text-text'
+              }`}
+            >
+              {s.block}
+            </button>
+          ))}
+        </div>
+
+        {/* Search Bar */}
+        <div className="w-full md:w-64 relative">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text/30 text-sm">🔍</span>
+          <input 
+            type="text"
+            placeholder="Search group or student..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="evl-input !py-2 !pl-9 !text-xs !bg-surface/50"
+          />
+        </div>
+      </div>
 
           {/* Groups grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">

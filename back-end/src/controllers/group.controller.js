@@ -75,8 +75,6 @@ exports.getGroups = async (req, res) => {
     }).select('_id');
     const sectionIds = assignedSections.map((s) => s._id);
 
-    console.log('Panel ID:', req.user._id);
-    console.log('Assigned section IDs:', sectionIds);
 
     // Bypass Mongoose $in array casting edge cases by filtering in memory
     const allGroups = await Group.find()
@@ -107,7 +105,6 @@ exports.getGroups = async (req, res) => {
       return gObj;
     });
       
-    console.log(`Returning ${groups.length} groups to panel.`);
     return res.json(groups);
   }
 
