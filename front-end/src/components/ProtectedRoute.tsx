@@ -2,7 +2,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Layout from './Layout';
 import { type ReactNode } from 'react';
-import { CardSkeleton, TableSkeleton } from './LoadingSkeleton';
+import { TableSkeleton } from './LoadingSkeleton';
 
 interface Props {
   children: ReactNode;
