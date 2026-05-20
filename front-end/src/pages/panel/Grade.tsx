@@ -378,6 +378,7 @@ export default function Grade() {
                     />
                   </div>
                 </div>
+                {/* Safe & Saved and Offline Backup hidden for now
                 <div className="flex items-center justify-between md:justify-end gap-4 px-1">
                   <span className="text-[10px] font-bold text-success flex items-center gap-1.5 opacity-80">
                     <span className="w-2 h-2 bg-success rounded-full animate-pulse shadow-[0_0_4px_rgba(34,197,94,0.6)]"></span>
@@ -391,6 +392,7 @@ export default function Grade() {
                     📥 Offline Backup
                   </button>
                 </div>
+                */}
               </div>
             </div>
 
