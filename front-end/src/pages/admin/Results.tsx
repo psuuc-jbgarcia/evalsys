@@ -3,6 +3,7 @@ import api from '../../services/api';
 import { TableSkeleton } from '../../components/LoadingSkeleton';
 
 interface Section { _id: string; name: string; block: string; }
+interface EvaluationRecord { _id: string; panelId: string; panelName: string; }
 interface GroupResult {
   group: { _id: string; name: string; members: string[] };
   averaged: Record<string, number> | null;
@@ -11,6 +12,7 @@ interface GroupResult {
   missingPanels?: string[];
   isIncomplete?: boolean;
   comments?: { panel: string; text: string }[];
+  evaluationRecords?: EvaluationRecord[];
 }
 
 const LABELS: Record<string, string> = {
@@ -49,6 +51,11 @@ export default function Results() {
   const [loading, setLoading] = useState(false);
   const [loadingSections, setLoadingSections] = useState(true);
 
+  // Clear score modal state
+  const [clearModal, setClearModal] = useState<{ group: GroupResult } | null>(null);
+  const [clearingId, setClearingId] = useState<string | null>(null);
+  const [confirmClearId, setConfirmClearId] = useState<string | null>(null);
+
   useEffect(() => { 
     setLoadingSections(true);
     api.get('/sections')
@@ -66,6 +73,34 @@ export default function Results() {
       console.error(error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleClearEvaluation = async (evaluationId: string) => {
+    setClearingId(evaluationId);
+    try {
+      await api.delete(`/evaluations/${evaluationId}`);
+      // Refresh results
+      if (selected) {
+        const res = await api.get(`/evaluations/section/${selected._id}/results`);
+        setResults(res.data);
+        // Update the modal's group data with fresh results
+        if (clearModal) {
+          const updatedGroup = res.data.find(
+            (r: GroupResult) => r.group._id === clearModal.group.group._id
+          );
+          if (updatedGroup) {
+            setClearModal({ group: updatedGroup });
+          } else {
+            setClearModal(null);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to clear evaluation', err);
+    } finally {
+      setClearingId(null);
+      setConfirmClearId(null);
     }
   };
 
@@ -155,61 +190,79 @@ export default function Results() {
                     <th key={k} className="text-center">{LABELS[k]}</th>
                   ))}
                   <th className="text-center">Final</th>
+                  <th className="text-center">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {results.map(({ group, averaged, finalTotal, evaluatedBy, missingPanels, isIncomplete, comments }) => (
-                  <tr key={group._id}>
-                    <td className="whitespace-nowrap">
-                      <div className="flex flex-col">
-                        <p className="font-semibold text-text">{group.name}</p>
-                        {evaluatedBy && evaluatedBy.length > 0 && (
-                          <p className="text-[10px] text-success/80 font-semibold tracking-wide uppercase mt-1">
-                            Eval by: {evaluatedBy.join(', ')}
-                          </p>
-                        )}
-                        {isIncomplete && missingPanels && missingPanels.length > 0 && (
-                          <p className="text-[10px] text-danger font-bold tracking-wide uppercase mt-0.5">
-                            Did not evaluate yet: {missingPanels.join(', ')}
-                          </p>
-                        )}
-                        {comments && comments.length > 0 && (
-                          <button 
-                            onClick={() => setViewFeedback({ group: group.name, items: comments })}
-                            className="text-[9px] font-bold text-primary uppercase text-left mt-2 hover:underline"
-                          >
-                            👁 View {comments.length} Comments
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                    <td className="text-text/50 text-xs max-w-[200px]">{group.members.join(', ') || '—'}</td>
-                    {Object.keys(LABELS).map((k) => (
-                      <td key={k} className={`text-center ${!isIncomplete && averaged ? scoreColor(averaged[k], MAX[k]) : 'text-text/40'}`}>
-                        {!isIncomplete && averaged ? averaged[k] : '—'}
+                {results.map((result) => {
+                  const { group, averaged, finalTotal, evaluatedBy, missingPanels, isIncomplete, comments, evaluationRecords } = result;
+                  return (
+                    <tr key={group._id}>
+                      <td className="whitespace-nowrap">
+                        <div className="flex flex-col">
+                          <p className="font-semibold text-text">{group.name}</p>
+                          {evaluatedBy && evaluatedBy.length > 0 && (
+                            <p className="text-[10px] text-success/80 font-semibold tracking-wide uppercase mt-1">
+                              Eval by: {evaluatedBy.join(', ')}
+                            </p>
+                          )}
+                          {isIncomplete && missingPanels && missingPanels.length > 0 && (
+                            <p className="text-[10px] text-danger font-bold tracking-wide uppercase mt-0.5">
+                              Did not evaluate yet: {missingPanels.join(', ')}
+                            </p>
+                          )}
+                          {comments && comments.length > 0 && (
+                            <button 
+                              onClick={() => setViewFeedback({ group: group.name, items: comments })}
+                              className="text-[9px] font-bold text-primary uppercase text-left mt-2 hover:underline"
+                            >
+                              👁 View {comments.length} Comments
+                            </button>
+                          )}
+                        </div>
                       </td>
-                    ))}
-                    <td className="text-center">
-                      {isIncomplete || finalTotal === null ? (
-                        <span className="text-danger font-bold text-[10px] uppercase tracking-tight">
-                          Pending Complete Evaluation
-                        </span>
-                      ) : (
-                        <span className={`text-lg ${scoreBadge(finalTotal)} !text-base`}>
-                          {finalTotal}
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                      <td className="text-text/50 text-xs max-w-[200px]">{group.members.join(', ') || '—'}</td>
+                      {Object.keys(LABELS).map((k) => (
+                        <td key={k} className={`text-center ${!isIncomplete && averaged ? scoreColor(averaged[k], MAX[k]) : 'text-text/40'}`}>
+                          {!isIncomplete && averaged ? averaged[k] : '—'}
+                        </td>
+                      ))}
+                      <td className="text-center">
+                        {isIncomplete || finalTotal === null ? (
+                          <span className="text-danger font-bold text-[10px] uppercase tracking-tight">
+                            Pending Complete Evaluation
+                          </span>
+                        ) : (
+                          <span className={`text-lg ${scoreBadge(finalTotal)} !text-base`}>
+                            {finalTotal}
+                          </span>
+                        )}
+                      </td>
+                      <td className="text-center">
+                        {evaluationRecords && evaluationRecords.length > 0 ? (
+                          <button
+                            onClick={() => setClearModal({ group: result })}
+                            title="Clear a panel's score for this group"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold border border-danger/30 text-danger bg-danger/5 hover:bg-danger/15 hover:border-danger/60 transition-all duration-150"
+                          >
+                            🗑 Clear Score
+                          </button>
+                        ) : (
+                          <span className="text-text/20 text-xs">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
                 {!results.length && (
-                  <tr><td colSpan={8} className="text-center text-text/40 py-12">No results for this section yet.</td></tr>
+                  <tr><td colSpan={9} className="text-center text-text/40 py-12">No results for this section yet.</td></tr>
                 )}
               </tbody>
             </table>
           </div>
         </div>
       )}
+
       {/* Feedback modal */}
       {viewFeedback && (
         <div className="fixed inset-0 bg-dark/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -232,6 +285,86 @@ export default function Results() {
             </div>
             <div className="px-6 py-4 bg-bg border-t border-muted/30 flex justify-end">
               <button onClick={() => setViewFeedback(null)} className="evl-btn-secondary !py-1.5 !text-xs">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clear Score Modal */}
+      {clearModal && (
+        <div className="fixed inset-0 bg-dark/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-surface w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-muted/30 flex justify-between items-center bg-bg">
+              <div>
+                <h3 className="font-bold text-text">Clear Panel Score</h3>
+                <p className="text-text/50 text-xs mt-0.5">{clearModal.group.group.name}</p>
+              </div>
+              <button
+                onClick={() => { setClearModal(null); setConfirmClearId(null); }}
+                className="text-text/40 hover:text-text text-xl"
+              >×</button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-3 max-h-[60vh] overflow-y-auto">
+              <p className="text-text/60 text-xs mb-4 leading-relaxed">
+                Select a panel's evaluation to permanently delete. This will allow them (or another panel) to re-grade this group. This action cannot be undone.
+              </p>
+
+              {clearModal.group.evaluationRecords && clearModal.group.evaluationRecords.length > 0 ? (
+                clearModal.group.evaluationRecords.map((rec) => (
+                  <div
+                    key={rec._id}
+                    className="flex items-center justify-between bg-bg rounded-xl px-4 py-3 border border-muted/20"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold">
+                        {rec.panelName.charAt(0).toUpperCase()}
+                      </div>
+                      <span className="text-sm font-semibold text-text">{rec.panelName}</span>
+                    </div>
+
+                    {confirmClearId === rec._id ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-danger font-bold">Confirm?</span>
+                        <button
+                          onClick={() => handleClearEvaluation(rec._id)}
+                          disabled={clearingId === rec._id}
+                          className="px-3 py-1 rounded-lg text-[11px] font-bold bg-danger text-white hover:bg-danger/80 transition-all disabled:opacity-50"
+                        >
+                          {clearingId === rec._id ? '...' : 'Yes, Clear'}
+                        </button>
+                        <button
+                          onClick={() => setConfirmClearId(null)}
+                          className="px-3 py-1 rounded-lg text-[11px] font-bold border border-muted text-text/50 hover:text-text transition-all"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmClearId(rec._id)}
+                        className="px-3 py-1 rounded-lg text-[11px] font-bold border border-danger/30 text-danger bg-danger/5 hover:bg-danger/15 hover:border-danger/60 transition-all"
+                      >
+                        🗑 Clear
+                      </button>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <p className="text-center text-text/40 text-sm py-8">No evaluations to clear for this group.</p>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-bg border-t border-muted/30 flex justify-end">
+              <button
+                onClick={() => { setClearModal(null); setConfirmClearId(null); }}
+                className="evl-btn-secondary !py-1.5 !text-xs"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

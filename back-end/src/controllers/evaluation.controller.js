@@ -3,6 +3,17 @@ const Group = require('../models/Group');
 const Section = require('../models/Section');
 const Settings = require('../models/Settings');
 
+// Admin: Clear (delete) a single evaluation record
+exports.clearEvaluation = async (req, res) => {
+  const { evaluationId } = req.params;
+  try {
+    const evaluation = await Evaluation.findByIdAndDelete(evaluationId);
+    if (!evaluation) return res.status(404).json({ message: 'Evaluation not found' });
+    res.json({ message: 'Evaluation cleared successfully' });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to clear evaluation', error: err.message });
+  }
+};
 
 // Panel: submit or update their evaluation for a group
 exports.submitEvaluation = async (req, res) => {
@@ -176,7 +187,13 @@ exports.getSectionResults = async (req, res) => {
         text: ev.comments || ''
       })).filter(c => c.text);
 
-      return { group, averaged, finalTotal, evaluatedBy, missingPanels, isIncomplete, comments };
+      const evaluationRecords = evaluations.map(ev => ({
+        _id: ev._id,
+        panelId: ev.panel?._id,
+        panelName: ev.panel?.name || 'Unknown',
+      }));
+
+      return { group, averaged, finalTotal, evaluatedBy, missingPanels, isIncomplete, comments, evaluationRecords };
     })
   );
   res.json(results);

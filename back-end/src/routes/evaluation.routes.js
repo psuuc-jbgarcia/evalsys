@@ -4,6 +4,7 @@ const {
   getMyEvaluation,
   getGroupResult,
   getSectionResults,
+  clearEvaluation,
 } = require('../controllers/evaluation.controller');
 const { protect, adminOnly, panelOnly } = require('../middleware/auth.middleware');
 const { validateScores } = require('../middleware/validate.middleware');
@@ -17,5 +18,6 @@ router.get('/group/:groupId/result', protect, adminOnly, getGroupResult);
 router.get('/section/:sectionId/results', protect, adminOnly, getSectionResults);
 router.get('/export-all', protect, adminOnly, require('../controllers/evaluation.controller').exportAllResults);
 router.post('/master-reset', protect, adminOnly, require('../controllers/evaluation.controller').masterReset);
+router.delete('/:evaluationId', protect, adminOnly, clearEvaluation);
 
 module.exports = router;
