@@ -109,6 +109,7 @@ automated-rubrics/
 
 ## 🔮 Future Roadmap
 
+- **Evolving to Multi-Subject (MIT) Platform**: Evolve the entire system from a single-subject application to a robust multi-subject (MIT) platform. This will allow administrators to manage multiple subjects/courses, assign subject-specific active rubrics, filter registrations, and track grading progress scoped to each subject.
 - **Deliberation View (Side-by-Side Comparison)**: A detailed admin view to compare individual judge scores side-by-side. This helps identify grading discrepancies (e.g., if one judge is significantly stricter than others) to facilitate fairer deliberations.
 - **Real-Time Leaderboard Mode**: A fullscreen, animated "Hall of Fame" view for projecting top-performing groups during awarding ceremonies.
 - **Radar Chart Analytics**: Visual performance breakdown per group to identify specific strengths and weaknesses in their presentation or technical implementation.
