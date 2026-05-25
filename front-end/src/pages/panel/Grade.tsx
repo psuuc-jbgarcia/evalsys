@@ -20,14 +20,14 @@ const LEVEL_COLORS: Record<string, string> = {
 export default function Grade() {
   const [rubrics, setRubrics] = useState<Rubric[]>([]);
   const [selectedRubricId, setSelectedRubricId] = useState<string>('');
-  
+
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
-  
+
   const [scores, setScores] = useState<Record<string, number | ''>>({});
   const [comments, setComments] = useState('');
   const [existing, setExisting] = useState<any>(null);
-  
+
   const [loadingRubrics, setLoadingRubrics] = useState(true);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
@@ -50,8 +50,8 @@ export default function Grade() {
         setSelectedRubricId(active._id);
       }
     })
-    .catch((err) => console.error(err))
-    .finally(() => setLoadingRubrics(false));
+      .catch((err) => console.error(err))
+      .finally(() => setLoadingRubrics(false));
 
     api.get('/sections').then((r) => {
       setSections(r.data);
@@ -71,7 +71,7 @@ export default function Grade() {
         }
       }
     })
-    .finally(() => setLoadingSidebar(false));
+      .finally(() => setLoadingSidebar(false));
 
     api.get('/settings').then((r) => {
       setGradingLocked(r.data.isGradingLocked);
@@ -108,7 +108,7 @@ export default function Grade() {
       setExisting(null);
       // Try to restore from local backup first
       const restored = restoreBackup(group._id);
-      
+
       // If no backup, reset scores based on currently selected rubric
       if (!restored && activeRubric) {
         const init: Record<string, number | ''> = {};
@@ -126,7 +126,7 @@ export default function Grade() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Check if all scores are filled
     const missing = activeRubric?.criteria.some(c => scores[c.key] === '');
     if (missing) {
@@ -139,10 +139,10 @@ export default function Grade() {
     setError(''); setSuccess('');
     setSubmitting(true);
     try {
-      await api.post(`/evaluations/group/${selectedGroup!._id}`, { 
-        scores, 
+      await api.post(`/evaluations/group/${selectedGroup!._id}`, {
+        scores,
         rubricId: selectedRubricId,
-        comments 
+        comments
       });
       setSuccess('Scores and feedback submitted successfully.');
       const res = await api.get(`/evaluations/group/${selectedGroup!._id}/mine`);
@@ -182,64 +182,64 @@ export default function Grade() {
     return false;
   };
 
-  const handlePrintRubric = () => {
-    if (!activeRubric || !selectedGroup) return;
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
+  // const _handlePrintRubric = () => {
+  //   if (!activeRubric || !selectedGroup) return;
+  //   const printWindow = window.open('', '_blank');
+  //   if (!printWindow) return;
 
-    const content = `
-      <html>
-        <head>
-          <title>Offline Grading Sheet - ${selectedGroup.name}</title>
-          <style>
-            body { font-family: sans-serif; padding: 40px; color: #333; }
-            h1 { margin-bottom: 5px; }
-            .info { color: #666; margin-bottom: 30px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
-            .criteria { margin-bottom: 40px; break-inside: avoid; }
-            .criteria-title { font-weight: bold; font-size: 18px; margin-bottom: 10px; display: flex; justify-content: space-between; }
-            .level { border: 1px solid #ddd; padding: 10px; margin-bottom: 5px; border-radius: 5px; }
-            .level-title { font-weight: bold; font-size: 12px; margin-bottom: 3px; }
-            .level-desc { font-size: 11px; color: #666; }
-            .score-box { border: 2px solid #000; width: 60px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: bold; }
-          </style>
-        </head>
-        <body>
-          <h1>Offline Grading Sheet</h1>
-          <div class="info">
-            <strong>Group:</strong> ${selectedGroup.name} <br/>
-            <strong>Block:</strong> ${selectedSidebarSectionId ? sections.find(s => s._id === selectedSidebarSectionId)?.block : ''} <br/>
-            <strong>Rubric:</strong> ${activeRubric.title}
-          </div>
-          ${activeRubric.criteria.map(c => `
-            <div class="criteria">
-              <div class="criteria-title">
-                <span>${c.label} (Max: ${c.maxScore})</span>
-                <div class="score-box"></div>
-              </div>
-              ${c.levels.map(l => `
-                <div class="level">
-                  <div class="level-title">${l.label} (${l.minScore}-${l.maxScore})</div>
-                  <div class="level-desc">${l.description}</div>
-                </div>
-              `).join('')}
-            </div>
-          `).join('')}
-          <div style="margin-top: 50px; border-top: 2px solid #000; padding-top: 10px;">
-            <strong>Total Score: ________ / ${maxTotal}</strong>
-          </div>
-          <script>window.print();</script>
-        </body>
-      </html>
-    `;
-    printWindow.document.write(content);
-    printWindow.document.close();
-  };
+  //   const content = `
+  //     <html>
+  //       <head>
+  //         <title>Offline Grading Sheet - ${selectedGroup.name}</title>
+  //         <style>
+  //           body { font-family: sans-serif; padding: 40px; color: #333; }
+  //           h1 { margin-bottom: 5px; }
+  //           .info { color: #666; margin-bottom: 30px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+  //           .criteria { margin-bottom: 40px; break-inside: avoid; }
+  //           .criteria-title { font-weight: bold; font-size: 18px; margin-bottom: 10px; display: flex; justify-content: space-between; }
+  //           .level { border: 1px solid #ddd; padding: 10px; margin-bottom: 5px; border-radius: 5px; }
+  //           .level-title { font-weight: bold; font-size: 12px; margin-bottom: 3px; }
+  //           .level-desc { font-size: 11px; color: #666; }
+  //           .score-box { border: 2px solid #000; width: 60px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: bold; }
+  //         </style>
+  //       </head>
+  //       <body>
+  //         <h1>Offline Grading Sheet</h1>
+  //         <div class="info">
+  //           <strong>Group:</strong> ${selectedGroup.name} <br/>
+  //           <strong>Block:</strong> ${selectedSidebarSectionId ? sections.find(s => s._id === selectedSidebarSectionId)?.block : ''} <br/>
+  //           <strong>Rubric:</strong> ${activeRubric.title}
+  //         </div>
+  //         ${activeRubric.criteria.map(c => `
+  //           <div class="criteria">
+  //             <div class="criteria-title">
+  //               <span>${c.label} (Max: ${c.maxScore})</span>
+  //               <div class="score-box"></div>
+  //             </div>
+  //             ${c.levels.map(l => `
+  //               <div class="level">
+  //                 <div class="level-title">${l.label} (${l.minScore}-${l.maxScore})</div>
+  //                 <div class="level-desc">${l.description}</div>
+  //               </div>
+  //             `).join('')}
+  //           </div>
+  //         `).join('')}
+  //         <div style="margin-top: 50px; border-top: 2px solid #000; padding-top: 10px;">
+  //           <strong>Total Score: ________ / ${maxTotal}</strong>
+  //         </div>
+  //         <script>window.print();</script>
+  //       </body>
+  //     </html>
+  //   `;
+  //   printWindow.document.write(content);
+  //   printWindow.document.close();
+  // };
 
   const visibleGroups = selectedSidebarSectionId
     ? groups.filter((g) => {
-        const sId = typeof g.section === 'string' ? g.section : g.section?._id;
-        return sId === selectedSidebarSectionId;
-      })
+      const sId = typeof g.section === 'string' ? g.section : g.section?._id;
+      return sId === selectedSidebarSectionId;
+    })
     : [];
 
   return (
@@ -248,7 +248,7 @@ export default function Grade() {
       <div className="w-full lg:w-72 shrink-0">
         <div className="sticky top-0 pr-2 pb-8">
           <h3 className="text-text font-bold text-base mb-4 px-1">Assigned Blocks</h3>
-          
+
           {loadingSidebar ? (
             <div className="space-y-3">
               {Array(3).fill(0).map((_, i) => (
@@ -261,11 +261,10 @@ export default function Grade() {
                 <button
                   key={section._id}
                   onClick={() => setSelectedSidebarSectionId(section._id)}
-                  className={`whitespace-nowrap lg:whitespace-normal text-left px-4 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150 border ${
-                    selectedSidebarSectionId === section._id
+                  className={`whitespace-nowrap lg:whitespace-normal text-left px-4 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150 border ${selectedSidebarSectionId === section._id
                       ? 'bg-primary text-white border-primary shadow-sm shadow-primary/20'
                       : 'bg-surface text-text/60 border-muted/40 hover:text-text hover:border-primary/30'
-                  }`}
+                    }`}
                 >
                   {section.block}
                 </button>
@@ -288,11 +287,10 @@ export default function Grade() {
                 {visibleGroups.length > 0 ? (
                   visibleGroups.map((g) => (
                     <button key={g._id} onClick={() => selectGroup(g)}
-                      className={`text-left px-4 py-3 rounded-lg transition-all duration-150 border min-w-0 w-full ${
-                        selectedGroup?._id === g._id
+                      className={`text-left px-4 py-3 rounded-lg transition-all duration-150 border min-w-0 w-full ${selectedGroup?._id === g._id
                           ? 'bg-primary text-white border-primary shadow-sm shadow-primary/20'
                           : 'bg-surface text-text/70 hover:text-text hover:border-primary/30 border-muted/30'
-                      }`}>
+                        }`}>
                       <p className="font-bold text-sm leading-tight truncate">{g.name}</p>
                       <p className={`text-[11px] mt-1 truncate ${selectedGroup?._id === g._id ? 'text-white/70' : 'text-text/40'}`}>
                         {g.members.length ? g.members.join(', ') : 'No members'}
@@ -344,11 +342,11 @@ export default function Grade() {
                   <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-xs uppercase tracking-wider">{selectedGroup.section?.block}</span>
                   {selectedGroup.members.length ? ` · ${selectedGroup.members.join(', ')}` : ''}
                 </p>
-                
+
                 <div className="mt-6 p-4 bg-surface rounded-xl border border-muted/20">
                   <label className="text-[10px] font-bold text-text/40 uppercase tracking-widest block mb-2">Grading Rubric In Use</label>
-                  <select 
-                    value={selectedRubricId} 
+                  <select
+                    value={selectedRubricId}
                     onChange={(e) => setSelectedRubricId(e.target.value)}
                     className="evl-select !py-2 !text-sm w-full bg-bg border-muted/40"
                   >
@@ -368,12 +366,11 @@ export default function Grade() {
                   </p>
                   <div className="w-full bg-muted/30 rounded-full h-2 mt-3">
                     <div
-                      className={`h-2 rounded-full transition-all duration-500 ${
-                        pct >= 84 ? 'bg-success shadow-[0_0_8px_rgba(34,197,94,0.4)]' : 
-                        pct >= 64 ? 'bg-primary shadow-[0_0_8px_rgba(59,130,246,0.4)]' : 
-                        pct >= 44 ? 'bg-warning shadow-[0_0_8px_rgba(234,179,8,0.4)]' : 
-                        'bg-danger shadow-[0_0_8px_rgba(239,68,68,0.4)]'
-                      }`}
+                      className={`h-2 rounded-full transition-all duration-500 ${pct >= 84 ? 'bg-success shadow-[0_0_8px_rgba(34,197,94,0.4)]' :
+                          pct >= 64 ? 'bg-primary shadow-[0_0_8px_rgba(59,130,246,0.4)]' :
+                            pct >= 44 ? 'bg-warning shadow-[0_0_8px_rgba(234,179,8,0.4)]' :
+                              'bg-danger shadow-[0_0_8px_rgba(239,68,68,0.4)]'
+                        }`}
                       style={{ width: `${pct}%` }}
                     />
                   </div>
@@ -386,7 +383,7 @@ export default function Grade() {
                   </span>
                   <button 
                     type="button"
-                    onClick={handlePrintRubric}
+                    onClick={_handlePrintRubric}
                     className="text-[10px] font-black text-primary uppercase tracking-widest hover:text-primary/70 transition-colors"
                   >
                     📥 Offline Backup
@@ -409,7 +406,7 @@ export default function Grade() {
             )}
             {success && <div className="evl-alert-success mb-4">{success}</div>}
             {error && <div className="evl-alert-error mb-4">{error}</div>}
-            
+
             {gradingLocked && (
               <div className="evl-alert-error bg-danger/5 border border-danger/20 text-danger mb-6 flex items-center gap-3">
                 <span className="text-xl">🔒</span>
@@ -454,8 +451,8 @@ export default function Grade() {
               />
             </div>
 
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               disabled={gradingLocked || submitting}
               className={`evl-btn-primary px-8 py-3 ${(gradingLocked || submitting) ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
             >
