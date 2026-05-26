@@ -8,20 +8,25 @@ const connectDB = require('./config/db');
 
 const app = express();
 
-// Rate limiting: 300 requests per 15 minutes per IP
-const limiter = rateLimit({
+// Trust Render/Vercel proxy headers so rate limiting uses the real client IP.
+app.set('trust proxy', 1);
+
+// Limit only login attempts. A global limiter can block many users sharing
+// the same school/network IP while they are actively using the system.
+const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 300,
-  message: { message: 'Too many requests from this IP, please try again after 15 minutes' },
+  max: 50,
+  message: { message: 'Too many login attempts, please try again after 15 minutes' },
   standardHeaders: true,
   legacyHeaders: false,
 });
 
-app.use(limiter);
 connectDB();
 
 app.use(cors());
 app.use(express.json());
+
+app.use('/api/auth/login', loginLimiter);
 
 app.use('/api/auth', require('./routes/auth.routes'));
 app.use('/api/users', require('./routes/user.routes'));

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 import ScoreInput from '../../components/ScoreInput';
@@ -16,6 +16,8 @@ const LEVEL_COLORS: Record<string, string> = {
   Fair: 'bg-warning/10 text-warning',
   Poor: 'bg-danger/10 text-danger',
 };
+
+const draftKey = (groupId: string) => `grading_draft_${groupId}`;
 
 export default function Grade() {
   const [rubrics, setRubrics] = useState<Rubric[]>([]);
@@ -39,6 +41,7 @@ export default function Grade() {
 
   const [searchParams] = useSearchParams();
   const urlGroupId = searchParams.get('groupId');
+  const skipAutosaveRef = useRef(false);
 
   const [selectedSidebarSectionId, setSelectedSidebarSectionId] = useState<string>('');
 
@@ -83,7 +86,13 @@ export default function Grade() {
   // Re-initialize scores when group or rubric changes
   useEffect(() => {
     if (selectedGroup && activeRubric) {
-      if (existing && existing.rubric?._id === activeRubric._id) {
+      skipAutosaveRef.current = true;
+      const draft = restoreBackup(selectedGroup._id, activeRubric._id);
+
+      if (draft) {
+        setScores(draft.scores);
+        setComments(draft.comments || '');
+      } else if (existing && (existing.rubric?._id || existing.rubric) === activeRubric._id) {
         setScores(existing.scores);
         setComments(existing.comments || '');
       } else {
@@ -92,10 +101,15 @@ export default function Grade() {
         setScores(init);
         setComments('');
       }
+
+      setTimeout(() => {
+        skipAutosaveRef.current = false;
+      }, 0);
     }
   }, [selectedGroup, activeRubric, existing]);
 
   const selectGroup = async (group: Group) => {
+    skipAutosaveRef.current = true;
     setSelectedGroup(group);
     setSuccess(''); setError('');
     const res = await api.get(`/evaluations/group/${group._id}/mine`);
@@ -106,16 +120,6 @@ export default function Grade() {
       }
     } else {
       setExisting(null);
-      // Try to restore from local backup first
-      const restored = restoreBackup(group._id);
-
-      // If no backup, reset scores based on currently selected rubric
-      if (!restored && activeRubric) {
-        const init: Record<string, number | ''> = {};
-        activeRubric.criteria.forEach((c) => { init[c.key] = ''; });
-        setScores(init);
-        setComments('');
-      }
     }
   };
 
@@ -147,7 +151,7 @@ export default function Grade() {
       setSuccess('Scores and feedback submitted successfully.');
       const res = await api.get(`/evaluations/group/${selectedGroup!._id}/mine`);
       setExisting(res.data);
-      localStorage.removeItem(`backup_${selectedGroup!._id}`);
+      localStorage.removeItem(draftKey(selectedGroup!._id));
     } catch (err: any) {
       setError(err.response?.data?.message || 'Submission failed');
     } finally {
@@ -159,27 +163,41 @@ export default function Grade() {
 
   // AUTO-SAVE to localStorage to prevent data loss if browser crashes
   useEffect(() => {
-    if (selectedGroup && activeRubric && Object.keys(scores).length > 0) {
+    if (
+      selectedGroup &&
+      activeRubric &&
+      !skipAutosaveRef.current &&
+      (Object.keys(scores).length > 0 || comments.trim())
+    ) {
       const backupData = {
         groupId: selectedGroup._id,
         rubricId: activeRubric._id,
-        scores
+        scores,
+        comments
       };
-      localStorage.setItem(`backup_${selectedGroup._id}`, JSON.stringify(backupData));
+      localStorage.setItem(draftKey(selectedGroup._id), JSON.stringify(backupData));
     }
-  }, [scores, selectedGroup, activeRubric]);
+  }, [scores, comments, selectedGroup, activeRubric]);
 
-  // Restore backup on group select
-  const restoreBackup = (groupId: string) => {
-    const saved = localStorage.getItem(`backup_${groupId}`);
+  // Restore unsaved local draft when returning to a group.
+  const restoreBackup = (groupId: string, rubricId: string) => {
+    const saved = localStorage.getItem(draftKey(groupId));
     if (saved) {
-      const data = JSON.parse(saved);
-      if (data.rubricId === selectedRubricId) {
-        setScores(data.scores);
-        return true;
+      try {
+        const data = JSON.parse(saved);
+        if (data.rubricId === rubricId && data.scores) {
+          return data as {
+            groupId: string;
+            rubricId: string;
+            scores: Record<string, number | ''>;
+            comments?: string;
+          };
+        }
+      } catch {
+        localStorage.removeItem(draftKey(groupId));
       }
     }
-    return false;
+    return null;
   };
 
   // const _handlePrintRubric = () => {
