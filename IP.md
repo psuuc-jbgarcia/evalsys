@@ -32,6 +32,76 @@ When a student registers their group publicly at `/register`, should they first 
 
 ---
 
+## Registration & Export Upgrade
+
+### Structured Member Registration
+The current registration flow accepts members as one comma-separated text field. In the future version, the registration form should use structured member fields so student names can be exported cleanly and sorted alphabetically.
+
+Each group registration should allow dynamic member rows:
+
+```text
+Member 1
+Last Name
+First Name
+Middle Name
+
+Member 2
+Last Name
+First Name
+Middle Name
+
+[+ Add Member]
+```
+
+Rules:
+* `Last Name` and `First Name` are required.
+* `Middle Name` is optional.
+* Groups can add multiple members using an **Add Member** button.
+* Individual registrations use one member row.
+* Existing old records with `members` stored as strings should remain supported during migration.
+
+Recommended future data shape:
+
+```javascript
+members: [
+  {
+    lastName: "Garcia",
+    firstName: "Jerico",
+    middleName: "Bautista"
+  }
+]
+```
+
+### Per-Block Member Grade Export
+The Results page should support exporting grades per selected block. This is useful when an instructor needs a clean alphabetized grade list for all students in one block.
+
+When an admin selects a block in Results, provide two export options:
+
+```text
+Download Group Summary CSV
+Download Member Grades CSV
+```
+
+Group summary export should remain one row per group:
+
+```csv
+Block,Group,Members,Group Score,Evaluated By,Missing Panels,Comments
+```
+
+Member grades export should be one row per member:
+
+```csv
+Block,Group,Last Name,First Name,Middle Name,Group Score
+```
+
+Export rules:
+* Export only the currently selected block.
+* Sort members alphabetically by `Last Name`, then `First Name`, then `Middle Name`.
+* Every member receives the same final group score.
+* If a group evaluation is incomplete, show `Pending Complete Evaluation` as the score.
+
+---
+
 ## Role Hierarchy: Super Admin
 
 ### Overview
@@ -40,6 +110,6 @@ To support instructors using the admin side for their own subject's evaluation, 
 | Role | Who | Access |
 |---|---|---|
 | `superadmin` | System owner | Full system access — manages all users (including admins), all subjects, global reset, and system settings |
-| `admin` | Instructor | Scoped to their assigned subject — manages sections, groups, rubrics, panel assignments, and results for that subject only | AND REMOVE create acc for admin the super admin is responsible for this
+| `admin` | Instructor | Scoped to one or more assigned subjects/courses; manages sections, groups, rubrics, panel assignments, and results only for those assigned subjects. Admin account creation should be handled by the superadmin. |
 | `panel` | Panel judge / evaluator | Grades groups assigned to them |
 
