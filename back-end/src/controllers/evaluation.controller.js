@@ -44,9 +44,11 @@ exports.submitEvaluation = async (req, res) => {
   if (!isAssigned && !isGroupAssigned)
     return res.status(403).json({ message: 'You are not assigned to this group\'s section' });
 
+  const total = Object.values(scores).reduce((sum, val) => sum + Number(val || 0), 0);
+
   const evaluation = await Evaluation.findOneAndUpdate(
     { group: groupId, panel: req.user._id },
-    { scores, rubric: rubricId, comments: req.body.comments || '', isSubmitted: true },
+    { scores, total, rubric: rubricId, comments: req.body.comments || '', isSubmitted: true },
     { new: true, upsert: true, runValidators: true }
   );
 
