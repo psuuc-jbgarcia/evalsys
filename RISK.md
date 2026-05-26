@@ -9,7 +9,7 @@ This file tracks technical risks found during project review. These are not imme
 - Risk: If panels can select a non-active rubric, the backend may validate scores against one rubric but save the evaluation under another rubric.
 - Suggested fix: Validate scores against the submitted `rubricId`, or restrict panels to only the active rubric.
 
-## 2. Evaluation Total May Not Be Saved During Update
+## 2. Evaluation Total May Not Be Saved During Update -done
 
 - Files:
   - `back-end/src/controllers/evaluation.controller.js`
