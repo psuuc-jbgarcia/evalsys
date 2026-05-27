@@ -22,6 +22,8 @@ const draftKey = (groupId: string) => `grading_draft_${groupId}`;
 const hasScoreValues = (scores: Record<string, number | ''>) =>
   Object.values(scores).some((value) => value !== '' && value !== null && value !== undefined);
 
+const getRefId = (value: any) => value?._id || value || '';
+
 export default function Grade() {
   const [rubrics, setRubrics] = useState<Rubric[]>([]);
   const [selectedRubricId, setSelectedRubricId] = useState<string>('');
@@ -45,6 +47,7 @@ export default function Grade() {
   const [searchParams] = useSearchParams();
   const urlGroupId = searchParams.get('groupId');
   const skipAutosaveRef = useRef(false);
+  const evaluationRequestIdRef = useRef(0);
 
   const [selectedSidebarSectionId, setSelectedSidebarSectionId] = useState<string>('');
 
@@ -85,19 +88,26 @@ export default function Grade() {
   }, []);
 
   const activeRubric = rubrics.find((r) => r._id === selectedRubricId) || null;
+  const selectedExisting = selectedGroup && getRefId(existing?.group) === selectedGroup._id
+    ? existing
+    : null;
 
   // Re-initialize scores when group or rubric changes
   useEffect(() => {
     if (selectedGroup && activeRubric) {
       skipAutosaveRef.current = true;
       const draft = restoreBackup(selectedGroup._id, activeRubric._id);
+      const matchingExisting = selectedExisting &&
+        getRefId(selectedExisting.rubric) === activeRubric._id
+        ? selectedExisting
+        : null;
 
-      if (draft) {
+      if (matchingExisting) {
+        setScores(matchingExisting.scores);
+        setComments(matchingExisting.comments || '');
+      } else if (draft) {
         setScores(draft.scores);
         setComments(draft.comments || '');
-      } else if (existing && (existing.rubric?._id || existing.rubric) === activeRubric._id) {
-        setScores(existing.scores);
-        setComments(existing.comments || '');
       } else {
         const init: Record<string, number | ''> = {};
         activeRubric.criteria.forEach((c) => { init[c.key] = ''; });
@@ -109,13 +119,17 @@ export default function Grade() {
         skipAutosaveRef.current = false;
       }, 0);
     }
-  }, [selectedGroup, activeRubric, existing]);
+  }, [selectedGroup, activeRubric, selectedExisting]);
 
   const selectGroup = async (group: Group) => {
+    const requestId = evaluationRequestIdRef.current + 1;
+    evaluationRequestIdRef.current = requestId;
     skipAutosaveRef.current = true;
     setSelectedGroup(group);
+    setExisting(null);
     setSuccess(''); setError('');
     const res = await api.get(`/evaluations/group/${group._id}/mine`);
+    if (requestId !== evaluationRequestIdRef.current) return;
     if (res.data) {
       setExisting(res.data);
       if (res.data.rubric) {
@@ -176,7 +190,8 @@ export default function Grade() {
         groupId: selectedGroup._id,
         rubricId: activeRubric._id,
         scores,
-        comments
+        comments,
+        updatedAt: new Date().toISOString()
       };
       localStorage.setItem(draftKey(selectedGroup._id), JSON.stringify(backupData));
     }
@@ -194,6 +209,7 @@ export default function Grade() {
             rubricId: string;
             scores: Record<string, number | ''>;
             comments?: string;
+            updatedAt?: string;
           };
         }
       } catch {
@@ -415,12 +431,12 @@ export default function Grade() {
             </div>
 
             {/* Alerts */}
-            {existing && existing.rubric?._id === activeRubric._id && (
+            {selectedExisting && getRefId(selectedExisting.rubric) === activeRubric._id && (
               <div className="evl-alert-info mb-4">
                 You already submitted scores for this group using this rubric. You can update them below.
               </div>
             )}
-            {existing && existing.rubric?._id !== activeRubric._id && (
+            {selectedExisting && getRefId(selectedExisting.rubric) !== activeRubric._id && (
               <div className="evl-alert-warning bg-warning/5 border border-warning/20 text-warning mb-4">
                 You previously graded this group using a different rubric. Saving now will overwrite those scores with the new rubric's criteria.
               </div>
@@ -477,7 +493,7 @@ export default function Grade() {
               disabled={gradingLocked || submitting}
               className={`evl-btn-primary px-8 py-3 ${(gradingLocked || submitting) ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
             >
-              {submitting ? 'Submitting...' : (existing ? 'Update Scores & Feedback' : 'Submit Scores & Feedback')}
+              {submitting ? 'Submitting...' : (selectedExisting ? 'Update Scores & Feedback' : 'Submit Scores & Feedback')}
             </button>
           </form>
         )}
