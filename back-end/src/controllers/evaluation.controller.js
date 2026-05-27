@@ -3,6 +3,21 @@ const Group = require('../models/Group');
 const Section = require('../models/Section');
 const Settings = require('../models/Settings');
 
+const scoresToObject = (scores) => {
+  if (!scores) return {};
+  if (scores instanceof Map) return Object.fromEntries(scores);
+  return scores;
+};
+
+const serializeEvaluation = (evaluation) => {
+  if (!evaluation) return null;
+  const obj = evaluation.toObject ? evaluation.toObject() : evaluation;
+  return {
+    ...obj,
+    scores: scoresToObject(evaluation.scores),
+  };
+};
+
 // Admin: Clear (delete) a single evaluation record
 exports.clearEvaluation = async (req, res) => {
   const { evaluationId } = req.params;
@@ -52,7 +67,7 @@ exports.submitEvaluation = async (req, res) => {
     { new: true, upsert: true, runValidators: true }
   );
 
-  res.json(evaluation);
+  res.json(serializeEvaluation(evaluation));
 };
 
 // Panel: get their own evaluation for a group
@@ -61,7 +76,7 @@ exports.getMyEvaluation = async (req, res) => {
     group: req.params.groupId,
     panel: req.user._id,
   }).populate('rubric');
-  res.json(evaluation || null);
+  res.json(serializeEvaluation(evaluation));
 };
 
 // Admin: get all evaluations for a group + computed final result

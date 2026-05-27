@@ -19,6 +19,9 @@ const LEVEL_COLORS: Record<string, string> = {
 
 const draftKey = (groupId: string) => `grading_draft_${groupId}`;
 
+const hasScoreValues = (scores: Record<string, number | ''>) =>
+  Object.values(scores).some((value) => value !== '' && value !== null && value !== undefined);
+
 export default function Grade() {
   const [rubrics, setRubrics] = useState<Rubric[]>([]);
   const [selectedRubricId, setSelectedRubricId] = useState<string>('');
@@ -185,7 +188,7 @@ export default function Grade() {
     if (saved) {
       try {
         const data = JSON.parse(saved);
-        if (data.rubricId === rubricId && data.scores) {
+        if (data.rubricId === rubricId && data.scores && (hasScoreValues(data.scores) || data.comments?.trim())) {
           return data as {
             groupId: string;
             rubricId: string;
