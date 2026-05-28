@@ -18,6 +18,9 @@ const panelLinks = [
 ];
 
 const getPanelId = (user?: any) => user?.id || user?._id || '';
+const groupNameCacheKey = 'grading_group_names';
+const groupStatusCacheKey = (panelId: string) => `grading_group_status_${panelId}`;
+const selectedRubricCacheKey = (panelId: string) => `grading_selected_rubric_${panelId}`;
 
 const hasDraftContent = (draft: any) => {
   const scores = draft?.scores || {};
@@ -25,19 +28,40 @@ const hasDraftContent = (draft: any) => {
   return hasScores || Boolean(draft?.comments?.trim());
 };
 
-const getPanelDraftCount = (panelId?: string) => {
+const getPanelDraftGroups = (panelId?: string) => {
+  if (!panelId) return [];
   const prefix = `grading_draft_${panelId}_`;
+  const selectedRubricId = localStorage.getItem(selectedRubricCacheKey(panelId));
+  let cachedNames: Record<string, string> = {};
+  let cachedStatus: Record<string, { name?: string; isGraded?: boolean }> = {};
+  try {
+    cachedNames = JSON.parse(localStorage.getItem(groupNameCacheKey) || '{}');
+  } catch {
+    localStorage.removeItem(groupNameCacheKey);
+  }
+  try {
+    cachedStatus = JSON.parse(localStorage.getItem(groupStatusCacheKey(panelId)) || '{}');
+  } catch {
+    localStorage.removeItem(groupStatusCacheKey(panelId));
+  }
   return Object.keys(localStorage).filter((key) => {
-    if (panelId && key.startsWith(prefix)) return true;
-    return /^grading_draft_[a-f0-9]{24}$/.test(key);
-  }).filter((key) => {
+    return key.startsWith(prefix);
+  }).map((key) => {
     try {
-      return hasDraftContent(JSON.parse(localStorage.getItem(key) || 'null'));
+      const draft = JSON.parse(localStorage.getItem(key) || 'null');
+      if (!hasDraftContent(draft)) return null;
+      if (selectedRubricId && draft?.rubricId !== selectedRubricId) return null;
+      const groupId = draft?.groupId || key.replace(prefix, '');
+      if (cachedStatus[groupId]?.isGraded) {
+        localStorage.removeItem(key);
+        return null;
+      }
+      return draft?.groupName || cachedStatus[groupId]?.name || cachedNames[groupId] || `Group ${groupId}`;
     } catch {
       localStorage.removeItem(key);
-      return false;
+      return null;
     }
-  }).length;
+  }).filter(Boolean) as string[];
 };
 
 export default function Layout({ children }: { children: ReactNode }) {
@@ -49,10 +73,14 @@ export default function Layout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleLogout = () => {
-    const draftCount = user?.role === 'panel' ? getPanelDraftCount(getPanelId(user)) : 0;
+    const draftGroups = user?.role === 'panel' ? getPanelDraftGroups(getPanelId(user)) : [];
+    const draftCount = draftGroups.length;
     if (draftCount > 0) {
+      const shownGroups = draftGroups.slice(0, 8).map((name) => `- ${name}`).join('\n');
+      const extraGroups = draftCount > 8 ? `\n...and ${draftCount - 8} more` : '';
       const proceed = confirm(
         `You still have ${draftCount} unsubmitted grading draft${draftCount === 1 ? '' : 's'} saved only on this browser.\n\n` +
+        `Groups:\n${shownGroups}${extraGroups}\n\n` +
         'If you sign out, those scores are NOT submitted yet. They can only be restored by logging back in on this same device/browser.\n\n' +
         'Do you still want to sign out?'
       );

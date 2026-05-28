@@ -7,6 +7,9 @@ import { CardSkeleton } from '../components/LoadingSkeleton';
 interface Section { _id: string; name: string; block: string; }
 interface Group { _id: string; name: string; section: Section; members: string[]; isGraded?: boolean; }
 
+const groupNameCacheKey = 'grading_group_names';
+const groupStatusCacheKey = (panelId: string) => `grading_group_status_${panelId}`;
+
 const adminCards = [
   { to: '/sections', label: 'Blocks', desc: 'Create and manage blocks', icon: '☰' },
   { to: '/groups', label: 'Groups', desc: 'Create groups and add members', icon: '⊞' },
@@ -20,7 +23,7 @@ export default function Dashboard() {
   const { user } = useAuth();
 
   if (user?.role === 'admin') return <AdminDashboard name={user.name} />;
-  return <PanelDashboard name={user?.name ?? ''} />;
+  return <PanelDashboard name={user?.name ?? ''} panelId={user?.id || user?._id || ''} />;
 }
 
 /* ── Admin view ── */
@@ -168,7 +171,7 @@ function AdminDashboard({ name }: { name: string }) {
 }
 
 /* ── Panel view — choose section, see groups ── */
-function PanelDashboard({ name }: { name: string }) {
+function PanelDashboard({ name, panelId }: { name: string; panelId: string }) {
   const [groups, setGroups] = useState<Group[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
@@ -189,11 +192,23 @@ function PanelDashboard({ name }: { name: string }) {
         setSelectedSection(fetchedSections[0]._id);
       }
       setGroups(grpRes.data);
+      if (panelId) {
+        const groupNames = grpRes.data.reduce((acc: Record<string, string>, group: Group) => {
+          acc[group._id] = group.name;
+          return acc;
+        }, {});
+        const groupStatus = grpRes.data.reduce((acc: Record<string, { name: string; isGraded: boolean }>, group: Group) => {
+          acc[group._id] = { name: group.name, isGraded: Boolean(group.isGraded) };
+          return acc;
+        }, {});
+        localStorage.setItem(groupNameCacheKey, JSON.stringify(groupNames));
+        localStorage.setItem(groupStatusCacheKey(panelId), JSON.stringify(groupStatus));
+      }
       setLocked(setRes.data.isGradingLocked);
     })
     .catch((err) => console.error(err))
     .finally(() => setLoading(false));
-  }, []);
+  }, [panelId]);
 
   const filteredGroups = groups
     .filter((g) => {

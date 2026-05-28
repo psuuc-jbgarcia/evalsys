@@ -21,6 +21,9 @@ const LEVEL_COLORS: Record<string, string> = {
 const draftKey = (panelId: string, groupId: string) => `grading_draft_${panelId}_${groupId}`;
 const legacyDraftKey = (groupId: string) => `grading_draft_${groupId}`;
 const lastSelectedGroupKey = (panelId: string) => `grading_last_selected_group_${panelId}`;
+const groupNameCacheKey = 'grading_group_names';
+const groupStatusCacheKey = (panelId: string) => `grading_group_status_${panelId}`;
+const selectedRubricCacheKey = (panelId: string) => `grading_selected_rubric_${panelId}`;
 
 const hasScoreValues = (scores: Record<string, number | ''>) =>
   Object.values(scores).some((value) => value !== '' && value !== null && value !== undefined);
@@ -63,6 +66,19 @@ export default function Grade() {
 
   const [selectedSidebarSectionId, setSelectedSidebarSectionId] = useState<string>('');
 
+  const cacheGroupStatus = (nextGroups: Group[]) => {
+    const groupNames = nextGroups.reduce((acc: Record<string, string>, group: Group) => {
+      acc[group._id] = group.name;
+      return acc;
+    }, {});
+    const groupStatus = nextGroups.reduce((acc: Record<string, { name: string; isGraded: boolean }>, group: Group) => {
+      acc[group._id] = { name: group.name, isGraded: Boolean(group.isGraded) };
+      return acc;
+    }, {});
+    localStorage.setItem(groupNameCacheKey, JSON.stringify(groupNames));
+    localStorage.setItem(groupStatusCacheKey(panelId), JSON.stringify(groupStatus));
+  };
+
   useEffect(() => {
     api.get('/rubrics').then((r) => {
       setRubrics(r.data);
@@ -83,6 +99,7 @@ export default function Grade() {
 
     api.get('/groups').then((r) => {
       setGroups(r.data);
+      cacheGroupStatus(r.data);
       const initialGroupId = urlGroupId || localStorage.getItem(lastSelectedGroupKey(panelId));
       if (initialGroupId) {
         const found = r.data.find((g: Group) => g._id === initialGroupId);
@@ -163,6 +180,7 @@ export default function Grade() {
 
     const backupData = {
       groupId: group._id,
+      groupName: group.name,
       rubricId: rubric._id,
       scores: nextScores,
       comments: nextComments,
@@ -174,6 +192,12 @@ export default function Grade() {
       setHasCurrentDraft(true);
     }
   };
+
+  useEffect(() => {
+    if (selectedRubricId) {
+      localStorage.setItem(selectedRubricCacheKey(panelId), selectedRubricId);
+    }
+  }, [panelId, selectedRubricId]);
 
   const hasUnsavedLocalWork = () => (
     Boolean(selectedGroup) &&
@@ -279,6 +303,10 @@ export default function Grade() {
       setGroups((current) => current.map((g) => (
         g._id === selectedGroup!._id ? { ...g, isGraded: true } : g
       )));
+      const nextGroups = groups.map((g) => (
+        g._id === selectedGroup!._id ? { ...g, isGraded: true } : g
+      ));
+      cacheGroupStatus(nextGroups);
     } catch (err: any) {
       if (!err.response) {
         setError('Server unavailable. Your scores are saved locally and can be submitted again when the connection returns.');
