@@ -3,6 +3,7 @@ import api from '../services/api';
 
 interface User {
   id: string;
+  _id?: string;
   name: string;
   email: string;
   role: 'admin' | 'panel';
@@ -17,6 +18,11 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+const normalizeUser = (user: any): User => ({
+  ...user,
+  id: user.id || user._id,
+});
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -25,7 +31,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const token = localStorage.getItem('token');
     if (token) {
       api.get('/auth/me')
-        .then((res) => setUser(res.data))
+        .then((res) => setUser(normalizeUser(res.data)))
         .catch((err) => {
           // Only clear token if it's actually invalid (401/403)
           // If it's 429 (Rate Limit), keep the token and maybe show an alert
@@ -44,7 +50,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const login = async (email: string, password: string) => {
     const res = await api.post('/auth/login', { email, password });
     localStorage.setItem('token', res.data.token);
-    setUser(res.data.user);
+    setUser(normalizeUser(res.data.user));
   };
 
   const logout = () => {

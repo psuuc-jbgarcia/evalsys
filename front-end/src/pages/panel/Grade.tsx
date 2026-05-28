@@ -3,12 +3,13 @@ import { useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 import ScoreInput from '../../components/ScoreInput';
 import { CardSkeleton } from '../../components/LoadingSkeleton';
+import { useAuth } from '../../context/AuthContext';
 
 interface Level { label: string; minScore: number; maxScore: number; description: string; }
 interface Criteria { key: string; label: string; maxScore: number; levels: Level[]; }
 interface Rubric { _id: string; title: string; criteria: Criteria[]; isActive: boolean; }
 interface Section { _id: string; name: string; block: string; }
-interface Group { _id: string; name: string; section: Section; members: string[]; }
+interface Group { _id: string; name: string; section: Section; members: string[]; isGraded?: boolean; }
 
 const LEVEL_COLORS: Record<string, string> = {
   Excellent: 'bg-success/10 text-success',
@@ -17,14 +18,22 @@ const LEVEL_COLORS: Record<string, string> = {
   Poor: 'bg-danger/10 text-danger',
 };
 
-const draftKey = (groupId: string) => `grading_draft_${groupId}`;
+const draftKey = (panelId: string, groupId: string) => `grading_draft_${panelId}_${groupId}`;
+const legacyDraftKey = (groupId: string) => `grading_draft_${groupId}`;
+const lastSelectedGroupKey = (panelId: string) => `grading_last_selected_group_${panelId}`;
 
 const hasScoreValues = (scores: Record<string, number | ''>) =>
   Object.values(scores).some((value) => value !== '' && value !== null && value !== undefined);
 
 const getRefId = (value: any) => value?._id || value || '';
+const formatSavedTime = (value: string | null) => {
+  if (!value) return '';
+  return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
 
 export default function Grade() {
+  const { user } = useAuth();
+  const panelId = user?.id || user?._id || 'unknown_panel';
   const [rubrics, setRubrics] = useState<Rubric[]>([]);
   const [selectedRubricId, setSelectedRubricId] = useState<string>('');
 
@@ -43,6 +52,9 @@ export default function Grade() {
   const [sections, setSections] = useState<Section[]>([]);
   const [gradingLocked, setGradingLocked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
+  const [hasCurrentDraft, setHasCurrentDraft] = useState(false);
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
 
   const [searchParams] = useSearchParams();
   const urlGroupId = searchParams.get('groupId');
@@ -71,8 +83,9 @@ export default function Grade() {
 
     api.get('/groups').then((r) => {
       setGroups(r.data);
-      if (urlGroupId) {
-        const found = r.data.find((g: Group) => g._id === urlGroupId);
+      const initialGroupId = urlGroupId || localStorage.getItem(lastSelectedGroupKey(panelId));
+      if (initialGroupId) {
+        const found = r.data.find((g: Group) => g._id === initialGroupId);
         if (found) {
           selectGroup(found);
           const sId = typeof found.section === 'string' ? found.section : found.section?._id;
@@ -87,10 +100,92 @@ export default function Grade() {
     });
   }, []);
 
+  useEffect(() => {
+    const refreshSettings = () => {
+      api.get('/settings')
+        .then((r) => setGradingLocked(r.data.isGradingLocked))
+        .catch(() => undefined);
+    };
+    const timer = window.setInterval(refreshSettings, 30000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const goOnline = () => setIsOnline(true);
+    const goOffline = () => setIsOnline(false);
+    window.addEventListener('online', goOnline);
+    window.addEventListener('offline', goOffline);
+    return () => {
+      window.removeEventListener('online', goOnline);
+      window.removeEventListener('offline', goOffline);
+    };
+  }, []);
+
   const activeRubric = rubrics.find((r) => r._id === selectedRubricId) || null;
   const selectedExisting = selectedGroup && getRefId(existing?.group) === selectedGroup._id
     ? existing
     : null;
+  const total = Object.values(scores).reduce<number>(
+    (a, b) => (typeof b === 'number' ? a + b : a), 0
+  );
+  const maxTotal = activeRubric?.criteria.reduce((a, c) => a + c.maxScore, 0) ?? 100;
+  const submittedTotal = typeof selectedExisting?.total === 'number'
+    ? selectedExisting.total
+    : total;
+  const canEditScores = !gradingLocked && !submitting;
+
+  const getStoredDraft = (groupId: string) => {
+    const saved = localStorage.getItem(draftKey(panelId, groupId)) || localStorage.getItem(legacyDraftKey(groupId));
+    if (!saved) return null;
+    try {
+      return JSON.parse(saved);
+    } catch {
+      localStorage.removeItem(draftKey(panelId, groupId));
+      localStorage.removeItem(legacyDraftKey(groupId));
+      return null;
+    }
+  };
+
+  const groupHasDraft = (groupId: string) => {
+    const draft = getStoredDraft(groupId);
+    const matchesCurrentRubric = !activeRubric || draft?.rubricId === activeRubric._id;
+    return Boolean(matchesCurrentRubric && draft?.scores && (hasScoreValues(draft.scores) || draft.comments?.trim()));
+  };
+
+  const saveDraft = (
+    group = selectedGroup,
+    rubric = activeRubric,
+    nextScores = scores,
+    nextComments = comments
+  ) => {
+    if (!group || !rubric) return;
+    if (!hasScoreValues(nextScores) && !nextComments.trim()) return;
+
+    const backupData = {
+      groupId: group._id,
+      rubricId: rubric._id,
+      scores: nextScores,
+      comments: nextComments,
+      updatedAt: new Date().toISOString()
+    };
+    localStorage.setItem(draftKey(panelId, group._id), JSON.stringify(backupData));
+    if (selectedGroup?._id === group._id) {
+      setDraftSavedAt(backupData.updatedAt);
+      setHasCurrentDraft(true);
+    }
+  };
+
+  const hasUnsavedLocalWork = () => (
+    Boolean(selectedGroup) &&
+    !selectedExisting &&
+    (hasScoreValues(scores) || Boolean(comments.trim()))
+  );
+
+  const confirmContinueWithDraft = () => {
+    saveDraft();
+    if (!hasUnsavedLocalWork()) return true;
+    return confirm('Your scores were saved locally but not submitted yet. Do you want to continue?');
+  };
 
   // Re-initialize scores when group or rubric changes
   useEffect(() => {
@@ -105,14 +200,20 @@ export default function Grade() {
       if (matchingExisting) {
         setScores(matchingExisting.scores);
         setComments(matchingExisting.comments || '');
+        setDraftSavedAt(null);
+        setHasCurrentDraft(false);
       } else if (draft) {
         setScores(draft.scores);
         setComments(draft.comments || '');
+        setDraftSavedAt(draft.updatedAt || null);
+        setHasCurrentDraft(true);
       } else {
         const init: Record<string, number | ''> = {};
         activeRubric.criteria.forEach((c) => { init[c.key] = ''; });
         setScores(init);
         setComments('');
+        setDraftSavedAt(null);
+        setHasCurrentDraft(false);
       }
 
       setTimeout(() => {
@@ -122,10 +223,12 @@ export default function Grade() {
   }, [selectedGroup, activeRubric, selectedExisting]);
 
   const selectGroup = async (group: Group) => {
+    if (group._id !== selectedGroup?._id && !confirmContinueWithDraft()) return;
     const requestId = evaluationRequestIdRef.current + 1;
     evaluationRequestIdRef.current = requestId;
     skipAutosaveRef.current = true;
     setSelectedGroup(group);
+    localStorage.setItem(lastSelectedGroupKey(panelId), group._id);
     setExisting(null);
     setSuccess(''); setError('');
     const res = await api.get(`/evaluations/group/${group._id}/mine`);
@@ -140,13 +243,14 @@ export default function Grade() {
     }
   };
 
-  const total = Object.values(scores).reduce<number>(
-    (a, b) => (typeof b === 'number' ? a + b : a), 0
-  );
-  const maxTotal = activeRubric?.criteria.reduce((a, c) => a + c.maxScore, 0) ?? 100;
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    saveDraft();
+
+    if (!isOnline) {
+      setError('You are offline. Your scores are saved locally and can be submitted when the connection returns.');
+      return;
+    }
 
     // Check if all scores are filled
     const missing = activeRubric?.criteria.some(c => scores[c.key] === '');
@@ -168,9 +272,21 @@ export default function Grade() {
       setSuccess('Scores and feedback submitted successfully.');
       const res = await api.get(`/evaluations/group/${selectedGroup!._id}/mine`);
       setExisting(res.data);
-      localStorage.removeItem(draftKey(selectedGroup!._id));
+      localStorage.removeItem(draftKey(panelId, selectedGroup!._id));
+      localStorage.removeItem(legacyDraftKey(selectedGroup!._id));
+      setDraftSavedAt(null);
+      setHasCurrentDraft(false);
+      setGroups((current) => current.map((g) => (
+        g._id === selectedGroup!._id ? { ...g, isGraded: true } : g
+      )));
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Submission failed');
+      if (!err.response) {
+        setError('Server unavailable. Your scores are saved locally and can be submitted again when the connection returns.');
+      } else if (err.response.status === 403) {
+        setError(err.response?.data?.message || 'Grading is locked or you are not assigned to this group.');
+      } else {
+        setError(err.response?.data?.message || 'Submission failed. Your draft is saved locally.');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -186,37 +302,44 @@ export default function Grade() {
       !skipAutosaveRef.current &&
       (Object.keys(scores).length > 0 || comments.trim())
     ) {
-      const backupData = {
-        groupId: selectedGroup._id,
-        rubricId: activeRubric._id,
-        scores,
-        comments,
-        updatedAt: new Date().toISOString()
-      };
-      localStorage.setItem(draftKey(selectedGroup._id), JSON.stringify(backupData));
+      saveDraft();
     }
   }, [scores, comments, selectedGroup, activeRubric]);
 
+  useEffect(() => {
+    const handleBeforeUnload = () => saveDraft();
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [selectedGroup, activeRubric, scores, comments]);
+
   // Restore unsaved local draft when returning to a group.
   const restoreBackup = (groupId: string, rubricId: string) => {
-    const saved = localStorage.getItem(draftKey(groupId));
-    if (saved) {
-      try {
-        const data = JSON.parse(saved);
-        if (data.rubricId === rubricId && data.scores && (hasScoreValues(data.scores) || data.comments?.trim())) {
-          return data as {
-            groupId: string;
-            rubricId: string;
-            scores: Record<string, number | ''>;
-            comments?: string;
-            updatedAt?: string;
-          };
-        }
-      } catch {
-        localStorage.removeItem(draftKey(groupId));
+    const data = getStoredDraft(groupId);
+    if (data?.rubricId === rubricId && data.scores && (hasScoreValues(data.scores) || data.comments?.trim())) {
+      return data as {
+        groupId: string;
+        rubricId: string;
+        scores: Record<string, number | ''>;
+        comments?: string;
+        updatedAt?: string;
       }
     }
     return null;
+  };
+
+  const clearCurrentDraft = () => {
+    if (!selectedGroup) return;
+    if (!confirm('Clear this unsaved local draft? Submitted scores will not be deleted.')) return;
+    localStorage.removeItem(draftKey(panelId, selectedGroup._id));
+    localStorage.removeItem(legacyDraftKey(selectedGroup._id));
+    setDraftSavedAt(null);
+    setHasCurrentDraft(false);
+    if (!selectedExisting && activeRubric) {
+      const init: Record<string, number | ''> = {};
+      activeRubric.criteria.forEach((c) => { init[c.key] = ''; });
+      setScores(init);
+      setComments('');
+    }
   };
 
   // const _handlePrintRubric = () => {
@@ -297,7 +420,10 @@ export default function Grade() {
               {sections.map((section) => (
                 <button
                   key={section._id}
-                  onClick={() => setSelectedSidebarSectionId(section._id)}
+                  onClick={() => {
+                    if (section._id !== selectedSidebarSectionId && !confirmContinueWithDraft()) return;
+                    setSelectedSidebarSectionId(section._id);
+                  }}
                   className={`whitespace-nowrap lg:whitespace-normal text-left px-4 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150 border ${selectedSidebarSectionId === section._id
                       ? 'bg-primary text-white border-primary shadow-sm shadow-primary/20'
                       : 'bg-surface text-text/60 border-muted/40 hover:text-text hover:border-primary/30'
@@ -328,7 +454,22 @@ export default function Grade() {
                           ? 'bg-primary text-white border-primary shadow-sm shadow-primary/20'
                           : 'bg-surface text-text/70 hover:text-text hover:border-primary/30 border-muted/30'
                         }`}>
-                      <p className="font-bold text-sm leading-tight truncate">{g.name}</p>
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-bold text-sm leading-tight truncate">{g.name}</p>
+                        {g.isGraded ? (
+                          <span className={`text-[9px] font-black uppercase rounded px-1.5 py-0.5 shrink-0 ${selectedGroup?._id === g._id ? 'bg-white/20 text-white' : 'bg-success/10 text-success'}`}>
+                            Submitted
+                          </span>
+                        ) : groupHasDraft(g._id) ? (
+                          <span className={`text-[9px] font-black uppercase rounded px-1.5 py-0.5 shrink-0 ${selectedGroup?._id === g._id ? 'bg-white/20 text-white' : 'bg-warning/10 text-warning'}`}>
+                            Draft
+                          </span>
+                        ) : (
+                          <span className={`text-[9px] font-black uppercase rounded px-1.5 py-0.5 shrink-0 ${selectedGroup?._id === g._id ? 'bg-white/10 text-white/70' : 'bg-muted/20 text-text/30'}`}>
+                            New
+                          </span>
+                        )}
+                      </div>
                       <p className={`text-[11px] mt-1 truncate ${selectedGroup?._id === g._id ? 'text-white/70' : 'text-text/40'}`}>
                         {g.members.length ? g.members.join(', ') : 'No members'}
                       </p>
@@ -384,13 +525,22 @@ export default function Grade() {
                   <label className="text-[10px] font-bold text-text/40 uppercase tracking-widest block mb-2">Grading Rubric In Use</label>
                   <select
                     value={selectedRubricId}
-                    onChange={(e) => setSelectedRubricId(e.target.value)}
+                    onChange={(e) => {
+                      if (!confirmContinueWithDraft()) return;
+                      setSelectedRubricId(e.target.value);
+                    }}
+                    disabled={!!selectedExisting}
                     className="evl-select !py-2 !text-sm w-full bg-bg border-muted/40"
                   >
                     {rubrics.map(r => (
                       <option key={r._id} value={r._id}>{r.title}</option>
                     ))}
                   </select>
+                  {selectedExisting && (
+                    <p className="text-[10px] text-text/40 font-semibold mt-2">
+                      Rubric is locked after submission.
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -427,6 +577,35 @@ export default function Grade() {
                   </button>
                 </div>
                 */}
+                <div className="flex flex-col items-stretch md:items-end gap-2 px-1">
+                  {selectedExisting ? (
+                    <span className="text-[10px] font-bold text-success uppercase tracking-widest">
+                      Submitted Score: {submittedTotal}/{maxTotal}
+                    </span>
+                  ) : hasCurrentDraft ? (
+                    <div className="flex flex-wrap items-center justify-start md:justify-end gap-3">
+                      <span className="text-[10px] font-bold text-warning uppercase tracking-widest">
+                        Draft saved locally{draftSavedAt ? ` at ${formatSavedTime(draftSavedAt)}` : ''}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={clearCurrentDraft}
+                        className="text-[10px] font-black text-danger uppercase tracking-widest hover:underline"
+                      >
+                        Clear Draft
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-[10px] font-bold text-text/30 uppercase tracking-widest">
+                      No local draft yet
+                    </span>
+                  )}
+                  {!isOnline && (
+                    <span className="text-[10px] font-bold text-danger uppercase tracking-widest">
+                      Offline - draft stays local
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -443,6 +622,12 @@ export default function Grade() {
             )}
             {success && <div className="evl-alert-success mb-4">{success}</div>}
             {error && <div className="evl-alert-error mb-4">{error}</div>}
+
+            {!isOnline && (
+              <div className="evl-alert-warning bg-warning/5 border border-warning/20 text-warning mb-4">
+                You are offline. Scores and comments are saved locally and can be submitted when your connection returns.
+              </div>
+            )}
 
             {gradingLocked && (
               <div className="evl-alert-error bg-danger/5 border border-danger/20 text-danger mb-6 flex items-center gap-3">
@@ -462,7 +647,12 @@ export default function Grade() {
                   label={cat.label}
                   max={cat.maxScore}
                   value={scores[cat.key] ?? ''}
-                  onChange={(v) => setScores((s) => ({ ...s, [cat.key]: v }))}
+                  disabled={!canEditScores}
+                  onChange={(v) => {
+                    const nextScores = { ...scores, [cat.key]: v };
+                    setScores(nextScores);
+                    saveDraft(selectedGroup, activeRubric, nextScores, comments);
+                  }}
                   levels={cat.levels.map((l) => ({
                     label: l.label,
                     range: `${l.minScore}–${l.maxScore}`,
@@ -481,17 +671,22 @@ export default function Grade() {
               </label>
               <textarea
                 value={comments}
-                onChange={(e) => setComments(e.target.value)}
+                disabled={!canEditScores}
+                onChange={(e) => {
+                  const nextComments = e.target.value;
+                  setComments(nextComments);
+                  saveDraft(selectedGroup, activeRubric, scores, nextComments);
+                }}
                 rows={4}
-                className="evl-input resize-none"
+                className={`evl-input resize-none ${!canEditScores ? 'opacity-70 cursor-not-allowed bg-muted/10' : ''}`}
                 placeholder="Write your constructive feedback here for the group... (e.g., Strengths, weaknesses, suggestions for improvement)"
               />
             </div>
 
             <button
               type="submit"
-              disabled={gradingLocked || submitting}
-              className={`evl-btn-primary px-8 py-3 ${(gradingLocked || submitting) ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
+              disabled={gradingLocked || submitting || !isOnline}
+              className={`evl-btn-primary px-8 py-3 ${(gradingLocked || submitting || !isOnline) ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
             >
               {submitting ? 'Submitting...' : (selectedExisting ? 'Update Scores & Feedback' : 'Submit Scores & Feedback')}
             </button>

@@ -17,6 +17,29 @@ const panelLinks = [
   { to: '/grade', label: 'Grade Groups', icon: '✎' },
 ];
 
+const getPanelId = (user?: any) => user?.id || user?._id || '';
+
+const hasDraftContent = (draft: any) => {
+  const scores = draft?.scores || {};
+  const hasScores = Object.values(scores).some((value) => value !== '' && value !== null && value !== undefined);
+  return hasScores || Boolean(draft?.comments?.trim());
+};
+
+const getPanelDraftCount = (panelId?: string) => {
+  const prefix = `grading_draft_${panelId}_`;
+  return Object.keys(localStorage).filter((key) => {
+    if (panelId && key.startsWith(prefix)) return true;
+    return /^grading_draft_[a-f0-9]{24}$/.test(key);
+  }).filter((key) => {
+    try {
+      return hasDraftContent(JSON.parse(localStorage.getItem(key) || 'null'));
+    } catch {
+      localStorage.removeItem(key);
+      return false;
+    }
+  }).length;
+};
+
 export default function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -26,6 +49,15 @@ export default function Layout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleLogout = () => {
+    const draftCount = user?.role === 'panel' ? getPanelDraftCount(getPanelId(user)) : 0;
+    if (draftCount > 0) {
+      const proceed = confirm(
+        `You still have ${draftCount} unsubmitted grading draft${draftCount === 1 ? '' : 's'} saved only on this browser.\n\n` +
+        'If you sign out, those scores are NOT submitted yet. They can only be restored by logging back in on this same device/browser.\n\n' +
+        'Do you still want to sign out?'
+      );
+      if (!proceed) return;
+    }
     logout();
     navigate('/login');
   };

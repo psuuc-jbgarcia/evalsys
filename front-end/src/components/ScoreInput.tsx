@@ -11,9 +11,10 @@ interface Props {
   value: number | '';
   onChange: (val: number) => void;
   levels: Level[];
+  disabled?: boolean;
 }
 
-export default function ScoreInput({ label, max, value, onChange, levels }: Props) {
+export default function ScoreInput({ label, max, value, onChange, levels, disabled = false }: Props) {
   const getLevel = (v: number) =>
     levels.find((l) => {
       const [min, lmax] = l.range.split('–').map(Number);
@@ -42,11 +43,12 @@ export default function ScoreInput({ label, max, value, onChange, levels }: Prop
             key={l.label}
             type="button"
             title={l.description}
+            disabled={disabled}
             onClick={() => {
               const [min] = l.range.split('–').map(Number);
               onChange(min);
             }}
-            className={`flex-1 min-w-[80px] text-[10px] sm:text-[11px] px-2 sm:px-3 py-2 sm:py-1.5 rounded-lg border font-bold transition-all duration-150 ${l.color} border-transparent hover:scale-105 active:scale-95`}
+            className={`flex-1 min-w-[80px] text-[10px] sm:text-[11px] px-2 sm:px-3 py-2 sm:py-1.5 rounded-lg border font-bold transition-all duration-150 ${l.color} border-transparent ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105 active:scale-95'}`}
           >
             {l.label}
           </button>
@@ -65,11 +67,12 @@ export default function ScoreInput({ label, max, value, onChange, levels }: Prop
           min={0}
           max={max}
           value={value}
+          disabled={disabled}
           onChange={(e) => {
             const v = Math.min(Math.max(Math.round(Number(e.target.value)), 0), max);
             onChange(v);
           }}
-          className="evl-input !py-3 !text-lg font-bold text-center"
+          className={`evl-input !py-3 !text-lg font-bold text-center ${disabled ? 'opacity-70 cursor-not-allowed bg-muted/10' : ''}`}
           placeholder={`Score (0 – ${max})`}
         />
         <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-text/20 group-focus-within:text-primary/40">/ {max}</span>
