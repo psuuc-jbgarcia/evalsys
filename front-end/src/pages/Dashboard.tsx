@@ -9,6 +9,7 @@ interface Group { _id: string; name: string; section: Section; members: string[]
 
 const groupNameCacheKey = 'grading_group_names';
 const groupStatusCacheKey = (panelId: string) => `grading_group_status_${panelId}`;
+const csvCell = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
 
 const adminCards = [
   { to: '/sections', label: 'Blocks', desc: 'Create and manage blocks', icon: '☰' },
@@ -120,16 +121,30 @@ function AdminDashboard({ name }: { name: string }) {
             <button 
               onClick={async () => {
                 const res = await api.get('/evaluations/export-all');
-                const csvContent = "data:text/csv;charset=utf-8," 
-                  + ["Section,GroupName,Members,AverageScore,EvaluatedBy,Comments", 
-                     ...res.data.map((r: any) => `${r.Section},${r.GroupName},"${r.Members}",${r.AverageScore},"${r.EvaluatedBy}","${r.Comments}"`)
-                    ].join("\n");
-                const encodedUri = encodeURI(csvContent);
+                const headers = ['Section', 'GroupName', 'Members', 'AverageScore', 'Status', 'EvaluatedBy', 'MissingPanels', 'Comments'];
+                const rows = res.data.map((r: any) => [
+                  r.Section,
+                  r.GroupName,
+                  r.Members,
+                  r.AverageScore,
+                  r.Status,
+                  r.EvaluatedBy,
+                  r.MissingPanels,
+                  r.Comments,
+                ]);
+                const csvContent = [
+                  headers.map(csvCell).join(','),
+                  ...rows.map((row: unknown[]) => row.map(csvCell).join(',')),
+                ].join('\n');
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
                 const link = document.createElement("a");
-                link.setAttribute("href", encodedUri);
+                link.setAttribute("href", url);
                 link.setAttribute("download", `Master_Results_Backup_${new Date().toLocaleDateString()}.csv`);
                 document.body.appendChild(link);
                 link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
               }}
               className="evl-btn-primary w-full py-3"
             >

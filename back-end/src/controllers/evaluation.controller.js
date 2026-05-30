@@ -222,26 +222,49 @@ exports.exportAllResults = async (req, res) => {
   const allResults = [];
 
   for (const section of sections) {
-    const groups = await Group.find({ section: section._id });
+    const groups = await Group.find({ section: section._id })
+      .populate({ path: 'section', populate: { path: 'assignedPanels', select: 'name email' } })
+      .populate('assignedPanels', 'name email');
+
     for (const group of groups) {
       const evaluations = await Evaluation.find({ group: group._id, isSubmitted: true }).populate('panel', 'name');
       
       if (evaluations.length === 0) continue;
 
+      let assignedPanelDocs = [];
+      if (group.section?.assignedPanels?.length) {
+        assignedPanelDocs = group.section.assignedPanels;
+      } else if (group.assignedPanels?.length) {
+        assignedPanelDocs = group.assignedPanels;
+      }
+
+      const divisor = assignedPanelDocs.length || evaluations.length || 1;
+      const evaluatedPanelIds = evaluations.map(ev => ev.panel?._id?.toString() || '');
+      const missingPanels = assignedPanelDocs
+        .filter(panel => panel && !evaluatedPanelIds.includes(panel._id.toString()))
+        .map(panel => panel.name || 'Unknown');
+      const isIncomplete = missingPanels.length > 0;
+
       let totalScore = 0;
       evaluations.forEach(ev => {
-        const scores = ev.scores instanceof Map ? Object.fromEntries(ev.scores) : ev.scores;
-        totalScore += Object.values(scores).reduce((a, b) => a + b, 0);
+        if (typeof ev.total === 'number') {
+          totalScore += ev.total;
+          return;
+        }
+        const scores = ev.scores instanceof Map ? Object.fromEntries(ev.scores) : ev.scores || {};
+        totalScore += Object.values(scores).reduce((a, b) => a + Number(b || 0), 0);
       });
 
-      const avgScore = Math.round((totalScore / (section.assignedPanels.length || evaluations.length)) * 100) / 100;
+      const avgScore = Math.round((totalScore / divisor) * 100) / 100;
 
       allResults.push({
         Section: section.block,
         GroupName: group.name,
         Members: group.members.join('; '),
-        AverageScore: avgScore,
+        AverageScore: isIncomplete ? 'Pending Complete Evaluation' : avgScore,
         EvaluatedBy: evaluations.map(ev => ev.panel?.name).join(', '),
+        MissingPanels: missingPanels.join(', '),
+        Status: isIncomplete ? 'Incomplete' : 'Complete',
         Comments: evaluations.map(ev => ev.comments).filter(Boolean).join(' | ')
       });
     }
