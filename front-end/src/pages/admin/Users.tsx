@@ -1,14 +1,19 @@
 import { useEffect, useState } from 'react';
 import api from '../../services/api';
 import { TableSkeleton } from '../../components/LoadingSkeleton';
+import { useAuth } from '../../context/AuthContext';
 
-interface User { _id: string; name: string; email: string; role: string; isActive: boolean; }
+interface Subject { _id: string; code: string; title: string; }
+interface User { _id: string; name: string; email: string; role: string; isActive: boolean; assignedSubjects?: Subject[]; }
 
 export default function Users() {
+  const { user } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'panel' });
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'panel', assignedSubjects: [] as string[] });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const isSuperadmin = user?.role === 'superadmin';
 
   const load = () => {
     setLoading(true);
@@ -17,17 +22,31 @@ export default function Users() {
       .finally(() => setLoading(false));
   };
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (isSuperadmin) {
+      api.get('/subjects').then((r) => setSubjects(r.data)).catch(() => undefined);
+    }
+  }, [isSuperadmin]);
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     try {
       await api.post('/users', form);
-      setForm({ name: '', email: '', password: '', role: 'panel' });
+      setForm({ name: '', email: '', password: '', role: 'panel', assignedSubjects: [] });
       load();
     } catch (err: any) {
       setError(err.response?.data?.message || 'Error');
     }
+  };
+
+  const toggleSubject = (subjectId: string) => {
+    setForm((current) => ({
+      ...current,
+      assignedSubjects: current.assignedSubjects.includes(subjectId)
+        ? current.assignedSubjects.filter((id) => id !== subjectId)
+        : [...current.assignedSubjects, subjectId],
+    }));
   };
 
   const handleToggle = async (id: string) => {
@@ -81,8 +100,8 @@ export default function Users() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h2 className="evl-page-title">Panel Accounts</h2>
-          <p className="evl-page-subtitle">Create and manage evaluator panel accounts.</p>
+          <h2 className="evl-page-title">Accounts</h2>
+          <p className="evl-page-subtitle">Create and manage panel accounts. Super admins can also create instructor accounts.</p>
         </div>
         <div className="flex gap-2">
           <button onClick={downloadTemplate} className="evl-btn-secondary !text-xs !py-1.5">
@@ -120,10 +139,32 @@ export default function Users() {
               <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}
                 className="evl-select">
                 <option value="panel">Panel</option>
-                <option value="admin">Admin</option>
+                {isSuperadmin && <option value="admin">Instructor</option>}
+                {isSuperadmin && <option value="superadmin">Superadmin</option>}
               </select>
             </div>
           </div>
+
+          {isSuperadmin && form.role === 'admin' && (
+            <div className="mb-4 rounded-xl border border-muted/30 bg-bg/50 p-4">
+              <label className="evl-label mb-3">Assigned Subjects</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {subjects.map((subject) => (
+                  <label key={subject._id} className="flex items-center gap-2 rounded-lg border border-muted/30 bg-surface px-3 py-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={form.assignedSubjects.includes(subject._id)}
+                      onChange={() => toggleSubject(subject._id)}
+                      className="w-4 h-4"
+                    />
+                    <span className="font-semibold text-text">{subject.code}</span>
+                    <span className="text-text/50 truncate">{subject.title}</span>
+                  </label>
+                ))}
+                {!subjects.length && <p className="text-text/40 text-sm">No subjects available yet.</p>}
+              </div>
+            </div>
+          )}
           <div className="flex items-center gap-4">
             <button type="submit" className="evl-btn-primary">Create Account</button>
             {error && <p className="text-danger text-sm font-medium">{error}</p>}
@@ -142,6 +183,7 @@ export default function Users() {
                 <th>Name</th>
                 <th>Email</th>
                 <th>Role</th>
+                <th>Subjects</th>
                 <th>Status</th>
                 <th className="text-right">Actions</th>
               </tr>
@@ -151,7 +193,12 @@ export default function Users() {
                 <tr key={u._id}>
                   <td className="font-semibold text-text">{u.name}</td>
                   <td className="text-text/50">{u.email}</td>
-                  <td className="capitalize text-text">{u.role}</td>
+                  <td className="capitalize text-text">{u.role === 'admin' ? 'Instructor' : u.role}</td>
+                  <td className="text-text/50 text-xs">
+                    {u.assignedSubjects?.length
+                      ? u.assignedSubjects.map((subject) => subject.code).join(', ')
+                      : u.role === 'panel' ? 'By block assignment' : 'All subjects'}
+                  </td>
                   <td>
                     <span className={u.isActive ? 'evl-badge-success' : 'evl-badge-danger'}>
                       {u.isActive ? 'Active' : 'Blocked'}
@@ -181,7 +228,7 @@ export default function Users() {
                 </tr>
               ))}
               {!users.length && (
-                <tr><td colSpan={5} className="text-center text-text/50 py-12">No accounts yet. Create one above.</td></tr>
+                <tr><td colSpan={6} className="text-center text-text/50 py-12">No accounts yet. Create one above.</td></tr>
               )}
             </tbody>
           </table>

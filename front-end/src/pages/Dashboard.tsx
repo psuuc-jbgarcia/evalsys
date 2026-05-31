@@ -29,7 +29,7 @@ const formatApiError = (err: any, fallback: string) => {
 const adminCards = [
   { to: '/sections', label: 'Blocks', desc: 'Create and manage blocks', icon: '☰' },
   { to: '/groups', label: 'Groups', desc: 'Create groups and add members', icon: '⊞' },
-  { to: '/users', label: 'Panel Accounts', desc: 'Create and manage panel accounts', icon: '⊕' },
+  { to: '/users', label: 'Accounts', desc: 'Create panel accounts and manage instructor accounts when permitted', icon: '⊕' },
   { to: '/assign-panels', label: 'Assign Panels', desc: 'Assign panel judges to specific blocks', icon: '👥' },
   { to: '/rubrics', label: 'Rubrics', desc: 'Create and manage grading rubrics', icon: '✎' },
   { to: '/results', label: 'Results', desc: 'View computed scores per group', icon: '▦' },
@@ -96,7 +96,8 @@ function AdminDashboard({ name }: { name: string }) {
         `Sections updated: ${res.data.sectionsUpdated}\n` +
         `Rubrics updated: ${res.data.rubricsUpdated}\n` +
         `Admins assigned: ${res.data.adminsAssigned}\n` +
-        `${res.data.promotedSuperadmin ? `Promoted superadmin: ${res.data.promotedSuperadmin.email}\n` : ''}` +
+        `${res.data.defaultSuperadmin ? `Default superadmin: ${res.data.defaultSuperadmin.email}\n` : ''}` +
+        `${res.data.defaultInstructor ? `Default instructor: ${res.data.defaultInstructor.email}\n` : ''}` +
         `Evaluations updated: ${res.data.evaluationsUpdated}\n` +
         `Evaluations defaulted: ${res.data.evaluationsDefaulted}`
       );
@@ -113,7 +114,7 @@ function AdminDashboard({ name }: { name: string }) {
         <div>
           <h2 className="evl-page-title">Welcome back, {name}</h2>
           <p className="evl-page-subtitle">
-            Manage blocks, groups, panel accounts, and rubrics from here.
+            Manage subjects, blocks, groups, panels, rubrics, and results from here.
           </p>
         </div>
 
@@ -233,7 +234,7 @@ function AdminDashboard({ name }: { name: string }) {
             <h4 className="text-danger font-bold text-sm mb-2 uppercase tracking-widest">2. Master Reset System</h4>
             <p className="text-text/60 text-xs mb-6 leading-relaxed">
               Wipe all Evaluations, Groups, and Blocks. 
-              <span className="font-bold text-danger"> This action cannot be undone.</span> Admin and Panel accounts will be preserved.
+              <span className="font-bold text-danger"> This action cannot be undone.</span> Instructor and panel accounts will be preserved.
             </p>
             <button 
               onClick={async () => {
@@ -342,7 +343,7 @@ function PanelDashboard({ name, panelId }: { name: string; panelId: string }) {
           </p>
           {locked && (
             <div className="mt-3 p-2.5 bg-danger/5 border border-danger/20 rounded-lg flex items-center gap-2 text-danger text-[11px] font-bold uppercase tracking-wider">
-              <span>🔒 Grading is currently locked by Admin</span>
+              <span>🔒 Grading is currently locked by the instructor</span>
             </div>
           )}
         </div>

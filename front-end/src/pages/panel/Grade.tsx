@@ -250,7 +250,7 @@ export default function Grade() {
     setSelectedRubricId('');
     setSuccess(''); setError('');
     if (!subjectId) {
-      setError('This group is not connected to a subject yet. Ask an administrator to run the subject migration.');
+      setError('This group is not connected to a subject yet. Ask the instructor to run the subject migration.');
       return;
     }
 
@@ -551,7 +551,7 @@ export default function Grade() {
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
               <p className="text-text/40 text-sm font-semibold mb-1">No rubrics available.</p>
-              <p className="text-text/50 text-xs">Please ask an administrator to create a grading rubric.</p>
+              <p className="text-text/50 text-xs">Please ask the instructor to create a grading rubric.</p>
             </div>
           </div>
         ) : (
@@ -678,7 +678,7 @@ export default function Grade() {
                 <span className="text-xl">🔒</span>
                 <div>
                   <p className="font-bold">Grading is Locked</p>
-                  <p className="text-sm opacity-80">An administrator has temporarily disabled grading submissions. You can still view or prepare scores, but saving is disabled.</p>
+                  <p className="text-sm opacity-80">The instructor has temporarily disabled grading submissions. You can still view or prepare scores, but saving is disabled.</p>
                 </div>
               </div>
             )}

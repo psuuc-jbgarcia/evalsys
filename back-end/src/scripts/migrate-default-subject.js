@@ -12,9 +12,8 @@ const run = async () => {
   console.log(`Sections updated: ${result.sectionsUpdated}`);
   console.log(`Rubrics updated: ${result.rubricsUpdated}`);
   console.log(`Admins assigned: ${result.adminsAssigned}`);
-  if (result.promotedSuperadmin) {
-    console.log(`Promoted superadmin: ${result.promotedSuperadmin.email}`);
-  }
+  console.log(`Default superadmin: ${result.defaultSuperadmin.email}`);
+  if (result.defaultInstructor) console.log(`Default instructor: ${result.defaultInstructor.email}`);
   console.log(`Evaluations updated: ${result.evaluationsUpdated}`);
   console.log(`Evaluations defaulted to ${result.subject.code}: ${result.evaluationsDefaulted}`);
 };

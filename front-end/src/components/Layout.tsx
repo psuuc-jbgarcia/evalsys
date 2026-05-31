@@ -5,9 +5,9 @@ import api from '../services/api';
 
 const adminLinks = [
   { to: '/dashboard', label: 'Dashboard', icon: '◫' },
-  { to: '/sections', label: 'Sections', icon: '☰' },
+  { to: '/sections', label: 'Blocks', icon: '☰' },
   { to: '/groups', label: 'Groups', icon: '⊞' },
-  { to: '/users', label: 'Panel Accounts', icon: '⊕' },
+  { to: '/users', label: 'Accounts', icon: '⊕' },
   { to: '/assign-panels', label: 'Assign Panels', icon: '👥' },
   { to: '/rubrics', label: 'Rubrics', icon: '✎' },
   { to: '/results', label: 'Results', icon: '▦' },
@@ -23,6 +23,11 @@ const groupNameCacheKey = 'grading_group_names';
 const groupStatusCacheKey = (panelId: string) => `grading_group_status_${panelId}`;
 const selectedRubricCacheKey = (panelId: string) => `grading_selected_rubric_${panelId}`;
 const currentSubjectKey = 'evalsys_current_subject_id';
+const roleLabel = (role?: string) => {
+  if (role === 'admin') return 'instructor';
+  if (role === 'superadmin') return 'superadmin';
+  return role || '';
+};
 
 interface Subject {
   _id: string;
@@ -182,7 +187,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               <div>
                 <h1 className="text-white font-bold text-sm leading-none">EvalSys</h1>
                 <p className="text-white/40 text-[10px] mt-0.5 uppercase tracking-widest font-semibold">
-                  {user?.role}
+                  {roleLabel(user?.role)}
                 </p>
               </div>
             )}

@@ -51,7 +51,10 @@ export default function ProtectedRoute({ children, role }: Props) {
   }
 
   if (!user) return <Navigate to="/login" replace />;
-  if (role && user.role !== role) return <Navigate to="/dashboard" replace />;
+  if (role === 'admin' && !['admin', 'superadmin'].includes(user.role)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  if (role === 'panel' && user.role !== 'panel') return <Navigate to="/dashboard" replace />;
 
   return <Layout>{children}</Layout>;
 }
