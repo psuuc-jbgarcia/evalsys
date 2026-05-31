@@ -9,7 +9,7 @@ This plan details the full schema changes, API routes, controller modifications,
 ## User Review Required
 
 ### Data Migration & Backward Compatibility
-Status: **Implementation ready - database migration run pending MongoDB connection.**
+Status: **Done - deployed migration completed.**
 
 Introducing `subject` as a required reference in `Section` and `Rubric` will break existing records that lack this field. We propose a database migration script that:
 1. Creates a default subject:

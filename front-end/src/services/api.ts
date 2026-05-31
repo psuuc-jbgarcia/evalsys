@@ -7,6 +7,8 @@ const api = axios.create({
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  const subjectId = localStorage.getItem('evalsys_current_subject_id');
+  if (subjectId) config.headers['x-subject-id'] = subjectId;
   return config;
 });
 

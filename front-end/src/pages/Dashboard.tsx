@@ -6,10 +6,25 @@ import { CardSkeleton } from '../components/LoadingSkeleton';
 
 interface Section { _id: string; name: string; block: string; }
 interface Group { _id: string; name: string; section: Section; members: string[]; isGraded?: boolean; }
+interface SubjectStatus {
+  subject: { code: string; title: string } | null;
+  sectionsMissingSubject: number;
+  rubricsMissingSubject: number;
+  evaluationsMissingSubject: number;
+  adminsMissingDefaultSubject?: number;
+  superadminCount?: number;
+  isComplete: boolean;
+}
 
 const groupNameCacheKey = 'grading_group_names';
 const groupStatusCacheKey = (panelId: string) => `grading_group_status_${panelId}`;
 const csvCell = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+const formatApiError = (err: any, fallback: string) => {
+  const status = err.response?.status ? `HTTP ${err.response.status}` : 'Network/connection error';
+  const message = err.response?.data?.message || err.message || fallback;
+  const detail = err.response?.data?.error ? `\n\nDetails: ${err.response.data.error}` : '';
+  return `${fallback}\n\n${status}\n${message}${detail}`;
+};
 
 const adminCards = [
   { to: '/sections', label: 'Blocks', desc: 'Create and manage blocks', icon: '☰' },
@@ -23,7 +38,7 @@ const adminCards = [
 export default function Dashboard() {
   const { user } = useAuth();
 
-  if (user?.role === 'admin') return <AdminDashboard name={user.name} />;
+  if (user?.role === 'admin' || user?.role === 'superadmin') return <AdminDashboard name={user.name} />;
   return <PanelDashboard name={user?.name ?? ''} panelId={user?.id || user?._id || ''} />;
 }
 
@@ -32,12 +47,16 @@ function AdminDashboard({ name }: { name: string }) {
   const [locked, setLocked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [migratingSubject, setMigratingSubject] = useState(false);
+  const [subjectStatus, setSubjectStatus] = useState<SubjectStatus | null>(null);
 
   useEffect(() => {
     api.get('/settings').then(res => {
       setLocked(res.data.isGradingLocked);
       setLoading(false);
     });
+    api.get('/subjects/migration-status')
+      .then((res) => setSubjectStatus(res.data))
+      .catch(() => undefined);
   }, []);
 
   const toggleLock = async () => {
@@ -58,17 +77,31 @@ function AdminDashboard({ name }: { name: string }) {
 
     setMigratingSubject(true);
     try {
+      const status = await api.get('/subjects/migration-status');
+      if (status.data.isComplete) {
+        setSubjectStatus(status.data);
+        alert(
+          'Default subject migration is already complete.\n\n' +
+          `Subject: ${status.data.subject.code} - ${status.data.subject.title}`
+        );
+        return;
+      }
+
       const res = await api.post('/subjects/migrate-default');
+      const nextStatus = await api.get('/subjects/migration-status');
+      setSubjectStatus(nextStatus.data);
       alert(
         `${res.data.message}\n\n` +
         `Subject: ${res.data.subject.code} - ${res.data.subject.title}\n` +
         `Sections updated: ${res.data.sectionsUpdated}\n` +
         `Rubrics updated: ${res.data.rubricsUpdated}\n` +
+        `Admins assigned: ${res.data.adminsAssigned}\n` +
+        `${res.data.promotedSuperadmin ? `Promoted superadmin: ${res.data.promotedSuperadmin.email}\n` : ''}` +
         `Evaluations updated: ${res.data.evaluationsUpdated}\n` +
         `Evaluations defaulted: ${res.data.evaluationsDefaulted}`
       );
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Default subject migration failed.');
+      alert(formatApiError(err, 'Default subject migration failed.'));
     } finally {
       setMigratingSubject(false);
     }
@@ -83,6 +116,23 @@ function AdminDashboard({ name }: { name: string }) {
             Manage blocks, groups, panel accounts, and rubrics from here.
           </p>
         </div>
+
+        {subjectStatus?.subject && (
+          <div className="evl-card px-5 py-3 flex items-center gap-4 bg-primary/5 border-primary/20">
+            <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary text-xs font-black">
+              {subjectStatus.subject.code}
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-text/40">Subject In Use</span>
+              <span className="text-xs font-extrabold text-text">{subjectStatus.subject.title}</span>
+              {!subjectStatus.isComplete && (
+                <span className="text-[10px] text-warning font-semibold">
+                  Missing links: {subjectStatus.sectionsMissingSubject + subjectStatus.rubricsMissingSubject + subjectStatus.evaluationsMissingSubject + (subjectStatus.adminsMissingDefaultSubject || 0)}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
         
         {/* Global Lock Card */}
         <div className={`evl-card px-5 py-3 flex items-center gap-4 transition-colors ${locked ? 'bg-danger/5 border-danger/20' : 'bg-success/5 border-success/20'}`}>

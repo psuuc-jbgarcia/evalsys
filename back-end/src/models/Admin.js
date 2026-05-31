@@ -5,7 +5,8 @@ const adminSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
   email: { type: String, required: true, unique: true, lowercase: true },
   password: { type: String, required: true },
-  role: { type: String, default: 'admin' },
+  role: { type: String, enum: ['superadmin', 'admin'], default: 'admin' },
+  assignedSubjects: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Subject' }],
   isActive: { type: Boolean, default: true },
 }, { timestamps: true, collection: 'admin_acc' });
 

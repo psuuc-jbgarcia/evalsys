@@ -1,9 +1,21 @@
 const Group = require('../models/Group');
 const Section = require('../models/Section');
 
+const getSubjectId = (req) => req.headers['x-subject-id'] || req.query.subject || req.body.subject;
+const canAccessSubject = (req, subjectId) => (
+  !subjectId ||
+  req.user?.role === 'superadmin' ||
+  (req.user?.assignedSubjects || []).some((id) => id.toString() === subjectId.toString())
+);
+
 exports.createGroup = async (req, res) => {
   const { name, section, members, assignedPanels } = req.body;
   if (!name || !section) return res.status(400).json({ message: 'Name and section required' });
+  const sectionDoc = await Section.findById(section);
+  if (!sectionDoc) return res.status(404).json({ message: 'Section not found' });
+  if (req.user && !canAccessSubject(req, sectionDoc.subject)) {
+    return res.status(403).json({ message: 'You are not assigned to this subject' });
+  }
   
   // Check for duplication in the same section
   const existing = await Group.findOne({ name: { $regex: new RegExp(`^${name}$`, 'i') }, section });
@@ -19,12 +31,15 @@ exports.createGroup = async (req, res) => {
 exports.bulkCreateGroups = async (req, res) => {
   const { groups } = req.body;
   if (!Array.isArray(groups)) return res.status(400).json({ message: 'Groups array required' });
+  const subject = getSubjectId(req);
+  if (!subject) return res.status(400).json({ message: 'Subject required' });
+  if (!canAccessSubject(req, subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
 
   const results = { created: 0, skipped: 0, errors: [] };
 
   // Cache sections for performance
   const sectionMap = {};
-  const allSections = await Section.find();
+  const allSections = await Section.find({ subject });
   allSections.forEach(s => {
     sectionMap[s.block.toLowerCase()] = s._id;
   });
@@ -67,6 +82,7 @@ exports.bulkCreateGroups = async (req, res) => {
 
 exports.getGroups = async (req, res) => {
   const filter = req.query.section ? { section: req.query.section } : {};
+  const subject = getSubjectId(req);
 
   // If the user is a panel, only return groups from sections they are assigned to
   if (req.user.role === 'panel') {
@@ -78,7 +94,7 @@ exports.getGroups = async (req, res) => {
 
     // Bypass Mongoose $in array casting edge cases by filtering in memory
     const allGroups = await Group.find()
-      .populate('section', 'name block')
+      .populate('section', 'name block subject')
       .populate('assignedPanels', 'name email')
       .sort({ createdAt: -1 });
 
@@ -108,8 +124,17 @@ exports.getGroups = async (req, res) => {
     return res.json(groups);
   }
 
+  if (subject) {
+    if (!canAccessSubject(req, subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
+    const subjectSections = await Section.find({ subject }).select('_id');
+    filter.section = req.query.section || { $in: subjectSections.map((s) => s._id) };
+  } else if (req.user.role === 'admin') {
+    const subjectSections = await Section.find({ subject: { $in: req.user.assignedSubjects || [] } }).select('_id');
+    filter.section = req.query.section || { $in: subjectSections.map((s) => s._id) };
+  }
+
   const groups = await Group.find(filter)
-    .populate('section', 'name block')
+    .populate('section', 'name block subject')
     .populate('assignedPanels', 'name email')
     .sort({ createdAt: -1 });
   res.json(groups);
@@ -117,9 +142,12 @@ exports.getGroups = async (req, res) => {
 
 exports.getGroup = async (req, res) => {
   const group = await Group.findById(req.params.id)
-    .populate('section', 'name block')
+    .populate('section', 'name block subject')
     .populate('assignedPanels', 'name email');
   if (!group) return res.status(404).json({ message: 'Group not found' });
+  if (req.user.role !== 'panel' && !canAccessSubject(req, group.section?.subject)) {
+    return res.status(403).json({ message: 'You are not assigned to this subject' });
+  }
   res.json(group);
 };
 
@@ -128,6 +156,10 @@ exports.updateGroup = async (req, res) => {
   
   if (name || section) {
     const current = await Group.findById(req.params.id);
+    const currentSection = await Section.findById(section || current.section);
+    if (!canAccessSubject(req, currentSection?.subject)) {
+      return res.status(403).json({ message: 'You are not assigned to this subject' });
+    }
     const checkName = name || current.name;
     const checkSection = section || current.section;
     
@@ -148,6 +180,9 @@ exports.updateGroup = async (req, res) => {
 };
 
 exports.deleteGroup = async (req, res) => {
-  await Group.findByIdAndDelete(req.params.id);
+  const group = await Group.findById(req.params.id).populate('section', 'subject');
+  if (!group) return res.status(404).json({ message: 'Group not found' });
+  if (!canAccessSubject(req, group.section?.subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
+  await group.deleteOne();
   res.json({ message: 'Group deleted' });
 };

@@ -7,8 +7,8 @@ import { useAuth } from '../../context/AuthContext';
 
 interface Level { label: string; minScore: number; maxScore: number; description: string; }
 interface Criteria { key: string; label: string; maxScore: number; levels: Level[]; }
-interface Rubric { _id: string; title: string; criteria: Criteria[]; isActive: boolean; }
-interface Section { _id: string; name: string; block: string; }
+interface Rubric { _id: string; title: string; criteria: Criteria[]; isActive: boolean; subject?: string; }
+interface Section { _id: string; name: string; block: string; subject?: string | { _id: string; code?: string; title?: string }; }
 interface Group { _id: string; name: string; section: Section; members: string[]; isGraded?: boolean; }
 
 const LEVEL_COLORS: Record<string, string> = {
@@ -47,7 +47,7 @@ export default function Grade() {
   const [comments, setComments] = useState('');
   const [existing, setExisting] = useState<any>(null);
 
-  const [loadingRubrics, setLoadingRubrics] = useState(true);
+  const [loadingRubrics, setLoadingRubrics] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
   const [loadingSidebar, setLoadingSidebar] = useState(true);
@@ -65,6 +65,7 @@ export default function Grade() {
   const evaluationRequestIdRef = useRef(0);
 
   const [selectedSidebarSectionId, setSelectedSidebarSectionId] = useState<string>('');
+  const getGroupSubjectId = (group: Group | null) => getRefId(group?.section?.subject);
 
   const cacheGroupStatus = (nextGroups: Group[]) => {
     const groupNames = nextGroups.reduce((acc: Record<string, string>, group: Group) => {
@@ -80,16 +81,6 @@ export default function Grade() {
   };
 
   useEffect(() => {
-    api.get('/rubrics').then((r) => {
-      setRubrics(r.data);
-      if (r.data.length > 0) {
-        const active = r.data.find((rub: Rubric) => rub.isActive) || r.data[0];
-        setSelectedRubricId(active._id);
-      }
-    })
-      .catch((err) => console.error(err))
-      .finally(() => setLoadingRubrics(false));
-
     api.get('/sections').then((r) => {
       setSections(r.data);
       if (r.data.length > 0) {
@@ -253,17 +244,42 @@ export default function Grade() {
     skipAutosaveRef.current = true;
     setSelectedGroup(group);
     localStorage.setItem(lastSelectedGroupKey(panelId), group._id);
+    const subjectId = getGroupSubjectId(group);
     setExisting(null);
+    setRubrics([]);
+    setSelectedRubricId('');
     setSuccess(''); setError('');
-    const res = await api.get(`/evaluations/group/${group._id}/mine`);
-    if (requestId !== evaluationRequestIdRef.current) return;
-    if (res.data) {
-      setExisting(res.data);
-      if (res.data.rubric) {
-        setSelectedRubricId(res.data.rubric._id || res.data.rubric);
+    if (!subjectId) {
+      setError('This group is not connected to a subject yet. Ask an administrator to run the subject migration.');
+      return;
+    }
+
+    try {
+      setLoadingRubrics(true);
+      const [res, rubricRes] = await Promise.all([
+        api.get(`/evaluations/group/${group._id}/mine`),
+        api.get('/rubrics', { params: { subject: subjectId } }),
+      ]);
+      if (requestId !== evaluationRequestIdRef.current) return;
+      setRubrics(rubricRes.data);
+      if (res.data) {
+        setExisting(res.data);
+        if (res.data.rubric) {
+          setSelectedRubricId(res.data.rubric._id || res.data.rubric);
+        }
+      } else {
+        setExisting(null);
+        if (rubricRes.data.length > 0) {
+          const active = rubricRes.data.find((rub: Rubric) => rub.isActive) || rubricRes.data[0];
+          setSelectedRubricId(active._id);
+        }
       }
-    } else {
-      setExisting(null);
+    } catch (err: any) {
+      if (requestId === evaluationRequestIdRef.current) {
+        setError(err.response?.data?.message || 'Failed to load this group subject and rubric.');
+      }
+    } finally {
+      if (requestId === evaluationRequestIdRef.current) setLoadingRubrics(false);
     }
   };
 

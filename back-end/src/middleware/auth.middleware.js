@@ -13,7 +13,7 @@ const protect = async (req, res, next) => {
 
     // Look up in correct collection based on role in token
     let user;
-    if (decoded.role === 'admin') {
+    if (decoded.role === 'admin' || decoded.role === 'superadmin') {
       user = await Admin.findById(decoded.id).select('-password');
     } else {
       user = await Panel.findById(decoded.id).select('-password');
@@ -30,8 +30,14 @@ const protect = async (req, res, next) => {
 };
 
 const adminOnly = (req, res, next) => {
-  if (req.user?.role !== 'admin')
+  if (!['admin', 'superadmin'].includes(req.user?.role))
     return res.status(403).json({ message: 'Admin access required' });
+  next();
+};
+
+const superadminOnly = (req, res, next) => {
+  if (req.user?.role !== 'superadmin')
+    return res.status(403).json({ message: 'Super admin access required' });
   next();
 };
 
@@ -41,4 +47,4 @@ const panelOnly = (req, res, next) => {
   next();
 };
 
-module.exports = { protect, adminOnly, panelOnly };
+module.exports = { protect, adminOnly, panelOnly, superadminOnly };

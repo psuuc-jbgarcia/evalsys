@@ -2,6 +2,14 @@ const Evaluation = require('../models/Evaluation');
 const Group = require('../models/Group');
 const Section = require('../models/Section');
 const Settings = require('../models/Settings');
+const Rubric = require('../models/Rubric');
+
+const getSubjectId = (req) => req.headers['x-subject-id'] || req.query.subject || req.body.subject;
+const canAccessSubject = (req, subjectId) => (
+  !subjectId ||
+  req.user?.role === 'superadmin' ||
+  (req.user?.assignedSubjects || []).some((id) => id.toString() === subjectId.toString())
+);
 
 const scoresToObject = (scores) => {
   if (!scores) return {};
@@ -47,6 +55,16 @@ exports.submitEvaluation = async (req, res) => {
 
   // Check section-level panel assignment
   const section = await Section.findById(group.section._id || group.section);
+  const rubric = await Rubric.findById(rubricId);
+  if (!rubric) return res.status(404).json({ message: 'Rubric not found' });
+  if (
+    rubric.subject &&
+    section?.subject &&
+    rubric.subject.toString() !== section.subject.toString()
+  ) {
+    return res.status(400).json({ message: 'Selected rubric does not belong to this group subject' });
+  }
+
   const isAssigned = section && section.assignedPanels.some(
     (p) => p.toString() === req.user._id.toString()
   );
@@ -143,6 +161,10 @@ exports.getGroupResult = async (req, res) => {
 
 // Admin: get results for all groups in a section
 exports.getSectionResults = async (req, res) => {
+  const section = await Section.findById(req.params.sectionId).select('subject');
+  if (!section) return res.status(404).json({ message: 'Section not found' });
+  if (!canAccessSubject(req, section.subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
+
   const groups = await Group.find({ section: req.params.sectionId });
   const results = await Promise.all(
     groups.map(async (group) => {
@@ -225,7 +247,14 @@ exports.getSectionResults = async (req, res) => {
 
 // Admin: Export ALL results from ALL sections for archiving
 exports.exportAllResults = async (req, res) => {
-  const sections = await Section.find();
+  const subject = getSubjectId(req);
+  if (subject && !canAccessSubject(req, subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
+  const sectionFilter = subject
+    ? { subject }
+    : req.user.role === 'admin'
+      ? { subject: { $in: req.user.assignedSubjects || [] } }
+      : {};
+  const sections = await Section.find(sectionFilter);
   const allResults = [];
 
   for (const section of sections) {
@@ -288,9 +317,22 @@ exports.masterReset = async (req, res) => {
   }
 
   try {
-    await Evaluation.deleteMany({});
-    await Group.deleteMany({});
-    await Section.deleteMany({});
+    const subject = getSubjectId(req);
+    if (subject) {
+      if (!canAccessSubject(req, subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
+      const sections = await Section.find({ subject }).select('_id');
+      const sectionIds = sections.map((section) => section._id);
+      const groups = await Group.find({ section: { $in: sectionIds } }).select('_id');
+      const groupIds = groups.map((group) => group._id);
+      await Evaluation.deleteMany({ $or: [{ subject }, { group: { $in: groupIds } }] });
+      await Group.deleteMany({ section: { $in: sectionIds } });
+      await Section.deleteMany({ _id: { $in: sectionIds } });
+    } else {
+      if (req.user.role !== 'superadmin') return res.status(403).json({ message: 'Global reset requires super admin access' });
+      await Evaluation.deleteMany({});
+      await Group.deleteMany({});
+      await Section.deleteMany({});
+    }
     // We keep Users (Admins/Panels) and Rubrics (usually reused)
     // But we could also delete Rubrics if preferred. 
     // Let's stick to event data: Evaluations, Groups, Sections.

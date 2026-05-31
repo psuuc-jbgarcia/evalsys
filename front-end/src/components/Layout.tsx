@@ -1,6 +1,7 @@
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import api from '../services/api';
 
 const adminLinks = [
   { to: '/dashboard', label: 'Dashboard', icon: '◫' },
@@ -21,6 +22,13 @@ const getPanelId = (user?: any) => user?.id || user?._id || '';
 const groupNameCacheKey = 'grading_group_names';
 const groupStatusCacheKey = (panelId: string) => `grading_group_status_${panelId}`;
 const selectedRubricCacheKey = (panelId: string) => `grading_selected_rubric_${panelId}`;
+const currentSubjectKey = 'evalsys_current_subject_id';
+
+interface Subject {
+  _id: string;
+  code: string;
+  title: string;
+}
 
 const hasDraftContent = (draft: any) => {
   const scores = draft?.scores || {};
@@ -68,9 +76,47 @@ export default function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const links = user?.role === 'admin' ? adminLinks : panelLinks;
+  const links = user?.role === 'admin' || user?.role === 'superadmin' ? adminLinks : panelLinks;
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [currentSubjectId, setCurrentSubjectId] = useState(() => localStorage.getItem(currentSubjectKey) || '');
+
+  useEffect(() => {
+    if (user?.role !== 'admin' && user?.role !== 'superadmin') return;
+    api.get('/subjects')
+      .then((res) => {
+        setSubjects(res.data);
+        const saved = localStorage.getItem(currentSubjectKey);
+        const savedExists = res.data.some((subject: Subject) => subject._id === saved);
+        if (!savedExists && res.data.length > 0) {
+          localStorage.setItem(currentSubjectKey, res.data[0]._id);
+          setCurrentSubjectId(res.data[0]._id);
+        }
+      })
+      .catch(() => undefined);
+  }, [user?.role]);
+
+  const handleSubjectChange = (subjectId: string) => {
+    localStorage.setItem(currentSubjectKey, subjectId);
+    setCurrentSubjectId(subjectId);
+    window.location.reload();
+  };
+
+  const handleCreateSubject = async () => {
+    const code = prompt('Subject code (example: IPT)');
+    if (!code) return;
+    const title = prompt('Subject title (example: Integrative Programming Technologies)');
+    if (!title) return;
+    try {
+      const res = await api.post('/subjects', { code, title });
+      localStorage.setItem(currentSubjectKey, res.data._id);
+      setCurrentSubjectId(res.data._id);
+      window.location.reload();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to create subject');
+    }
+  };
 
   const handleLogout = () => {
     const draftGroups = user?.role === 'panel' ? getPanelDraftGroups(getPanelId(user)) : [];
@@ -152,6 +198,31 @@ export default function Layout({ children }: { children: ReactNode }) {
 
         {/* Navigation */}
         <nav className="flex flex-col gap-0.5 flex-1 px-3 py-4 overflow-y-auto">
+          {(user?.role === 'admin' || user?.role === 'superadmin') && (!collapsed || mobileOpen) && (
+            <div className="mb-4 px-1">
+              <label className="text-[9px] font-black uppercase tracking-widest text-white/30 block mb-1.5">
+                Current Subject
+              </label>
+              <select
+                value={currentSubjectId}
+                onChange={(e) => handleSubjectChange(e.target.value)}
+                className="w-full rounded-lg bg-white/10 border border-white/10 text-white text-xs px-2 py-2 outline-none"
+              >
+                {subjects.map((subject) => (
+                  <option key={subject._id} value={subject._id}>
+                    {subject.code} - {subject.title}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={handleCreateSubject}
+                className="mt-2 w-full text-[10px] font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-lg py-1.5 transition-colors"
+              >
+                + Add Subject
+              </button>
+            </div>
+          )}
           {links.map((link) => {
             const isActive = location.pathname === link.to;
             return (

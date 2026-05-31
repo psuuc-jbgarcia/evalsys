@@ -1,5 +1,12 @@
 const Rubric = require('../models/Rubric');
 
+const getSubjectId = (req) => req.headers['x-subject-id'] || req.query.subject || req.body.subject;
+const canAccessSubject = (req, subjectId) => (
+  !subjectId ||
+  req.user?.role === 'superadmin' ||
+  (req.user?.assignedSubjects || []).some((id) => id.toString() === subjectId.toString())
+);
+
 const DEFAULT_RUBRIC = {
   title: 'Capstone Defense Rubric',
   criteria: [
@@ -63,22 +70,39 @@ const DEFAULT_RUBRIC = {
 
 // Get active rubric (or seed default if none exists)
 exports.getActiveRubric = async (req, res) => {
-  let rubric = await Rubric.findOne({ isActive: true });
+  const subject = getSubjectId(req);
+  const filter = subject ? { subject } : {};
+  let rubric = await Rubric.findOne({ ...filter, isActive: true });
   if (!rubric) {
-    rubric = await Rubric.create({ ...DEFAULT_RUBRIC, isActive: true });
+    rubric = await Rubric.create({ ...DEFAULT_RUBRIC, subject, isActive: true });
   }
   res.json(rubric);
 };
 
 exports.getAllRubrics = async (req, res) => {
-  const rubrics = await Rubric.find().sort({ createdAt: -1 });
+  const subject = getSubjectId(req);
+  const filter = {};
+  if (subject) {
+    if (req.user.role !== 'panel' && !canAccessSubject(req, subject)) {
+      return res.status(403).json({ message: 'You are not assigned to this subject' });
+    }
+    filter.subject = subject;
+  } else if (req.user.role === 'panel') {
+    return res.status(400).json({ message: 'Subject required' });
+  } else if (req.user.role === 'admin') {
+    filter.subject = { $in: req.user.assignedSubjects || [] };
+  }
+  const rubrics = await Rubric.find(filter).sort({ createdAt: -1 });
   res.json(rubrics);
 };
 
 exports.createRubric = async (req, res) => {
   const { title, criteria } = req.body;
+  const subject = getSubjectId(req);
   if (!title || !criteria?.length)
     return res.status(400).json({ message: 'Title and criteria required' });
+  if (!subject) return res.status(400).json({ message: 'Subject required' });
+  if (!canAccessSubject(req, subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
 
   // Validate criteria
   for (const c of criteria) {
@@ -90,18 +114,23 @@ exports.createRubric = async (req, res) => {
     }
   }
 
-  const rubric = await Rubric.create({ title, criteria });
+  const rubric = await Rubric.create({ title, criteria, subject });
   res.status(201).json(rubric);
 };
 
 exports.updateRubric = async (req, res) => {
+  const existing = await Rubric.findById(req.params.id);
+  if (!existing) return res.status(404).json({ message: 'Rubric not found' });
+  if (!canAccessSubject(req, existing.subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
   const rubric = await Rubric.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
-  if (!rubric) return res.status(404).json({ message: 'Rubric not found' });
   res.json(rubric);
 };
 
 exports.setActiveRubric = async (req, res) => {
-  await Rubric.updateMany({}, { isActive: false });
+  const existing = await Rubric.findById(req.params.id);
+  if (!existing) return res.status(404).json({ message: 'Rubric not found' });
+  if (!canAccessSubject(req, existing.subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
+  await Rubric.updateMany({ subject: existing.subject }, { isActive: false });
   const rubric = await Rubric.findByIdAndUpdate(req.params.id, { isActive: true }, { new: true });
   if (!rubric) return res.status(404).json({ message: 'Rubric not found' });
   res.json(rubric);
@@ -110,6 +139,7 @@ exports.setActiveRubric = async (req, res) => {
 exports.deleteRubric = async (req, res) => {
   const rubric = await Rubric.findById(req.params.id);
   if (!rubric) return res.status(404).json({ message: 'Rubric not found' });
+  if (!canAccessSubject(req, rubric.subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
   if (rubric.isActive) return res.status(400).json({ message: 'Cannot delete the active rubric' });
   await rubric.deleteOne();
   res.json({ message: 'Rubric deleted' });
