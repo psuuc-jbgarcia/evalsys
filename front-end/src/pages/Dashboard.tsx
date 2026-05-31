@@ -13,6 +13,8 @@ interface SubjectStatus {
   evaluationsMissingSubject: number;
   adminsMissingDefaultSubject?: number;
   superadminCount?: number;
+  defaultSuperadminExists?: boolean;
+  defaultInstructorReady?: boolean;
   isComplete: boolean;
 }
 
@@ -38,12 +40,14 @@ const adminCards = [
 export default function Dashboard() {
   const { user } = useAuth();
 
-  if (user?.role === 'admin' || user?.role === 'superadmin') return <AdminDashboard name={user.name} />;
+  if (user?.role === 'admin' || user?.role === 'superadmin') {
+    return <AdminDashboard name={user.name} role={user.role} />;
+  }
   return <PanelDashboard name={user?.name ?? ''} panelId={user?.id || user?._id || ''} />;
 }
 
 /* ── Admin view ── */
-function AdminDashboard({ name }: { name: string }) {
+function AdminDashboard({ name, role }: { name: string; role: 'admin' | 'superadmin' }) {
   const [locked, setLocked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [migratingSubject, setMigratingSubject] = useState(false);
@@ -258,19 +262,21 @@ function AdminDashboard({ name }: { name: string }) {
           </div>
         </div>
 
-        <div className="evl-card p-6 mt-5 border-primary/20 bg-surface">
-          <h4 className="text-primary font-bold text-sm mb-2 uppercase tracking-widest">3. Subject Migration</h4>
-          <p className="text-text/60 text-xs mb-6 leading-relaxed">
-            Create or reuse IPT - Integrative Programming Technologies, then attach existing sections, rubrics, and evaluations to that subject.
-          </p>
-          <button
-            onClick={runDefaultSubjectMigration}
-            disabled={migratingSubject}
-            className={`evl-btn-secondary w-full py-3 ${migratingSubject ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            {migratingSubject ? 'Running Migration...' : 'Run Default Subject Migration'}
-          </button>
-        </div>
+        {role === 'superadmin' && (
+          <div className="evl-card p-6 mt-5 border-primary/20 bg-surface">
+            <h4 className="text-primary font-bold text-sm mb-2 uppercase tracking-widest">3. Subject Migration</h4>
+            <p className="text-text/60 text-xs mb-6 leading-relaxed">
+              Create or reuse IPT - Integrative Programming Technologies, then attach existing sections, rubrics, evaluations, and default accounts to that subject.
+            </p>
+            <button
+              onClick={runDefaultSubjectMigration}
+              disabled={migratingSubject}
+              className={`evl-btn-secondary w-full py-3 ${migratingSubject ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              {migratingSubject ? 'Running Migration...' : 'Run Default Subject Migration'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

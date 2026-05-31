@@ -123,6 +123,19 @@ const getDefaultSubjectMigrationStatus = async () => {
     ? await Admin.countDocuments({ role: 'admin', assignedSubjects: { $ne: subject._id } })
     : 0;
   const superadminCount = await Admin.countDocuments({ role: 'superadmin' });
+  const defaultSuperadmin = await Admin.findOne({
+    email: DEFAULT_SUPERADMIN.email,
+    role: 'superadmin',
+    isActive: true,
+  });
+  const defaultInstructor = subject
+    ? await Admin.findOne({
+      email: DEFAULT_INSTRUCTOR_EMAIL,
+      role: 'admin',
+      isActive: true,
+      assignedSubjects: subject._id,
+    })
+    : null;
 
   return {
     subject: subject ? {
@@ -135,12 +148,15 @@ const getDefaultSubjectMigrationStatus = async () => {
     evaluationsMissingSubject,
     adminsMissingDefaultSubject,
     superadminCount,
+    defaultSuperadminExists: Boolean(defaultSuperadmin),
+    defaultInstructorReady: Boolean(defaultInstructor),
     isComplete: Boolean(subject) &&
       sectionsMissingSubject === 0 &&
       rubricsMissingSubject === 0 &&
       evaluationsMissingSubject === 0 &&
       adminsMissingDefaultSubject === 0 &&
-      superadminCount > 0,
+      Boolean(defaultSuperadmin) &&
+      Boolean(defaultInstructor),
   };
 };
 
