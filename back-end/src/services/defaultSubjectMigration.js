@@ -10,6 +10,16 @@ const DEFAULT_SUBJECT = {
   title: 'Integrative Programming Technologies',
 };
 
+const DEFAULT_SUPERADMIN = {
+  name: 'Super Admin',
+  email: 'superadmin@evalsys.com',
+  password: 'password',
+  role: 'superadmin',
+  isActive: true,
+};
+
+const DEFAULT_INSTRUCTOR_EMAIL = 'admin@evalsys.com';
+
 const missingSubjectFilter = {
   $or: [
     { subject: { $exists: false } },
@@ -38,15 +48,26 @@ const migrateDefaultSubject = async () => {
     { role: 'admin' },
     { $addToSet: { assignedSubjects: subject._id } }
   );
-  let promotedSuperadmin = null;
-  const superadminExists = await Admin.exists({ role: 'superadmin' });
-  if (!superadminExists) {
-    promotedSuperadmin = await Admin.findOneAndUpdate(
-      { role: 'admin' },
-      { $set: { role: 'superadmin' } },
-      { sort: { createdAt: 1 }, new: true }
-    ).select('name email');
+  let defaultSuperadmin = await Admin.findOne({ email: DEFAULT_SUPERADMIN.email });
+  if (!defaultSuperadmin) {
+    defaultSuperadmin = new Admin(DEFAULT_SUPERADMIN);
+  } else {
+    defaultSuperadmin.name = DEFAULT_SUPERADMIN.name;
+    defaultSuperadmin.role = DEFAULT_SUPERADMIN.role;
+    defaultSuperadmin.isActive = true;
+    defaultSuperadmin.password = DEFAULT_SUPERADMIN.password;
+    defaultSuperadmin.markModified('password');
   }
+  await defaultSuperadmin.save();
+
+  const defaultInstructor = await Admin.findOneAndUpdate(
+    { email: DEFAULT_INSTRUCTOR_EMAIL },
+    {
+      $set: { role: 'admin', isActive: true },
+      $addToSet: { assignedSubjects: subject._id },
+    },
+    { new: true }
+  ).select('name email role');
 
   const evaluations = await Evaluation.find(missingSubjectFilter).select('_id group');
   let evaluationsUpdated = 0;
@@ -76,10 +97,17 @@ const migrateDefaultSubject = async () => {
     sectionsUpdated: sectionResult.modifiedCount,
     rubricsUpdated: rubricResult.modifiedCount,
     adminsAssigned: adminResult.modifiedCount,
-    promotedSuperadmin: promotedSuperadmin ? {
-      id: promotedSuperadmin._id,
-      name: promotedSuperadmin.name,
-      email: promotedSuperadmin.email,
+    defaultSuperadmin: {
+      id: defaultSuperadmin._id,
+      name: defaultSuperadmin.name,
+      email: defaultSuperadmin.email,
+      role: defaultSuperadmin.role,
+    },
+    defaultInstructor: defaultInstructor ? {
+      id: defaultInstructor._id,
+      name: defaultInstructor.name,
+      email: defaultInstructor.email,
+      role: defaultInstructor.role,
     } : null,
     evaluationsUpdated,
     evaluationsDefaulted,

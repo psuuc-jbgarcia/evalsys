@@ -96,7 +96,8 @@ function AdminDashboard({ name }: { name: string }) {
         `Sections updated: ${res.data.sectionsUpdated}\n` +
         `Rubrics updated: ${res.data.rubricsUpdated}\n` +
         `Admins assigned: ${res.data.adminsAssigned}\n` +
-        `${res.data.promotedSuperadmin ? `Promoted superadmin: ${res.data.promotedSuperadmin.email}\n` : ''}` +
+        `${res.data.defaultSuperadmin ? `Default superadmin: ${res.data.defaultSuperadmin.email}\n` : ''}` +
+        `${res.data.defaultInstructor ? `Default instructor: ${res.data.defaultInstructor.email}\n` : ''}` +
         `Evaluations updated: ${res.data.evaluationsUpdated}\n` +
         `Evaluations defaulted: ${res.data.evaluationsDefaulted}`
       );
