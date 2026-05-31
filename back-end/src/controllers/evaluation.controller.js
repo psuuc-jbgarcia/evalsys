@@ -63,7 +63,14 @@ exports.submitEvaluation = async (req, res) => {
 
   const evaluation = await Evaluation.findOneAndUpdate(
     { group: groupId, panel: req.user._id },
-    { scores, total, rubric: rubricId, comments: req.body.comments || '', isSubmitted: true },
+    {
+      scores,
+      total,
+      rubric: rubricId,
+      subject: section.subject,
+      comments: req.body.comments || '',
+      isSubmitted: true,
+    },
     { new: true, upsert: true, runValidators: true }
   );
 

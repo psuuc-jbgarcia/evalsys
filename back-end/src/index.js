@@ -35,6 +35,7 @@ app.use('/api/groups', require('./routes/group.routes'));
 app.use('/api/evaluations', require('./routes/evaluation.routes'));
 app.use('/api/rubrics', require('./routes/rubric.routes'));
 app.use('/api/settings', require('./routes/settings.routes'));
+app.use('/api/subjects', require('./routes/subject.routes'));
 
 app.get('/api/health', (_, res) => res.json({ status: 'ok' }));
 

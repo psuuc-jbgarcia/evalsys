@@ -31,6 +31,7 @@ export default function Dashboard() {
 function AdminDashboard({ name }: { name: string }) {
   const [locked, setLocked] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [migratingSubject, setMigratingSubject] = useState(false);
 
   useEffect(() => {
     api.get('/settings').then(res => {
@@ -45,6 +46,31 @@ function AdminDashboard({ name }: { name: string }) {
       setLocked(res.data.isGradingLocked);
     } catch (err) {
       alert('Failed to toggle lock');
+    }
+  };
+
+  const runDefaultSubjectMigration = async () => {
+    const proceed = confirm(
+      'Run the default subject migration now?\n\n' +
+      'This will create/reuse IPT - Integrative Programming Technologies and attach old sections, rubrics, and evaluations to it.'
+    );
+    if (!proceed) return;
+
+    setMigratingSubject(true);
+    try {
+      const res = await api.post('/subjects/migrate-default');
+      alert(
+        `${res.data.message}\n\n` +
+        `Subject: ${res.data.subject.code} - ${res.data.subject.title}\n` +
+        `Sections updated: ${res.data.sectionsUpdated}\n` +
+        `Rubrics updated: ${res.data.rubricsUpdated}\n` +
+        `Evaluations updated: ${res.data.evaluationsUpdated}\n` +
+        `Evaluations defaulted: ${res.data.evaluationsDefaulted}`
+      );
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Default subject migration failed.');
+    } finally {
+      setMigratingSubject(false);
     }
   };
 
@@ -179,6 +205,20 @@ function AdminDashboard({ name }: { name: string }) {
               Wipe All Event Data
             </button>
           </div>
+        </div>
+
+        <div className="evl-card p-6 mt-5 border-primary/20 bg-surface">
+          <h4 className="text-primary font-bold text-sm mb-2 uppercase tracking-widest">3. Subject Migration</h4>
+          <p className="text-text/60 text-xs mb-6 leading-relaxed">
+            Create or reuse IPT - Integrative Programming Technologies, then attach existing sections, rubrics, and evaluations to that subject.
+          </p>
+          <button
+            onClick={runDefaultSubjectMigration}
+            disabled={migratingSubject}
+            className={`evl-btn-secondary w-full py-3 ${migratingSubject ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            {migratingSubject ? 'Running Migration...' : 'Run Default Subject Migration'}
+          </button>
         </div>
       </div>
     </div>

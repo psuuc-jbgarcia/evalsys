@@ -16,6 +16,7 @@ const criteriaSchema = new mongoose.Schema({
 
 const rubricSchema = new mongoose.Schema({
   title: { type: String, required: true, default: 'Default Rubric' },
+  subject: { type: mongoose.Schema.Types.ObjectId, ref: 'Subject', index: true },
   criteria: [criteriaSchema],
   isActive: { type: Boolean, default: true },
 }, { timestamps: true });

@@ -4,6 +4,7 @@ const evaluationSchema = new mongoose.Schema({
   group: { type: mongoose.Schema.Types.ObjectId, ref: 'Group', required: true },
   panel: { type: mongoose.Schema.Types.ObjectId, ref: 'Panel', required: true },
   rubric: { type: mongoose.Schema.Types.ObjectId, ref: 'Rubric' },
+  subject: { type: mongoose.Schema.Types.ObjectId, ref: 'Subject', index: true },
   scores: {
     type: Map,
     of: Number,

@@ -4,7 +4,8 @@
   "type": "commonjs",
   "scripts": {
     "dev": "nodemon src/index.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "migrate:default-subject": "node src/scripts/migrate-default-subject.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

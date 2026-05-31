@@ -9,13 +9,33 @@ This plan details the full schema changes, API routes, controller modifications,
 ## User Review Required
 
 ### Data Migration & Backward Compatibility
+Status: **Implementation ready - database migration run pending MongoDB connection.**
+
 Introducing `subject` as a required reference in `Section` and `Rubric` will break existing records that lack this field. We propose a database migration script that:
-1. Creates a default subject (e.g., code: `CAP-1`, title: `Capstone Project 1`).
+1. Creates a default subject:
+   * Code: `IPT`
+   * Title: `Integrative Programming Technologies`
 2. Automatically associates all pre-existing sections and rubrics with this default subject.
 3. Connects evaluations to their corresponding subject contexts.
+4. Keeps old records readable during rollout until the migration has been verified.
+
+Recommended migration behavior:
+* If the default subject already exists, reuse it instead of creating a duplicate.
+* Add `subject` to all sections without one.
+* Add `subject` to all rubrics without one.
+* Add `subject` to all evaluations by resolving the evaluation's group -> section -> subject.
+* Log how many subjects, sections, rubrics, and evaluations were updated.
+* Run the migration before making `subject` required in the schema.
 
 ### Subject-Scoped Master Resets vs. Global Resets
 In the single-subject version, a "Master Reset" wipes all evaluations, groups, and sections. In the multi-subject version, admins should be allowed to perform a **scoped reset** for a single subject (preserving other subjects' active evaluations) or a global reset. We plan to add a dropdown to select the scope before resetting.
+
+Planned reset options:
+* **Scoped Reset**: Deletes evaluations, groups, and sections only for the selected subject.
+* **Global Reset**: Deletes evaluations, groups, and sections across all subjects.
+* Admin must choose the reset scope from a dropdown before confirming.
+* The confirmation text should clearly include the selected scope, for example `RESET IPT` for the Integrative Programming Technologies scoped reset.
+* Admin and panel accounts should be preserved unless a future superadmin-only account reset is added.
 
 ---
 
