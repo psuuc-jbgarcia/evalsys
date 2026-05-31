@@ -15,6 +15,7 @@ const DEFAULT_SUPERADMIN = {
   email: 'superadmin@evalsys.com',
   password: 'password',
   role: 'superadmin',
+  isActive: true,
 };
 
 const DEFAULT_INSTRUCTOR_EMAIL = 'admin@evalsys.com';
@@ -47,16 +48,23 @@ const migrateDefaultSubject = async () => {
     { role: 'admin' },
     { $addToSet: { assignedSubjects: subject._id } }
   );
-  const defaultSuperadmin = await Admin.findOneAndUpdate(
-    { email: DEFAULT_SUPERADMIN.email },
-    { $setOnInsert: DEFAULT_SUPERADMIN },
-    { new: true, upsert: true }
-  ).select('name email role');
+
+  let defaultSuperadmin = await Admin.findOne({ email: DEFAULT_SUPERADMIN.email });
+  if (!defaultSuperadmin) {
+    defaultSuperadmin = new Admin(DEFAULT_SUPERADMIN);
+  } else {
+    defaultSuperadmin.name = DEFAULT_SUPERADMIN.name;
+    defaultSuperadmin.role = DEFAULT_SUPERADMIN.role;
+    defaultSuperadmin.isActive = true;
+    defaultSuperadmin.password = DEFAULT_SUPERADMIN.password;
+    defaultSuperadmin.markModified('password');
+  }
+  await defaultSuperadmin.save();
 
   const defaultInstructor = await Admin.findOneAndUpdate(
     { email: DEFAULT_INSTRUCTOR_EMAIL },
     {
-      $set: { role: 'admin' },
+      $set: { role: 'admin', isActive: true },
       $addToSet: { assignedSubjects: subject._id },
     },
     { new: true }
