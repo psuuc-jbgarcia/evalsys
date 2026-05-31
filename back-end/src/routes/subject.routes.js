@@ -12,7 +12,7 @@ const { protect, adminOnly, superadminOnly } = require('../middleware/auth.middl
 router.get('/', protect, adminOnly, getSubjects);
 router.post('/', protect, adminOnly, createSubject);
 router.get('/migration-status', protect, adminOnly, getDefaultSubjectMigrationStatus);
-router.post('/migrate-default', protect, adminOnly, migrateDefaultSubject);
+router.post('/migrate-default', protect, superadminOnly, migrateDefaultSubject);
 router.put('/:id', protect, adminOnly, updateSubject);
 router.put('/:id/admins', protect, superadminOnly, assignSubjectAdmins);
 
