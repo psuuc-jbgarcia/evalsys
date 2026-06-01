@@ -19,10 +19,13 @@ exports.createSection = async (req, res) => {
 
 exports.getSections = async (req, res) => {
   let filter = {};
-  if (req.user && req.user.role === 'panel') {
+  const subject = req.user ? getSubjectId(req) : req.query.subject;
+
+  if (!req.user && subject) {
+    filter.subject = subject;
+  } else if (req.user && req.user.role === 'panel') {
     filter = { assignedPanels: req.user._id };
   } else if (req.user) {
-    const subject = getSubjectId(req);
     if (subject) {
       if (!canAccessSubject(req, subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
       filter.subject = subject;
@@ -33,6 +36,7 @@ exports.getSections = async (req, res) => {
   
   const sections = await Section.find(filter)
     .populate('assignedPanels', 'name email')
+    .populate('subject', 'code title')
     .sort({ createdAt: -1 });
   res.json(sections);
 };

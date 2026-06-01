@@ -117,13 +117,19 @@ body {
     @apply bg-bg;
   }
   .evl-table th {
-    @apply px-5 py-4 text-left text-xs font-bold text-text/50 uppercase tracking-wider;
+    @apply px-5 py-4 text-left text-xs font-bold text-text/50 uppercase tracking-wider align-middle;
   }
   .evl-table td {
-    @apply px-5 py-4;
+    @apply px-5 py-4 align-middle;
   }
   .evl-table tbody tr {
     @apply border-t border-muted/40 transition-colors hover:bg-bg;
+  }
+  /* Shrink-wrap the actions column — apply to both th and td */
+  .evl-table .col-actions {
+    width: 1%;
+    white-space: nowrap;
+    text-align: right;
   }
 
   /* Status badges */

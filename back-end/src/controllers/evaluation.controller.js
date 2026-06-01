@@ -17,6 +17,16 @@ const scoresToObject = (scores) => {
   return scores;
 };
 
+const formatMemberName = (member) => {
+  if (typeof member === 'string') return member;
+  return [member.firstName, member.middleName, member.lastName].filter(Boolean).join(' ');
+};
+
+const formatMemberList = (members = [], separator = '; ') => members
+  .map(formatMemberName)
+  .filter(Boolean)
+  .join(separator);
+
 const serializeEvaluation = (evaluation) => {
   if (!evaluation) return null;
   const obj = evaluation.toObject ? evaluation.toObject() : evaluation;
@@ -296,7 +306,7 @@ exports.exportAllResults = async (req, res) => {
       allResults.push({
         Section: section.block,
         GroupName: group.name,
-        Members: group.members.join('; '),
+        Members: formatMemberList(group.members),
         AverageScore: isIncomplete ? 'Pending Complete Evaluation' : avgScore,
         EvaluatedBy: evaluations.map(ev => ev.panel?.name).join(', '),
         MissingPanels: missingPanels.join(', '),

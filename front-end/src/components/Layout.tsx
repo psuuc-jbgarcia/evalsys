@@ -1,16 +1,18 @@
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 
 const adminLinks = [
   { to: '/dashboard', label: 'Dashboard', icon: '◫' },
+  { to: '/subjects', label: 'Subjects', icon: '📚' },
   { to: '/sections', label: 'Sections', icon: '☰' },
   { to: '/groups', label: 'Groups', icon: '⊞' },
   { to: '/users', label: 'Panel Accounts', icon: '⊕' },
   { to: '/assign-panels', label: 'Assign Panels', icon: '👥' },
   { to: '/rubrics', label: 'Rubrics', icon: '✎' },
   { to: '/results', label: 'Results', icon: '▦' },
+  { to: '/registration-links', label: 'Registration Links', icon: 'RL' },
 ];
 
 const panelLinks = [
@@ -18,11 +20,78 @@ const panelLinks = [
   { to: '/grade', label: 'Grade Groups', icon: '✎' },
 ];
 
+type NavIconName = 'dashboard' | 'sections' | 'groups' | 'users' | 'assign' | 'rubrics' | 'results' | 'link' | 'grade' | 'subjects' | 'subscription';
+
+const getNavIconName = (to: string): NavIconName => {
+  if (to === '/subjects') return 'subjects';
+  if (to === '/sections') return 'sections';
+  if (to === '/groups') return 'groups';
+  if (to === '/users') return 'users';
+  if (to === '/assign-panels') return 'assign';
+  if (to === '/rubrics') return 'rubrics';
+  if (to === '/results') return 'results';
+  if (to === '/registration-links') return 'link';
+  if (to === '/grade') return 'grade';
+  if (to === '/subscription') return 'subscription';
+  return 'dashboard';
+};
+
+const NavIcon = ({ name }: { name: NavIconName }) => {
+  const common = {
+    className: 'w-[18px] h-[18px]',
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 2,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    'aria-hidden': true,
+  };
+
+  if (name === 'dashboard') {
+    return <svg {...common}><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></svg>;
+  }
+  if (name === 'subjects') {
+    return <svg {...common}><path d="M4 19V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14" /><path d="M4 19h16" /><path d="M9 7h6" /><path d="M9 11h6" /></svg>;
+  }
+  if (name === 'sections') {
+    return <svg {...common}><path d="M4 7h16" /><path d="M4 12h16" /><path d="M4 17h16" /></svg>;
+  }
+  if (name === 'groups') {
+    return <svg {...common}><rect x="3" y="4" width="7" height="7" rx="1.5" /><rect x="14" y="4" width="7" height="7" rx="1.5" /><rect x="3" y="15" width="7" height="5" rx="1.5" /><rect x="14" y="15" width="7" height="5" rx="1.5" /></svg>;
+  }
+  if (name === 'users') {
+    return <svg {...common}><circle cx="9" cy="8" r="3" /><path d="M3.5 19c.8-3.2 2.7-5 5.5-5s4.7 1.8 5.5 5" /><circle cx="17" cy="9" r="2.5" /><path d="M15.5 14.5c2.4.3 4 1.8 4.8 4.5" /></svg>;
+  }
+  if (name === 'assign') {
+    return <svg {...common}><circle cx="7" cy="8" r="3" /><path d="M2.8 19c.8-3.1 2.2-5 4.2-5s3.4 1.9 4.2 5" /><path d="M15 7h6" /><path d="M18 4v6" /><path d="M15 17h6" /></svg>;
+  }
+  if (name === 'rubrics') {
+    return <svg {...common}><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3Z" /><path d="m13.5 8.5 2 2" /></svg>;
+  }
+  if (name === 'results') {
+    return <svg {...common}><path d="M4 19V5" /><path d="M4 19h16" /><rect x="7" y="11" width="3" height="5" rx="1" /><rect x="12" y="8" width="3" height="8" rx="1" /><rect x="17" y="4" width="3" height="12" rx="1" /></svg>;
+  }
+  if (name === 'link') {
+    return <svg {...common}><path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1" /><path d="M14 11a5 5 0 0 0-7.1 0l-2 2A5 5 0 0 0 12 20.1l1.1-1.1" /></svg>;
+  }
+  if (name === 'subscription') {
+    return <svg {...common}><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z" /><path d="M12 8v4l3 3" /></svg>;
+  }
+  return <svg {...common}><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" /></svg>;
+};
+
 const getPanelId = (user?: any) => user?.id || user?._id || '';
 const groupNameCacheKey = 'grading_group_names';
 const groupStatusCacheKey = (panelId: string) => `grading_group_status_${panelId}`;
 const selectedRubricCacheKey = (panelId: string) => `grading_selected_rubric_${panelId}`;
 const currentSubjectKey = 'evalsys_current_subject_id';
+const roleLabel = (role?: string) => {
+  if (role === 'admin') return 'Instructor';
+  if (role === 'superadmin') return 'Super Admin';
+  if (role === 'panel') return 'Panel';
+  return role || '';
+};
 
 interface Subject {
   _id: string;
@@ -81,6 +150,12 @@ export default function Layout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [currentSubjectId, setCurrentSubjectId] = useState(() => localStorage.getItem(currentSubjectKey) || '');
+  const [subjectMenuOpen, setSubjectMenuOpen] = useState(false);
+
+  const currentSubject = useMemo(
+    () => subjects.find((subject) => subject._id === currentSubjectId) || null,
+    [subjects, currentSubjectId]
+  );
 
   useEffect(() => {
     if (user?.role !== 'admin' && user?.role !== 'superadmin') return;
@@ -98,24 +173,14 @@ export default function Layout({ children }: { children: ReactNode }) {
   }, [user?.role]);
 
   const handleSubjectChange = (subjectId: string) => {
+    if (!subjectId || subjectId === currentSubjectId) {
+      setSubjectMenuOpen(false);
+      return;
+    }
     localStorage.setItem(currentSubjectKey, subjectId);
     setCurrentSubjectId(subjectId);
+    setSubjectMenuOpen(false);
     window.location.reload();
-  };
-
-  const handleCreateSubject = async () => {
-    const code = prompt('Subject code (example: IPT)');
-    if (!code) return;
-    const title = prompt('Subject title (example: Integrative Programming Technologies)');
-    if (!title) return;
-    try {
-      const res = await api.post('/subjects', { code, title });
-      localStorage.setItem(currentSubjectKey, res.data._id);
-      setCurrentSubjectId(res.data._id);
-      window.location.reload();
-    } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to create subject');
-    }
   };
 
   const handleLogout = () => {
@@ -182,7 +247,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               <div>
                 <h1 className="text-white font-bold text-sm leading-none">EvalSys</h1>
                 <p className="text-white/40 text-[10px] mt-0.5 uppercase tracking-widest font-semibold">
-                  {user?.role}
+                  {roleLabel(user?.role)}
                 </p>
               </div>
             )}
@@ -203,24 +268,56 @@ export default function Layout({ children }: { children: ReactNode }) {
               <label className="text-[9px] font-black uppercase tracking-widest text-white/30 block mb-1.5">
                 Current Subject
               </label>
-              <select
-                value={currentSubjectId}
-                onChange={(e) => handleSubjectChange(e.target.value)}
-                className="w-full rounded-lg bg-white/10 border border-white/10 text-white text-xs px-2 py-2 outline-none"
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setSubjectMenuOpen((open) => !open)}
+                  className="w-full min-h-10 rounded-lg bg-white/10 border border-white/10 text-white text-left px-3 py-2 outline-none hover:bg-white/15 focus:ring-2 focus:ring-primary/40 transition-colors"
+                  title={currentSubject ? `${currentSubject.code} - ${currentSubject.title}` : 'Select subject'}
+                >
+                  <span className="block text-xs font-bold truncate pr-5">
+                    {currentSubject ? `${currentSubject.code} - ${currentSubject.title}` : 'Select subject'}
+                  </span>
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 text-[10px]">
+                    {subjectMenuOpen ? '^' : 'v'}
+                  </span>
+                </button>
+
+                {subjectMenuOpen && (
+                  <div className="absolute left-0 right-0 top-full mt-1 rounded-lg border border-white/10 bg-dark shadow-xl z-50 overflow-hidden">
+                    <div className="max-h-48 overflow-y-auto py-1">
+                      {subjects.map((subject) => {
+                        const active = subject._id === currentSubjectId;
+                        return (
+                          <button
+                            key={subject._id}
+                            type="button"
+                            onClick={() => handleSubjectChange(subject._id)}
+                            className={`w-full text-left px-3 py-2 text-xs transition-colors ${
+                              active
+                                ? 'bg-primary text-white font-bold'
+                                : 'text-white/70 hover:bg-white/10 hover:text-white'
+                            }`}
+                            title={`${subject.code} - ${subject.title}`}
+                          >
+                            <span className="block truncate">{subject.code} - {subject.title}</span>
+                          </button>
+                        );
+                      })}
+                      {!subjects.length && (
+                        <div className="px-3 py-2 text-xs text-white/40">No subjects yet</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <Link
+                to="/subjects"
+                onClick={() => setMobileOpen(false)}
+                className="mt-2 w-full text-[10px] font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-lg py-1.5 transition-colors flex items-center justify-center gap-1"
               >
-                {subjects.map((subject) => (
-                  <option key={subject._id} value={subject._id}>
-                    {subject.code} - {subject.title}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={handleCreateSubject}
-                className="mt-2 w-full text-[10px] font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-lg py-1.5 transition-colors"
-              >
-                + Add Subject
-              </button>
+                ⚙ Manage Subjects
+              </Link>
             </div>
           )}
           {links.map((link) => {
@@ -235,11 +332,36 @@ export default function Layout({ children }: { children: ReactNode }) {
                     : 'text-white/50 hover:text-white hover:bg-white/5'
                   }`}
               >
-                <span className="text-base leading-none w-5 text-center shrink-0">{link.icon}</span>
+                <span className="w-5 h-5 flex items-center justify-center shrink-0">
+                  <NavIcon name={getNavIconName(link.to)} />
+                </span>
                 {(!collapsed || mobileOpen) && <span>{link.label}</span>}
               </Link>
             );
           })}
+          {(user?.role === 'superadmin') && (
+            <>
+              {(!collapsed || mobileOpen) && (
+                <div className="mt-3 mb-1 px-1">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-white/20">Super Admin</span>
+                </div>
+              )}
+              <Link
+                to="/subscription"
+                onClick={() => setMobileOpen(false)}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150 ${
+                  location.pathname === '/subscription'
+                    ? 'bg-primary text-white'
+                    : 'text-white/50 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <span className="w-5 h-5 flex items-center justify-center shrink-0">
+                  <NavIcon name="subscription" />
+                </span>
+                {(!collapsed || mobileOpen) && <span>Manage Subscription</span>}
+              </Link>
+            </>
+          )}
         </nav>
 
         {/* User info */}

@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import api from '../../services/api';
 import { TableSkeleton } from '../../components/LoadingSkeleton';
+import { formatMemberList, type Member } from '../../utils/members';
 
 interface Section { _id: string; name: string; block: string; }
 interface Group {
   _id: string; name: string;
   section: Section;
-  members: string[];
+  members: Member[];
 }
 
 export default function Groups() {
@@ -51,7 +52,7 @@ export default function Groups() {
     setEditForm({
       name: g.name,
       section: typeof g.section === 'string' ? g.section : g.section?._id || '',
-      members: g.members.join(', ')
+      members: formatMemberList(g.members)
     });
   };
 
@@ -199,7 +200,7 @@ export default function Groups() {
                 <th>Group</th>
                 <th>Block</th>
                 <th>Members</th>
-                <th className="text-right">Actions</th>
+                <th className="col-actions">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -207,8 +208,8 @@ export default function Groups() {
                 <tr key={g._id}>
                   <td className="font-semibold text-text">{g.name}</td>
                   <td className="text-text/50">{g.section?.block}</td>
-                  <td className="text-text/50 text-xs max-w-[200px] truncate">{g.members.join(', ') || '—'}</td>
-                  <td className="text-right">
+                  <td className="text-text/50 text-xs max-w-[200px] truncate">{formatMemberList(g.members) || '—'}</td>
+                  <td className="col-actions">
                     <div className="flex justify-end gap-1">
                       <button onClick={() => startEdit(g)} className="evl-btn-ghost text-primary hover:bg-primary/5">
                         Edit

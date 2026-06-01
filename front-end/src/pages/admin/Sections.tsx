@@ -79,7 +79,7 @@ export default function Sections() {
             <thead>
               <tr>
                 <th>Block</th>
-                <th className="text-right">Actions</th>
+                <th className="col-actions">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -101,7 +101,7 @@ export default function Sections() {
                       s.block
                     )}
                   </td>
-                  <td className="text-right">
+                  <td className="col-actions">
                     {editingId === s._id ? (
                       <div className="flex justify-end gap-2">
                         <button onClick={() => handleUpdate(s._id)} className="evl-btn-primary py-1 px-3 text-xs h-9">

@@ -24,7 +24,7 @@ const loginLimiter = rateLimit({
 connectDB();
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 app.use('/api/auth/login', loginLimiter);
 
@@ -36,6 +36,7 @@ app.use('/api/evaluations', require('./routes/evaluation.routes'));
 app.use('/api/rubrics', require('./routes/rubric.routes'));
 app.use('/api/settings', require('./routes/settings.routes'));
 app.use('/api/subjects', require('./routes/subject.routes'));
+app.use('/api/registration-links', require('./routes/registrationLink.routes'));
 
 app.get('/api/health', (_, res) => res.json({ status: 'ok' }));
 

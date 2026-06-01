@@ -120,7 +120,7 @@ export default function Users() {
               <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}
                 className="evl-select">
                 <option value="panel">Panel</option>
-                <option value="admin">Admin</option>
+                <option value="admin">Instructor</option>
               </select>
             </div>
           </div>
@@ -143,7 +143,7 @@ export default function Users() {
                 <th>Email</th>
                 <th>Role</th>
                 <th>Status</th>
-                <th className="text-right">Actions</th>
+                <th className="col-actions">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -157,8 +157,8 @@ export default function Users() {
                       {u.isActive ? 'Active' : 'Blocked'}
                     </span>
                   </td>
-                  <td className="text-right">
-                    <div className="flex items-center justify-end gap-2">
+                  <td className="col-actions">
+                    <div className="flex items-center justify-end gap-2 whitespace-nowrap">
                       <button onClick={() => handleToggle(u._id)}
                         className="evl-btn-ghost text-primary hover:bg-primary/5">
                         {u.isActive ? 'Block' : 'Unblock'}

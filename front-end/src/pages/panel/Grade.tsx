@@ -4,12 +4,13 @@ import api from '../../services/api';
 import ScoreInput from '../../components/ScoreInput';
 import { CardSkeleton } from '../../components/LoadingSkeleton';
 import { useAuth } from '../../context/AuthContext';
+import { formatMemberList, type Member } from '../../utils/members';
 
 interface Level { label: string; minScore: number; maxScore: number; description: string; }
 interface Criteria { key: string; label: string; maxScore: number; levels: Level[]; }
 interface Rubric { _id: string; title: string; criteria: Criteria[]; isActive: boolean; subject?: string; }
 interface Section { _id: string; name: string; block: string; subject?: string | { _id: string; code?: string; title?: string }; }
-interface Group { _id: string; name: string; section: Section; members: string[]; isGraded?: boolean; }
+interface Group { _id: string; name: string; section: Section; members: Member[]; isGraded?: boolean; }
 
 const LEVEL_COLORS: Record<string, string> = {
   Excellent: 'bg-success/10 text-success',
@@ -29,6 +30,14 @@ const hasScoreValues = (scores: Record<string, number | ''>) =>
   Object.values(scores).some((value) => value !== '' && value !== null && value !== undefined);
 
 const getRefId = (value: any) => value?._id || value || '';
+const getSubjectLabel = (section?: Section | null) => {
+  const subject = section?.subject;
+  if (!subject || typeof subject === 'string') return 'Subject not linked';
+  return [subject.code, subject.title].filter(Boolean).join(' - ') || 'Subject not linked';
+};
+const formatScoreKey = (key: string) => key
+  .replace(/([A-Z])/g, ' $1')
+  .replace(/^./, (char) => char.toUpperCase());
 const formatSavedTime = (value: string | null) => {
   if (!value) return '';
   return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -133,6 +142,7 @@ export default function Grade() {
   const selectedExisting = selectedGroup && getRefId(existing?.group) === selectedGroup._id
     ? existing
     : null;
+  const existingScores = selectedExisting?.scores || {};
   const total = Object.values(scores).reduce<number>(
     (a, b) => (typeof b === 'number' ? a + b : a), 0
   );
@@ -236,6 +246,18 @@ export default function Grade() {
       }, 0);
     }
   }, [selectedGroup, activeRubric, selectedExisting]);
+
+  useEffect(() => {
+    if (!selectedGroup || !selectedExisting || activeRubric) return;
+    skipAutosaveRef.current = true;
+    setScores(existingScores);
+    setComments(selectedExisting.comments || '');
+    setDraftSavedAt(null);
+    setHasCurrentDraft(false);
+    setTimeout(() => {
+      skipAutosaveRef.current = false;
+    }, 0);
+  }, [selectedGroup, selectedExisting, activeRubric]);
 
   const selectGroup = async (group: Group) => {
     if (group._id !== selectedGroup?._id && !confirmContinueWithDraft()) return;
@@ -473,7 +495,10 @@ export default function Grade() {
                       : 'bg-surface text-text/60 border-muted/40 hover:text-text hover:border-primary/30'
                     }`}
                 >
-                  {section.block}
+                  <span className="block">{section.block}</span>
+                  <span className={`block text-xs mt-1 truncate font-semibold ${selectedSidebarSectionId === section._id ? 'text-white/85' : 'text-text/55'}`}>
+                    {getSubjectLabel(section)}
+                  </span>
                 </button>
               ))}
             </div>
@@ -515,7 +540,10 @@ export default function Grade() {
                         )}
                       </div>
                       <p className={`text-[11px] mt-1 truncate ${selectedGroup?._id === g._id ? 'text-white/70' : 'text-text/40'}`}>
-                        {g.members.length ? g.members.join(', ') : 'No members'}
+                        {getSubjectLabel(g.section)}
+                      </p>
+                      <p className={`text-[11px] mt-0.5 truncate ${selectedGroup?._id === g._id ? 'text-white/70' : 'text-text/40'}`}>
+                        {formatMemberList(g.members) || 'No members'}
                       </p>
                     </button>
                   ))
@@ -547,11 +575,61 @@ export default function Grade() {
               {Array(4).fill(0).map((_, i) => <CardSkeleton key={i} />)}
             </div>
           </div>
+        ) : !activeRubric && selectedExisting ? (
+          <div className="space-y-5">
+            <div className="evl-card p-6 border-warning/30 bg-warning/5">
+              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-warning mb-2">
+                    Submitted Evaluation
+                  </p>
+                  <h2 className="text-2xl md:text-3xl font-extrabold text-text leading-tight">{selectedGroup.name}</h2>
+                  <p className="text-text/50 text-sm mt-2 font-medium">
+                    <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-xs uppercase tracking-wider">{selectedGroup.section?.block}</span>
+                    <span className="ml-2">{getSubjectLabel(selectedGroup.section)}</span>
+                  </p>
+                  <p className="text-text/60 text-sm mt-4 max-w-2xl">
+                    The rubric used for this submitted score was deleted, but the saved scores and feedback are still preserved.
+                  </p>
+                </div>
+                <div className="evl-card px-6 py-5 text-center min-w-[160px] bg-surface">
+                  <p className="text-text/40 text-[10px] font-extrabold uppercase tracking-widest mb-1">Submitted Total</p>
+                  <p className="text-4xl font-black text-text">{submittedTotal}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {Object.entries(existingScores).map(([key, value]) => (
+                <div key={key} className="evl-card p-5">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-text/40 mb-2">
+                    {formatScoreKey(key)}
+                  </p>
+                  <p className="text-3xl font-black text-text">{String(value)}</p>
+                </div>
+              ))}
+            </div>
+
+            {comments && (
+              <div className="evl-card p-6">
+                <p className="text-[10px] font-black uppercase tracking-widest text-text/40 mb-2">
+                  Panel Feedback
+                </p>
+                <p className="text-text/70 text-sm leading-relaxed whitespace-pre-wrap">{comments}</p>
+              </div>
+            )}
+
+            {rubrics.length > 0 && (
+              <div className="evl-alert-info">
+                A new rubric is available for this subject. Ask the instructor to clear this submitted score first if this group needs to be graded again using the new rubric.
+              </div>
+            )}
+          </div>
         ) : !activeRubric ? (
           <div className="flex items-center justify-center h-64">
-            <div className="text-center">
-              <p className="text-text/40 text-sm font-semibold mb-1">No rubrics available.</p>
-              <p className="text-text/50 text-xs">Please ask an administrator to create a grading rubric.</p>
+            <div className="text-center max-w-md">
+              <p className="text-text/40 text-sm font-semibold mb-1">No rubrics available for this subject.</p>
+              <p className="text-text/50 text-xs">Please ask the instructor to create a grading rubric before grading this group.</p>
             </div>
           </div>
         ) : (
@@ -562,7 +640,8 @@ export default function Grade() {
                 <h2 className="text-2xl md:text-3xl font-extrabold text-text leading-tight">{selectedGroup.name}</h2>
                 <p className="text-text/50 text-sm mt-2 font-medium">
                   <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-xs uppercase tracking-wider">{selectedGroup.section?.block}</span>
-                  {selectedGroup.members.length ? ` · ${selectedGroup.members.join(', ')}` : ''}
+                  <span className="ml-2">{getSubjectLabel(selectedGroup.section)}</span>
+                  {selectedGroup.members.length ? ` - ${formatMemberList(selectedGroup.members)}` : ''}
                 </p>
 
                 <div className="mt-6 p-4 bg-surface rounded-xl border border-muted/20">

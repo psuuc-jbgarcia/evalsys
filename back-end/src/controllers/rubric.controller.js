@@ -140,7 +140,19 @@ exports.deleteRubric = async (req, res) => {
   const rubric = await Rubric.findById(req.params.id);
   if (!rubric) return res.status(404).json({ message: 'Rubric not found' });
   if (!canAccessSubject(req, rubric.subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
-  if (rubric.isActive) return res.status(400).json({ message: 'Cannot delete the active rubric' });
+
+  const wasActive = rubric.isActive;
+  const subject = rubric.subject;
   await rubric.deleteOne();
+
+  if (wasActive) {
+    const replacement = await Rubric.findOne({ subject, _id: { $ne: rubric._id } }).sort({ createdAt: -1 });
+    if (replacement) {
+      await Rubric.updateMany({ subject }, { isActive: false });
+      replacement.isActive = true;
+      await replacement.save();
+    }
+  }
+
   res.json({ message: 'Rubric deleted' });
 };

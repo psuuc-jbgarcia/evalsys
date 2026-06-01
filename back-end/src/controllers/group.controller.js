@@ -23,7 +23,12 @@ exports.createGroup = async (req, res) => {
     return res.status(400).json({ message: `A group with the name "${name}" already exists in this block.` });
   }
 
-  const group = await Group.create({ name, section, members: members || [], assignedPanels: assignedPanels || [] });
+  const group = await Group.create({
+    name,
+    section,
+    members: members || [],
+    assignedPanels: assignedPanels || [],
+  });
   res.status(201).json(group);
 };
 
@@ -94,7 +99,11 @@ exports.getGroups = async (req, res) => {
 
     // Bypass Mongoose $in array casting edge cases by filtering in memory
     const allGroups = await Group.find()
-      .populate('section', 'name block subject')
+      .populate({
+        path: 'section',
+        select: 'name block subject',
+        populate: { path: 'subject', select: 'code title' },
+      })
       .populate('assignedPanels', 'name email')
       .sort({ createdAt: -1 });
 
@@ -134,7 +143,11 @@ exports.getGroups = async (req, res) => {
   }
 
   const groups = await Group.find(filter)
-    .populate('section', 'name block subject')
+    .populate({
+      path: 'section',
+      select: 'name block subject',
+      populate: { path: 'subject', select: 'code title' },
+    })
     .populate('assignedPanels', 'name email')
     .sort({ createdAt: -1 });
   res.json(groups);
@@ -142,7 +155,11 @@ exports.getGroups = async (req, res) => {
 
 exports.getGroup = async (req, res) => {
   const group = await Group.findById(req.params.id)
-    .populate('section', 'name block subject')
+    .populate({
+      path: 'section',
+      select: 'name block subject',
+      populate: { path: 'subject', select: 'code title' },
+    })
     .populate('assignedPanels', 'name email');
   if (!group) return res.status(404).json({ message: 'Group not found' });
   if (req.user.role !== 'panel' && !canAccessSubject(req, group.section?.subject)) {

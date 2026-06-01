@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import api from '../../services/api';
 import { TableSkeleton } from '../../components/LoadingSkeleton';
+import { formatMemberList, type Member } from '../../utils/members';
+import { useAuth } from '../../context/AuthContext';
 
 interface Section { _id: string; name: string; block: string; }
 interface EvaluationRecord { _id: string; panelId: string; panelName: string; }
 interface GroupResult {
-  group: { _id: string; name: string; members: string[] };
+  group: { _id: string; name: string; members: Member[] };
   averaged: Record<string, number> | null;
   finalTotal: number | null;
   evaluatedBy?: string[];
@@ -44,23 +46,30 @@ const scoreBadge = (total: number) => {
 };
 
 export default function Results() {
+  const { user } = useAuth();
+  const isSuperadmin = user?.role === 'superadmin';
   const [sections, setSections] = useState<Section[]>([]);
   const [selected, setSelected] = useState<Section | null>(null);
   const [results, setResults] = useState<GroupResult[]>([]);
   const [viewFeedback, setViewFeedback] = useState<{ group: string, items: { panel: string, text: string }[] } | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingSections, setLoadingSections] = useState(true);
+  const [csvLocked, setCsvLocked] = useState(false);
 
   // Clear score modal state
   const [clearModal, setClearModal] = useState<{ group: GroupResult } | null>(null);
   const [clearingId, setClearingId] = useState<string | null>(null);
   const [confirmClearId, setConfirmClearId] = useState<string | null>(null);
 
-  useEffect(() => { 
+  useEffect(() => {
     setLoadingSections(true);
-    api.get('/sections')
-      .then((r) => setSections(r.data))
-      .finally(() => setLoadingSections(false)); 
+    Promise.all([
+      api.get('/sections'),
+      api.get('/settings'),
+    ]).then(([secRes, setRes]) => {
+      setSections(secRes.data);
+      setCsvLocked(setRes.data.isCsvExportLocked ?? false);
+    }).finally(() => setLoadingSections(false));
   }, []);
 
   const loadResults = async (section: Section) => {
@@ -110,7 +119,7 @@ export default function Results() {
     const headers = ['Group', 'Members', ...Object.values(LABELS), 'Final Total', 'Evaluated By', 'Did Not Evaluate Yet', 'Comments'];
     const rows = results.map((r) => [
       r.group.name,
-      r.group.members.join('; '),
+      formatMemberList(r.group.members, '; '),
       ...Object.keys(LABELS).map((k) => 
         !r.isIncomplete && r.averaged ? (r.averaged[k] || 0).toFixed(2) : '—'
       ),
@@ -175,9 +184,11 @@ export default function Results() {
             </h3>
             <button
               onClick={downloadCSV}
-              className="evl-btn-primary !py-1.5 !text-xs flex items-center gap-2"
+              disabled={csvLocked && !isSuperadmin}
+              title={csvLocked && !isSuperadmin ? 'CSV export is currently disabled by the administrator' : ''}
+              className={`evl-btn-primary !py-1.5 !text-xs flex items-center gap-2 ${csvLocked && !isSuperadmin ? 'opacity-40 cursor-not-allowed' : ''}`}
             >
-              <span>⬇</span> Download CSV
+              {csvLocked && !isSuperadmin ? '🔒 Export Locked' : <><span>⬇</span> Download CSV</>}
             </button>
           </div>
           <div className="overflow-x-auto">
@@ -190,7 +201,7 @@ export default function Results() {
                     <th key={k} className="text-center">{LABELS[k]}</th>
                   ))}
                   <th className="text-center">Final</th>
-                  <th className="text-center">Actions</th>
+                  <th className="col-actions">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -221,7 +232,7 @@ export default function Results() {
                           )}
                         </div>
                       </td>
-                      <td className="text-text/50 text-xs max-w-[200px]">{group.members.join(', ') || '—'}</td>
+                      <td className="text-text/50 text-xs max-w-[200px]">{formatMemberList(group.members) || '—'}</td>
                       {Object.keys(LABELS).map((k) => (
                         <td key={k} className={`text-center ${!isIncomplete && averaged ? scoreColor(averaged[k], MAX[k]) : 'text-text/40'}`}>
                           {!isIncomplete && averaged ? averaged[k] : '—'}
@@ -238,7 +249,7 @@ export default function Results() {
                           </span>
                         )}
                       </td>
-                      <td className="text-center">
+                      <td className="col-actions">
                         {evaluationRecords && evaluationRecords.length > 0 ? (
                           <button
                             onClick={() => setClearModal({ group: result })}
