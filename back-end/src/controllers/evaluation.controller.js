@@ -36,6 +36,23 @@ const serializeEvaluation = (evaluation) => {
   };
 };
 
+const serializeCriteria = (criteria = []) => criteria.map((item) => ({
+  key: item.key,
+  label: item.label,
+  maxScore: item.maxScore,
+}));
+
+const mergeCriteria = (...criteriaLists) => {
+  const criteriaByKey = new Map();
+
+  criteriaLists.flat().forEach((criteria) => {
+    if (!criteria?.key || criteriaByKey.has(criteria.key)) return;
+    criteriaByKey.set(criteria.key, criteria);
+  });
+
+  return Array.from(criteriaByKey.values());
+};
+
 // Admin: Clear (delete) a single evaluation record
 exports.clearEvaluation = async (req, res) => {
   const { evaluationId } = req.params;
@@ -175,13 +192,15 @@ exports.getSectionResults = async (req, res) => {
   if (!section) return res.status(404).json({ message: 'Section not found' });
   if (!canAccessSubject(req, section.subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
 
+  const activeRubric = await Rubric.findOne({ subject: section.subject, isActive: true });
+  const activeCriteria = serializeCriteria(activeRubric?.criteria || []);
   const groups = await Group.find({ section: req.params.sectionId });
   const results = await Promise.all(
     groups.map(async (group) => {
       const evaluations = await Evaluation.find({
         group: group._id,
         isSubmitted: true,
-      }).populate('panel', 'name email');
+      }).populate('panel', 'name email').populate('rubric');
 
       // if (!evaluations.length) return { group, averaged: null, finalTotal: null };
 
@@ -248,8 +267,10 @@ exports.getSectionResults = async (req, res) => {
         panelId: ev.panel?._id,
         panelName: ev.panel?.name || 'Unknown',
       }));
+      const evaluationCriteria = evaluations.flatMap(ev => serializeCriteria(ev.rubric?.criteria || []));
+      const rubricCriteria = mergeCriteria(evaluationCriteria, activeCriteria);
 
-      return { group, averaged, finalTotal, evaluatedBy, missingPanels, isIncomplete, comments, evaluationRecords };
+      return { group, averaged, finalTotal, rubricCriteria, evaluatedBy, missingPanels, isIncomplete, comments, evaluationRecords };
     })
   );
   res.json(results);

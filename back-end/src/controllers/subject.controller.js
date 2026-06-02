@@ -5,7 +5,6 @@ const Group = require('../models/Group');
 const Evaluation = require('../models/Evaluation');
 const Rubric = require('../models/Rubric');
 const RegistrationLink = require('../models/RegistrationLink');
-const Settings = require('../models/Settings');
 const {
   migrateDefaultSubject,
   getDefaultSubjectMigrationStatus,
@@ -16,6 +15,34 @@ const isAssignedToSubject = (user, subjectId) => (
   isSuperadmin(user) ||
   (user?.assignedSubjects || []).some((id) => id.toString() === subjectId.toString())
 );
+
+const ensureInstructorSubjectLimits = async (adminIds = [], subjectId = null) => {
+  if (!adminIds.length) return null;
+
+  const instructors = await Admin.find({
+    _id: { $in: adminIds },
+    role: 'admin',
+  }).select('name assignedSubjects subjectLimit');
+  const instructorById = new Map(instructors.map((instructor) => [instructor._id.toString(), instructor]));
+
+  const exceeded = adminIds
+    .map((id) => instructorById.get(id.toString()))
+    .filter(Boolean)
+    .filter((instructor) => {
+      const assignedSubjectIds = (instructor.assignedSubjects || []).map((id) => id.toString());
+      const alreadyAssigned = subjectId && assignedSubjectIds.includes(subjectId.toString());
+      const nextCount = assignedSubjectIds.length + (alreadyAssigned ? 0 : 1);
+      return nextCount > (instructor.subjectLimit || 1);
+    });
+
+  if (!exceeded.length) return null;
+
+  const names = exceeded
+    .map((instructor) => `${instructor.name} (${instructor.assignedSubjects.length}/${instructor.subjectLimit || 1})`)
+    .join(', ');
+
+  return `The following instructor(s) have reached their subject limit: ${names}. Increase the instructor's limit in Manage Subscription to assign more subjects.`;
+};
 
 exports.getSubjects = async (req, res) => {
   const filter = isSuperadmin(req.user)
@@ -41,6 +68,12 @@ exports.createSubject = async (req, res) => {
   });
 
   const assignedAdminIds = isSuperadmin(req.user) ? adminIds : [req.user._id];
+  const limitMessage = await ensureInstructorSubjectLimits(assignedAdminIds, subject._id);
+  if (limitMessage) {
+    await Subject.findByIdAndDelete(subject._id);
+    return res.status(400).json({ message: limitMessage });
+  }
+
   if (assignedAdminIds.length > 0) {
     await Admin.updateMany(
       { _id: { $in: assignedAdminIds }, role: 'admin' },
@@ -73,36 +106,8 @@ exports.assignSubjectAdmins = async (req, res) => {
   const subject = await Subject.findById(req.params.id);
   if (!subject) return res.status(404).json({ message: 'Subject not found' });
 
-  // Check the limit for each admin being newly assigned
-  if (adminIds.length > 0) {
-    const settings = await Settings.findOne();
-    const limit = settings?.maxSubjectsPerInstructor ?? 1;
-
-    // Find admins currently assigned to this subject (they won't count as "new")
-    const currentlyAssigned = await Admin.find({
-      role: 'admin',
-      assignedSubjects: subject._id,
-    }).select('_id');
-    const currentIds = new Set(currentlyAssigned.map((a) => a._id.toString()));
-
-    // Only check admins being newly added
-    const newlyAdded = adminIds.filter((id) => !currentIds.has(id.toString()));
-
-    if (newlyAdded.length > 0) {
-      const wouldExceed = await Admin.find({
-        _id: { $in: newlyAdded },
-        role: 'admin',
-        $expr: { $gte: [{ $size: '$assignedSubjects' }, limit] },
-      }).select('name');
-
-      if (wouldExceed.length > 0) {
-        const names = wouldExceed.map((a) => a.name).join(', ');
-        return res.status(400).json({
-          message: `The following instructor(s) have already reached the subject limit (${limit}): ${names}. Increase the limit in Settings to assign more subjects.`,
-        });
-      }
-    }
-  }
+  const limitMessage = await ensureInstructorSubjectLimits(adminIds, subject._id);
+  if (limitMessage) return res.status(400).json({ message: limitMessage });
 
   await Admin.updateMany({ role: 'admin' }, { $pull: { assignedSubjects: subject._id } });
   if (adminIds.length > 0) {

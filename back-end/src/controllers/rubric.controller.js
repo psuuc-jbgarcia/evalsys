@@ -7,6 +7,19 @@ const canAccessSubject = (req, subjectId) => (
   (req.user?.assignedSubjects || []).some((id) => id.toString() === subjectId.toString())
 );
 
+const normalizeActiveRubrics = async (subject) => {
+  const activeRubrics = await Rubric.find({ subject, isActive: true }).sort({ createdAt: -1 });
+  if (activeRubrics.length <= 1) return activeRubrics[0] || null;
+
+  const [current, ...duplicates] = activeRubrics;
+  await Rubric.updateMany(
+    { _id: { $in: duplicates.map((rubric) => rubric._id) } },
+    { isActive: false }
+  );
+
+  return current;
+};
+
 const DEFAULT_RUBRIC = {
   title: 'Capstone Defense Rubric',
   criteria: [
@@ -72,6 +85,7 @@ const DEFAULT_RUBRIC = {
 exports.getActiveRubric = async (req, res) => {
   const subject = getSubjectId(req);
   const filter = subject ? { subject } : {};
+  if (subject) await normalizeActiveRubrics(subject);
   let rubric = await Rubric.findOne({ ...filter, isActive: true });
   if (!rubric) {
     rubric = await Rubric.create({ ...DEFAULT_RUBRIC, subject, isActive: true });
@@ -92,6 +106,7 @@ exports.getAllRubrics = async (req, res) => {
   } else if (req.user.role === 'admin') {
     filter.subject = { $in: req.user.assignedSubjects || [] };
   }
+  if (subject) await normalizeActiveRubrics(subject);
   const rubrics = await Rubric.find(filter).sort({ createdAt: -1 });
   res.json(rubrics);
 };
@@ -114,7 +129,8 @@ exports.createRubric = async (req, res) => {
     }
   }
 
-  const rubric = await Rubric.create({ title, criteria, subject });
+  const hasRubric = await Rubric.exists({ subject });
+  const rubric = await Rubric.create({ title, criteria, subject, isActive: !hasRubric });
   res.status(201).json(rubric);
 };
 

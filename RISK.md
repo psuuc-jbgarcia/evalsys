@@ -18,7 +18,7 @@ This file tracks technical risks found during project review. These are not imme
 - Risk: The `total` field may not be recalculated when a panel submits or updates scores.
 - Suggested fix: Compute `total` directly in `submitEvaluation` before `findOneAndUpdate`, or switch to loading the evaluation document and calling `.save()`.
 
-## 3. Results Page Still Assumes Default Rubric Fields
+## 3. Results Page Still Assumes Default Rubric Fields -done
 
 - File: `front-end/src/pages/admin/Results.tsx`
 - Current issue: The results table hard-codes rubric labels and max scores.

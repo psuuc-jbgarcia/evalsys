@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import api from '../../services/api';
 import { TableSkeleton } from '../../components/LoadingSkeleton';
 import { formatMemberList, type Member } from '../../utils/members';
@@ -6,10 +6,12 @@ import { useAuth } from '../../context/AuthContext';
 
 interface Section { _id: string; name: string; block: string; }
 interface EvaluationRecord { _id: string; panelId: string; panelName: string; }
+interface RubricCriteria { key: string; label: string; maxScore: number; }
 interface GroupResult {
   group: { _id: string; name: string; members: Member[] };
   averaged: Record<string, number> | null;
   finalTotal: number | null;
+  rubricCriteria?: RubricCriteria[];
   evaluatedBy?: string[];
   missingPanels?: string[];
   isIncomplete?: boolean;
@@ -17,20 +19,8 @@ interface GroupResult {
   evaluationRecords?: EvaluationRecord[];
 }
 
-const LABELS: Record<string, string> = {
-  systemFunctionality: 'System',
-  apiIntegration: 'API/DB',
-  presentation: 'Presentation',
-  uiUx: 'UI/UX',
-  qa: 'Q&A',
-};
-
-const MAX: Record<string, number> = {
-  systemFunctionality: 25, apiIntegration: 25,
-  presentation: 15, uiUx: 10, qa: 25,
-};
-
 const scoreColor = (score: number, max: number) => {
+  if (!max) return 'text-text/70 font-bold';
   const pct = score / max;
   if (pct >= 0.84) return 'text-success font-bold';
   if (pct >= 0.64) return 'text-primary font-bold';
@@ -38,10 +28,11 @@ const scoreColor = (score: number, max: number) => {
   return 'text-danger font-bold';
 };
 
-const scoreBadge = (total: number) => {
-  if (total >= 84) return 'evl-badge-success';
-  if (total >= 64) return 'evl-badge-primary';
-  if (total >= 44) return 'evl-badge-warning';
+const scoreBadge = (total: number, max: number) => {
+  const pct = max > 0 ? total / max : 0;
+  if (pct >= 0.84) return 'evl-badge-success';
+  if (pct >= 0.64) return 'evl-badge-primary';
+  if (pct >= 0.44) return 'evl-badge-warning';
   return 'evl-badge-danger';
 };
 
@@ -61,8 +52,21 @@ export default function Results() {
   const [clearingId, setClearingId] = useState<string | null>(null);
   const [confirmClearId, setConfirmClearId] = useState<string | null>(null);
 
+  const criteriaColumns = useMemo(() => {
+    const byKey = new Map<string, RubricCriteria>();
+
+    results.forEach((result) => {
+      result.rubricCriteria?.forEach((criteria) => {
+        if (!byKey.has(criteria.key)) byKey.set(criteria.key, criteria);
+      });
+    });
+
+    return Array.from(byKey.values());
+  }, [results]);
+
+  const maxTotal = criteriaColumns.reduce((sum, criteria) => sum + criteria.maxScore, 0);
+
   useEffect(() => {
-    setLoadingSections(true);
     Promise.all([
       api.get('/sections'),
       api.get('/settings'),
@@ -116,12 +120,12 @@ export default function Results() {
   const downloadCSV = () => {
     if (!selected || !results.length) return;
 
-    const headers = ['Group', 'Members', ...Object.values(LABELS), 'Final Total', 'Evaluated By', 'Did Not Evaluate Yet', 'Comments'];
+    const headers = ['Group', 'Members', ...criteriaColumns.map((criteria) => criteria.label), 'Final Total', 'Evaluated By', 'Did Not Evaluate Yet', 'Comments'];
     const rows = results.map((r) => [
       r.group.name,
       formatMemberList(r.group.members, '; '),
-      ...Object.keys(LABELS).map((k) => 
-        !r.isIncomplete && r.averaged ? (r.averaged[k] || 0).toFixed(2) : '—'
+      ...criteriaColumns.map((criteria) => 
+        !r.isIncomplete && r.averaged ? (r.averaged[criteria.key] || 0).toFixed(2) : '—'
       ),
       (r.isIncomplete || r.finalTotal === null) ? 'Pending Complete Evaluation' : (r.finalTotal?.toFixed(2) ?? 'Pending'),
       r.evaluatedBy?.join('; ') ?? '',
@@ -197,8 +201,11 @@ export default function Results() {
                 <tr>
                   <th>Group</th>
                   <th>Members</th>
-                  {Object.keys(LABELS).map((k) => (
-                    <th key={k} className="text-center">{LABELS[k]}</th>
+                  {criteriaColumns.map((criteria) => (
+                    <th key={criteria.key} className="text-center">
+                      {criteria.label}
+                      <span className="block text-[10px] font-semibold text-text/35">/{criteria.maxScore}</span>
+                    </th>
                   ))}
                   <th className="text-center">Final</th>
                   <th className="col-actions">Actions</th>
@@ -207,6 +214,7 @@ export default function Results() {
               <tbody>
                 {results.map((result) => {
                   const { group, averaged, finalTotal, evaluatedBy, missingPanels, isIncomplete, comments, evaluationRecords } = result;
+                  const resultMaxTotal = result.rubricCriteria?.reduce((sum, criteria) => sum + criteria.maxScore, 0) ?? maxTotal;
                   return (
                     <tr key={group._id}>
                       <td className="whitespace-nowrap">
@@ -233,9 +241,9 @@ export default function Results() {
                         </div>
                       </td>
                       <td className="text-text/50 text-xs max-w-[200px]">{formatMemberList(group.members) || '—'}</td>
-                      {Object.keys(LABELS).map((k) => (
-                        <td key={k} className={`text-center ${!isIncomplete && averaged ? scoreColor(averaged[k], MAX[k]) : 'text-text/40'}`}>
-                          {!isIncomplete && averaged ? averaged[k] : '—'}
+                      {criteriaColumns.map((criteria) => (
+                        <td key={criteria.key} className={`text-center ${!isIncomplete && averaged ? scoreColor(averaged[criteria.key] || 0, criteria.maxScore) : 'text-text/40'}`}>
+                          {!isIncomplete && averaged ? (averaged[criteria.key] ?? 0) : '—'}
                         </td>
                       ))}
                       <td className="text-center">
@@ -244,8 +252,9 @@ export default function Results() {
                             Pending Complete Evaluation
                           </span>
                         ) : (
-                          <span className={`text-lg ${scoreBadge(finalTotal)} !text-base`}>
+                          <span className={`text-lg ${scoreBadge(finalTotal, resultMaxTotal)} !text-base`}>
                             {finalTotal}
+                            {resultMaxTotal > 0 && <span className="ml-1 text-[10px] font-semibold opacity-60">/{resultMaxTotal}</span>}
                           </span>
                         )}
                       </td>
@@ -266,7 +275,7 @@ export default function Results() {
                   );
                 })}
                 {!results.length && (
-                  <tr><td colSpan={9} className="text-center text-text/40 py-12">No results for this section yet.</td></tr>
+                  <tr><td colSpan={criteriaColumns.length + 4} className="text-center text-text/40 py-12">No results for this section yet.</td></tr>
                 )}
               </tbody>
             </table>

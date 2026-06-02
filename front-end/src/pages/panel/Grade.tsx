@@ -24,7 +24,6 @@ const legacyDraftKey = (groupId: string) => `grading_draft_${groupId}`;
 const lastSelectedGroupKey = (panelId: string) => `grading_last_selected_group_${panelId}`;
 const groupNameCacheKey = 'grading_group_names';
 const groupStatusCacheKey = (panelId: string) => `grading_group_status_${panelId}`;
-const selectedRubricCacheKey = (panelId: string) => `grading_selected_rubric_${panelId}`;
 
 const hasScoreValues = (scores: Record<string, number | ''>) =>
   Object.values(scores).some((value) => value !== '' && value !== null && value !== undefined);
@@ -194,12 +193,6 @@ export default function Grade() {
     }
   };
 
-  useEffect(() => {
-    if (selectedRubricId) {
-      localStorage.setItem(selectedRubricCacheKey(panelId), selectedRubricId);
-    }
-  }, [panelId, selectedRubricId]);
-
   const hasUnsavedLocalWork = () => (
     Boolean(selectedGroup) &&
     !selectedExisting &&
@@ -280,19 +273,21 @@ export default function Grade() {
       setLoadingRubrics(true);
       const [res, rubricRes] = await Promise.all([
         api.get(`/evaluations/group/${group._id}/mine`),
-        api.get('/rubrics', { params: { subject: subjectId } }),
+        api.get('/rubrics/active', { params: { subject: subjectId } }),
       ]);
       if (requestId !== evaluationRequestIdRef.current) return;
-      setRubrics(rubricRes.data);
+      const active = rubricRes.data as Rubric;
+      setRubrics(active ? [active] : []);
       if (res.data) {
         setExisting(res.data);
-        if (res.data.rubric) {
+        if (active) {
+          setSelectedRubricId(active._id);
+        } else if (res.data.rubric) {
           setSelectedRubricId(res.data.rubric._id || res.data.rubric);
         }
       } else {
         setExisting(null);
-        if (rubricRes.data.length > 0) {
-          const active = rubricRes.data.find((rub: Rubric) => rub.isActive) || rubricRes.data[0];
+        if (active) {
           setSelectedRubricId(active._id);
         }
       }
@@ -646,24 +641,12 @@ export default function Grade() {
 
                 <div className="mt-6 p-4 bg-surface rounded-xl border border-muted/20">
                   <label className="text-[10px] font-bold text-text/40 uppercase tracking-widest block mb-2">Grading Rubric In Use</label>
-                  <select
-                    value={selectedRubricId}
-                    onChange={(e) => {
-                      if (!confirmContinueWithDraft()) return;
-                      setSelectedRubricId(e.target.value);
-                    }}
-                    disabled={!!selectedExisting}
-                    className="evl-select !py-2 !text-sm w-full bg-bg border-muted/40"
-                  >
-                    {rubrics.map(r => (
-                      <option key={r._id} value={r._id}>{r.title}</option>
-                    ))}
-                  </select>
-                  {selectedExisting && (
-                    <p className="text-[10px] text-text/40 font-semibold mt-2">
-                      Rubric is locked after submission.
+                  <div className="rounded-lg border border-muted/40 bg-bg px-4 py-2.5">
+                    <p className="text-sm font-bold text-text">{activeRubric.title}</p>
+                    <p className="text-[10px] text-success font-black uppercase tracking-widest mt-1">
+                      Active rubric selected by instructor
                     </p>
-                  )}
+                  </div>
                 </div>
               </div>
 

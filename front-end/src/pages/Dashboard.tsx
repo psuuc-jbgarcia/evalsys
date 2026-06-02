@@ -12,7 +12,6 @@ interface Subject { _id: string; code: string; title: string; }
 const currentSubjectKey = 'evalsys_current_subject_id';
 const groupNameCacheKey = 'grading_group_names';
 const groupStatusCacheKey = (panelId: string) => `grading_group_status_${panelId}`;
-const csvCell = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
 
 // SVG icons matching the sidebar NavIcon set exactly
 const CardIcon = ({ name }: { name: string }) => {
@@ -49,7 +48,7 @@ const adminCards = [
   { to: '/subjects',            label: 'Subjects',            desc: 'Create and manage subjects or courses',          icon: 'subjects' },
   { to: '/sections',            label: 'Blocks',              desc: 'Create and manage evaluation blocks',            icon: 'sections' },
   { to: '/groups',              label: 'Groups',              desc: 'Register groups and manage member lists',        icon: 'groups'   },
-  { to: '/users',               label: 'Panel Accounts',      desc: 'Create and manage panel judge accounts',         icon: 'users'    },
+  { to: '/users',               label: 'Panel Accounts',      superadminLabel: 'Accounts', superadminDesc: 'Create and manage platform accounts by role', desc: 'Create and manage panel judge accounts', icon: 'users' },
   { to: '/assign-panels',       label: 'Assign Panels',       desc: 'Assign panel judges to specific blocks',         icon: 'assign'   },
   { to: '/rubrics',             label: 'Rubrics',             desc: 'Create and manage grading rubrics',              icon: 'rubrics'  },
   { to: '/results',             label: 'Results',             desc: 'View averaged scores per group',                 icon: 'results'  },
@@ -90,7 +89,7 @@ function AdminDashboard({ name, role }: { name: string; role: 'admin' | 'superad
     try {
       const res = await api.patch('/settings/toggle-lock');
       setLocked(res.data.isGradingLocked);
-    } catch (err) {
+    } catch {
       alert('Failed to toggle lock');
     }
   };
@@ -156,9 +155,11 @@ function AdminDashboard({ name, role }: { name: string; role: 'admin' | 'superad
               </div>
             </div>
             <h3 className="text-text font-bold text-base mb-1 group-hover:text-primary transition-colors">
-              {card.label}
+              {role === 'superadmin' && 'superadminLabel' in card ? card.superadminLabel : card.label}
             </h3>
-            <p className="text-text/50 text-sm leading-relaxed">{card.desc}</p>
+            <p className="text-text/50 text-sm leading-relaxed">
+              {role === 'superadmin' && 'superadminDesc' in card ? card.superadminDesc : card.desc}
+            </p>
             <div className="mt-4 text-primary text-xs font-semibold flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               Open →
             </div>

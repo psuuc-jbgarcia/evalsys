@@ -37,6 +37,11 @@ const DEFAULT_CRITERIA: Criteria[] = [
   emptyCriteria(),
 ];
 
+const getErrorMessage = (err: unknown, fallback: string) => {
+  const response = (err as { response?: { data?: { message?: string } } })?.response;
+  return response?.data?.message || fallback;
+};
+
 export default function Rubrics() {
   const [rubrics, setRubrics] = useState<Rubric[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -53,7 +58,11 @@ export default function Rubrics() {
       .then((r) => setRubrics(r.data))
       .finally(() => setLoading(false));
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    api.get('/rubrics')
+      .then((r) => setRubrics(r.data))
+      .finally(() => setLoading(false));
+  }, []);
 
   const resetForm = () => {
     setTitle('');
@@ -88,18 +97,18 @@ export default function Rubrics() {
       .slice(0, 30);
   };
 
-  const updateCriteria = (ci: number, field: keyof Criteria, value: any) => {
+  const updateCriteria = (ci: number, field: keyof Criteria, value: string | number) => {
     setCriteria((prev) => prev.map((c, i) => {
       if (i !== ci) return c;
       const updated = { ...c, [field]: value };
-      if (field === 'label') {
+      if (field === 'label' && typeof value === 'string') {
         updated.key = slugify(value);
       }
       return updated;
     }));
   };
 
-  const updateLevel = (ci: number, li: number, field: keyof Level, value: any) => {
+  const updateLevel = (ci: number, li: number, field: keyof Level, value: string | number) => {
     setCriteria((prev) => prev.map((c, i) => {
       if (i !== ci) return c;
       return { ...c, levels: c.levels.map((l, j) => j === li ? { ...l, [field]: value } : l) };
@@ -120,8 +129,8 @@ export default function Rubrics() {
       }
       resetForm();
       load();
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Error saving rubric');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Error saving rubric'));
     }
   };
 
@@ -141,8 +150,8 @@ export default function Rubrics() {
     try {
       await api.delete(`/rubrics/${rubric._id}`);
       load();
-    } catch (err: any) {
-      alert(err.response?.data?.message || 'Error');
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, 'Error'));
     }
   };
 
@@ -327,7 +336,7 @@ export default function Rubrics() {
                     </button>
                     {!r.isActive && (
                       <button onClick={() => handleActivate(r._id)} className="evl-btn-ghost text-success hover:bg-success/5">
-                        Set Active
+                        Use for Grading
                       </button>
                     )}
                     <button onClick={() => handleDelete(r)} className="evl-btn-ghost text-danger hover:bg-danger/5">

@@ -14,8 +14,22 @@ interface Admin {
   _id: string;
   name: string;
   email: string;
-  assignedSubjects: string[];
+  assignedSubjects: Array<string | { _id: string; code?: string; title?: string }>;
+  subjectLimit?: number;
 }
+
+type UserRow = Admin & { role: string };
+
+const getSubjectId = (subject: string | { _id: string }) =>
+  typeof subject === 'string' ? subject : subject._id;
+
+const adminHasSubject = (admin: Admin, subjectId: string) =>
+  admin.assignedSubjects.some((subject) => getSubjectId(subject) === subjectId);
+
+const getErrorMessage = (err: unknown, fallback: string) => {
+  const response = (err as { response?: { data?: { message?: string } } })?.response;
+  return response?.data?.message || fallback;
+};
 
 export default function Subjects() {
   const { user } = useAuth();
@@ -24,11 +38,6 @@ export default function Subjects() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [admins, setAdmins] = useState<Admin[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Subject limit setting (superadmin only)
-  const [maxSubjects, setMaxSubjects] = useState(1);
-  const [maxSubjectsInput, setMaxSubjectsInput] = useState('1');
-  const [savingLimit, setSavingLimit] = useState(false);
 
   // Create modal
   const [showCreate, setShowCreate] = useState(false);
@@ -52,20 +61,8 @@ export default function Subjects() {
   const fetchSubjects = () =>
     api.get('/subjects').then((r) => setSubjects(r.data));
 
-  const handleSaveLimit = async () => {
-    const val = parseInt(maxSubjectsInput, 10);
-    if (!val || val < 1) return;
-    setSavingLimit(true);
-    try {
-      const res = await api.patch('/settings/max-subjects', { maxSubjectsPerInstructor: val });
-      setMaxSubjects(res.data.maxSubjectsPerInstructor);
-      setMaxSubjectsInput(String(res.data.maxSubjectsPerInstructor));
-    } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to update limit');
-    } finally {
-      setSavingLimit(false);
-    }
-  };
+  const fetchAdmins = () =>
+    api.get('/users').then((r) => setAdmins((r.data as UserRow[]).filter((u) => u.role === 'admin')));
 
   useEffect(() => {
     const fetchData = async () => {
@@ -73,29 +70,21 @@ export default function Subjects() {
         const subRes = await api.get('/subjects');
         setSubjects(subRes.data);
       } catch {
-        // subjects fetch failed — page still renders
+        // subjects fetch failed; page still renders
       }
+
       if (isSuperadmin) {
         try {
-          const admRes = await api.get('/users');
-          setAdmins((admRes.data as Admin[]).filter((u: any) => u.role === 'admin'));
+          await fetchAdmins();
         } catch {
-          // admins fetch failed — non-critical
-        }
-        try {
-          const setRes = await api.get('/settings');
-          const limit = setRes.data.maxSubjectsPerInstructor ?? 1;
-          setMaxSubjects(limit);
-          setMaxSubjectsInput(String(limit));
-        } catch {
-          // settings fetch failed — use default
+          // admins fetch failed; subject list still works
         }
       }
+
       setLoading(false);
     };
     fetchData();
   }, [isSuperadmin]);
-
   /* ── Create ── */
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,12 +97,13 @@ export default function Subjects() {
         adminIds: isSuperadmin ? createAdminIds : [],
       });
       await fetchSubjects();
+      if (isSuperadmin) await fetchAdmins();
       setShowCreate(false);
       setCreateCode('');
       setCreateTitle('');
       setCreateAdminIds([]);
-    } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to create subject');
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, 'Failed to create subject'));
     } finally {
       setCreating(false);
     }
@@ -139,8 +129,8 @@ export default function Subjects() {
       });
       await fetchSubjects();
       setEditSubject(null);
-    } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to update subject');
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, 'Failed to update subject'));
     } finally {
       setSaving(false);
     }
@@ -150,7 +140,7 @@ export default function Subjects() {
   const openAssign = (s: Subject) => {
     setAssignSubject(s);
     const current = admins
-      .filter((a) => a.assignedSubjects.includes(s._id))
+      .filter((a) => adminHasSubject(a, s._id))
       .map((a) => a._id);
     setAssignAdminIds(current);
   };
@@ -161,9 +151,10 @@ export default function Subjects() {
     setAssigning(true);
     try {
       await api.put(`/subjects/${assignSubject._id}/admins`, { adminIds: assignAdminIds });
+      await fetchAdmins();
       setAssignSubject(null);
-    } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to assign instructors');
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, 'Failed to assign instructors'));
     } finally {
       setAssigning(false);
     }
@@ -182,10 +173,11 @@ export default function Subjects() {
     try {
       await api.delete(`/subjects/${subjectToDelete._id}`);
       await fetchSubjects();
+      if (isSuperadmin) await fetchAdmins();
       setSubjectToDelete(null);
       setDeleteConfirmCode('');
-    } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to delete subject');
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, 'Failed to delete subject'));
     } finally {
       setDeleting(false);
     }
@@ -245,7 +237,7 @@ export default function Subjects() {
             </thead>
             <tbody>
               {subjects.map((s) => {
-                const assigned = admins.filter((a) => a.assignedSubjects.includes(s._id));
+                const assigned = admins.filter((a) => adminHasSubject(a, s._id));
                 return (
                   <tr key={s._id}>
                     <td>
@@ -335,18 +327,26 @@ export default function Subjects() {
                 <div>
                   <label className="evl-label">Assign Instructors (optional)</label>
                   <div className="mt-1 space-y-1 max-h-40 overflow-y-auto border border-muted rounded-lg p-2 bg-bg">
-                    {admins.map((a) => (
-                      <label key={a._id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-surface cursor-pointer">
+                    {admins.map((a) => {
+                      const count = a.assignedSubjects.length;
+                      const limit = a.subjectLimit ?? 1;
+                      const checked = createAdminIds.includes(a._id);
+                      const wouldExceed = !checked && count >= limit;
+
+                      return (
+                      <label key={a._id} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer ${wouldExceed ? 'opacity-50 bg-muted/10' : 'hover:bg-surface'}`}>
                         <input
                           type="checkbox"
-                          checked={createAdminIds.includes(a._id)}
-                          onChange={() => toggleCreateAdmin(a._id)}
+                          checked={checked}
+                          disabled={wouldExceed}
+                          onChange={() => !wouldExceed && toggleCreateAdmin(a._id)}
                           className="accent-primary"
                         />
                         <span className="text-xs text-text font-medium">{a.name}</span>
-                        <span className="text-[10px] text-text/40 ml-auto">{a.email}</span>
+                        <span className="text-[10px] text-text/40 ml-auto">{count}/{limit} subjects</span>
                       </label>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -431,18 +431,27 @@ export default function Subjects() {
                 <p className="text-text/50 text-sm text-center py-4">No instructor accounts found.</p>
               ) : (
                 <div className="space-y-1 max-h-60 overflow-y-auto border border-muted rounded-lg p-2 bg-bg">
-                  {admins.map((a) => (
-                    <label key={a._id} className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-surface cursor-pointer">
+                  {admins.map((a) => {
+                    const count = a.assignedSubjects.length;
+                    const limit = a.subjectLimit ?? 1;
+                    const checked = assignAdminIds.includes(a._id);
+                    const alreadyAssigned = assignSubject ? adminHasSubject(a, assignSubject._id) : false;
+                    const wouldExceed = !checked && !alreadyAssigned && count >= limit;
+
+                    return (
+                    <label key={a._id} className={`flex items-center gap-2 px-2 py-2 rounded-lg cursor-pointer ${wouldExceed ? 'opacity-50 bg-muted/10' : 'hover:bg-surface'}`}>
                       <input
                         type="checkbox"
-                        checked={assignAdminIds.includes(a._id)}
-                        onChange={() => toggleAssignAdmin(a._id)}
+                        checked={checked}
+                        disabled={wouldExceed}
+                        onChange={() => !wouldExceed && toggleAssignAdmin(a._id)}
                         className="accent-primary"
                       />
                       <span className="text-xs text-text font-medium">{a.name}</span>
-                      <span className="text-[10px] text-text/40 ml-auto">{a.email}</span>
+                      <span className="text-[10px] text-text/40 ml-auto">{count}/{limit} subjects</span>
                     </label>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
               <div className="flex gap-3 pt-2">

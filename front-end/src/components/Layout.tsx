@@ -8,7 +8,7 @@ const adminLinks = [
   { to: '/subjects', label: 'Subjects', icon: '📚' },
   { to: '/sections', label: 'Sections', icon: '☰' },
   { to: '/groups', label: 'Groups', icon: '⊞' },
-  { to: '/users', label: 'Panel Accounts', icon: '⊕' },
+  { to: '/users', label: 'Panel Accounts', superadminLabel: 'Accounts', icon: '⊕' },
   { to: '/assign-panels', label: 'Assign Panels', icon: '👥' },
   { to: '/rubrics', label: 'Rubrics', icon: '✎' },
   { to: '/results', label: 'Results', icon: '▦' },
@@ -81,7 +81,20 @@ const NavIcon = ({ name }: { name: NavIconName }) => {
   return <svg {...common}><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" /></svg>;
 };
 
-const getPanelId = (user?: any) => user?.id || user?._id || '';
+interface UserRef {
+  id?: string;
+  _id?: string;
+}
+
+interface GradingDraft {
+  scores?: Record<string, unknown>;
+  comments?: string;
+  rubricId?: string;
+  groupId?: string;
+  groupName?: string;
+}
+
+const getPanelId = (user?: UserRef) => user?.id || user?._id || '';
 const groupNameCacheKey = 'grading_group_names';
 const groupStatusCacheKey = (panelId: string) => `grading_group_status_${panelId}`;
 const selectedRubricCacheKey = (panelId: string) => `grading_selected_rubric_${panelId}`;
@@ -99,7 +112,7 @@ interface Subject {
   title: string;
 }
 
-const hasDraftContent = (draft: any) => {
+const hasDraftContent = (draft?: GradingDraft | null) => {
   const scores = draft?.scores || {};
   const hasScores = Object.values(scores).some((value) => value !== '' && value !== null && value !== undefined);
   return hasScores || Boolean(draft?.comments?.trim());
@@ -322,6 +335,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           )}
           {links.map((link) => {
             const isActive = location.pathname === link.to;
+            const linkLabel = user?.role === 'superadmin' && link.to === '/users' ? 'Accounts' : link.label;
             return (
               <Link
                 key={link.to}
@@ -335,7 +349,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                 <span className="w-5 h-5 flex items-center justify-center shrink-0">
                   <NavIcon name={getNavIconName(link.to)} />
                 </span>
-                {(!collapsed || mobileOpen) && <span>{link.label}</span>}
+                {(!collapsed || mobileOpen) && <span>{linkLabel}</span>}
               </Link>
             );
           })}
