@@ -5,6 +5,9 @@ const clamp = (val, min, max) => Math.min(Math.max(Math.round(val), min), max);
 const validateScores = async (req, res, next) => {
   const { scores, rubricId } = req.body;
   if (!scores) return res.status(400).json({ message: 'Scores are required' });
+  if (req.user?.role === 'panel' && !rubricId) {
+    return res.status(400).json({ message: 'Rubric is required for panel grading' });
+  }
 
   // Use the selected rubric first. Fall back to the active rubric for older clients.
   const subject = req.headers['x-subject-id'] || req.body.subject;

@@ -107,16 +107,16 @@ export default function Sections() {
                         <button onClick={() => handleUpdate(s._id)} className="evl-btn-primary py-1 px-3 text-xs h-9">
                           Save
                         </button>
-                        <button onClick={() => setEditingId(null)} className="evl-btn-ghost py-1 px-3 text-xs h-9">
+                        <button onClick={() => setEditingId(null)} className="evl-btn-ghost">
                           Cancel
                         </button>
                       </div>
                     ) : (
                       <div className="flex justify-end gap-2">
-                        <button onClick={() => { setEditingId(s._id); setEditValue(s.block); }} className="evl-btn-ghost text-primary hover:text-primary hover:bg-primary/5">
+                        <button onClick={() => { setEditingId(s._id); setEditValue(s.block); }} className="evl-btn-ghost text-primary border-primary/30 hover:text-primary hover:bg-primary/5 hover:border-primary/50">
                           Edit
                         </button>
-                        <button onClick={() => handleDelete(s._id)} className="evl-btn-ghost text-danger hover:text-danger hover:bg-danger/5">
+                        <button onClick={() => handleDelete(s._id)} className="evl-btn-ghost text-danger border-danger/30 hover:text-danger hover:bg-danger/5 hover:border-danger/50">
                           Delete
                         </button>
                       </div>

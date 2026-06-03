@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import api from '../../services/api';
 import { TableSkeleton } from '../../components/LoadingSkeleton';
-import { formatMemberList, type Member } from '../../utils/members';
+import { formatMemberList, type Member, type StructuredMember } from '../../utils/members';
 import { useAuth } from '../../context/AuthContext';
 
 interface Section { _id: string; name: string; block: string; }
@@ -36,6 +36,52 @@ const scoreBadge = (total: number, max: number) => {
   return 'evl-badge-danger';
 };
 
+const csvEscape = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+
+const downloadCsvFile = (filename: string, headers: string[], rows: unknown[][]) => {
+  const csvContent = [
+    headers.map(csvEscape).join(','),
+    ...rows.map((row) => row.map(csvEscape).join(',')),
+  ].join('\n');
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  link.setAttribute('href', url);
+  link.setAttribute('download', filename);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+const safeFilename = (value: string) => value.replace(/[^a-z0-9_-]+/gi, '_');
+
+const getGroupScore = (result: GroupResult) => (
+  result.isIncomplete || result.finalTotal === null
+    ? 'Pending Complete Evaluation'
+    : (result.finalTotal?.toFixed(2) ?? 'Pending Complete Evaluation')
+);
+
+const isStructuredMember = (member: Member): member is StructuredMember => typeof member !== 'string';
+
+const getMemberNameParts = (member: Member) => {
+  if (isStructuredMember(member)) {
+    return {
+      lastName: member.lastName || '',
+      firstName: member.firstName || '',
+      middleName: member.middleName || '',
+    };
+  }
+
+  return {
+    lastName: member,
+    firstName: '',
+    middleName: '',
+  };
+};
+
 export default function Results() {
   const { user } = useAuth();
   const isSuperadmin = user?.role === 'superadmin';
@@ -45,7 +91,8 @@ export default function Results() {
   const [viewFeedback, setViewFeedback] = useState<{ group: string, items: { panel: string, text: string }[] } | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingSections, setLoadingSections] = useState(true);
-  const [csvLocked, setCsvLocked] = useState(false);
+  const [accountCsvLocked, setAccountCsvLocked] = useState(Boolean(user?.csvExportLocked));
+  const csvLocked = user?.role === 'admin' && accountCsvLocked;
 
   // Clear score modal state
   const [clearModal, setClearModal] = useState<{ group: GroupResult } | null>(null);
@@ -69,10 +116,10 @@ export default function Results() {
   useEffect(() => {
     Promise.all([
       api.get('/sections'),
-      api.get('/settings'),
-    ]).then(([secRes, setRes]) => {
+      api.get('/auth/me'),
+    ]).then(([secRes, meRes]) => {
       setSections(secRes.data);
-      setCsvLocked(setRes.data.isCsvExportLocked ?? false);
+      setAccountCsvLocked(Boolean(meRes.data.csvExportLocked));
     }).finally(() => setLoadingSections(false));
   }, []);
 
@@ -117,36 +164,52 @@ export default function Results() {
     }
   };
 
-  const downloadCSV = () => {
+  const downloadGroupSummaryCSV = () => {
     if (!selected || !results.length) return;
 
-    const headers = ['Group', 'Members', ...criteriaColumns.map((criteria) => criteria.label), 'Final Total', 'Evaluated By', 'Did Not Evaluate Yet', 'Comments'];
+    const headers = ['Block', 'Group', 'Members', 'Group Score', 'Evaluated By', 'Missing Panels', 'Comments'];
     const rows = results.map((r) => [
+      selected.block,
       r.group.name,
       formatMemberList(r.group.members, '; '),
-      ...criteriaColumns.map((criteria) => 
-        !r.isIncomplete && r.averaged ? (r.averaged[criteria.key] || 0).toFixed(2) : '—'
-      ),
-      (r.isIncomplete || r.finalTotal === null) ? 'Pending Complete Evaluation' : (r.finalTotal?.toFixed(2) ?? 'Pending'),
+      getGroupScore(r),
       r.evaluatedBy?.join('; ') ?? '',
       r.missingPanels?.join('; ') ?? '',
       r.comments?.map(c => `[${c.panel}]: ${c.text}`).join(' | ') ?? '',
     ]);
 
-    const csvContent = [
-      headers.join(','),
-      ...rows.map((row) => row.map((cell) => `"${cell}"`).join(',')),
-    ].join('\n');
+    downloadCsvFile(`${safeFilename(selected.block)}_Group_Summary.csv`, headers, rows);
+  };
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `${selected.block}_Results.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const downloadMemberGradesCSV = () => {
+    if (!selected || !results.length) return;
+
+    const headers = ['Block', 'Group', 'Last Name', 'First Name', 'Middle Name', 'Group Score'];
+    const rows = results
+      .flatMap((result) => result.group.members.map((member) => {
+        const memberParts = getMemberNameParts(member);
+        return {
+          block: selected.block,
+          group: result.group.name,
+          ...memberParts,
+          score: getGroupScore(result),
+        };
+      }))
+      .sort((a, b) => (
+        a.lastName.localeCompare(b.lastName) ||
+        a.firstName.localeCompare(b.firstName) ||
+        a.middleName.localeCompare(b.middleName)
+      ))
+      .map((row) => [
+        row.block,
+        row.group,
+        row.lastName,
+        row.firstName,
+        row.middleName,
+        row.score,
+      ]);
+
+    downloadCsvFile(`${safeFilename(selected.block)}_Member_Grades.csv`, headers, rows);
   };
 
   return (
@@ -181,21 +244,30 @@ export default function Results() {
       {loading ? (
         <TableSkeleton rows={6} cols={8} />
       ) : selected && (
-        <div className="evl-card overflow-hidden">
-          <div className="px-6 py-4 border-b border-muted/40 flex justify-between items-center">
+        <div className="overflow-hidden border-y border-muted/30 bg-surface">
+          <div className="px-2 sm:px-0 py-4 border-b border-muted/40 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
             <h3 className="text-text font-bold text-sm">
-              {selected.name === selected.block ? selected.block : `${selected.name} — ${selected.block}`}
+              {selected.name === selected.block ? selected.block : `${selected.name} - ${selected.block}`}
             </h3>
-            <button
-              onClick={downloadCSV}
-              disabled={csvLocked && !isSuperadmin}
-              title={csvLocked && !isSuperadmin ? 'CSV export is currently disabled by the administrator' : ''}
-              className={`evl-btn-primary !py-1.5 !text-xs flex items-center gap-2 ${csvLocked && !isSuperadmin ? 'opacity-40 cursor-not-allowed' : ''}`}
-            >
-              {csvLocked && !isSuperadmin ? '🔒 Export Locked' : <><span>⬇</span> Download CSV</>}
-            </button>
-          </div>
-          <div className="overflow-x-auto">
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={downloadGroupSummaryCSV}
+                disabled={csvLocked && !isSuperadmin}
+                title={csvLocked && !isSuperadmin ? 'CSV export is currently disabled by the administrator' : ''}
+                className={`evl-btn-primary !py-1.5 !text-xs ${csvLocked && !isSuperadmin ? 'opacity-40 cursor-not-allowed' : ''}`}
+              >
+                {csvLocked && !isSuperadmin ? 'Export Locked' : 'Download Group Summary CSV'}
+              </button>
+              <button
+                onClick={downloadMemberGradesCSV}
+                disabled={csvLocked && !isSuperadmin}
+                title={csvLocked && !isSuperadmin ? 'CSV export is currently disabled by the administrator' : ''}
+                className={`evl-btn-secondary !py-1.5 !text-xs ${csvLocked && !isSuperadmin ? 'opacity-40 cursor-not-allowed' : ''}`}
+              >
+                {csvLocked && !isSuperadmin ? 'Export Locked' : 'Download Member Grades CSV'}
+              </button>
+            </div>
+          </div>          <div className="overflow-x-auto">
             <table className="evl-table">
               <thead>
                 <tr>
@@ -392,3 +464,5 @@ export default function Results() {
     </div>
   );
 }
+
+

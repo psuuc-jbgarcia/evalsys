@@ -1,5 +1,7 @@
 const Group = require('../models/Group');
 const Section = require('../models/Section');
+const Admin = require('../models/Admin');
+const Panel = require('../models/Panel');
 
 const getSubjectId = (req) => req.headers['x-subject-id'] || req.query.subject || req.body.subject;
 const canAccessSubject = (req, subjectId) => (
@@ -7,6 +9,58 @@ const canAccessSubject = (req, subjectId) => (
   req.user?.role === 'superadmin' ||
   (req.user?.assignedSubjects || []).some((id) => id.toString() === subjectId.toString())
 );
+
+const normalizeMembers = (members) => {
+  if (Array.isArray(members)) {
+    return members
+      .map((member) => {
+        if (typeof member === 'string') return member.trim();
+        return {
+          lastName: String(member?.lastName || '').trim(),
+          firstName: String(member?.firstName || '').trim(),
+          middleName: String(member?.middleName || '').trim(),
+        };
+      })
+      .filter((member) => {
+        if (typeof member === 'string') return Boolean(member);
+        return Boolean(member.lastName || member.firstName || member.middleName);
+      });
+  }
+
+  if (typeof members === 'string') {
+    return members.split(';').map((member) => member.trim()).filter(Boolean);
+  }
+
+  return [];
+};
+
+const validatePanelAssignments = async (req, panelIds = [], subject) => {
+  if (!Array.isArray(panelIds) || !panelIds.length) return null;
+
+  const uniquePanelIds = [...new Set(panelIds.map((id) => id.toString()))];
+  const panels = await Panel.find({ _id: { $in: uniquePanelIds }, isActive: true }).select('name createdBy');
+  if (panels.length !== uniquePanelIds.length) {
+    return 'One or more selected panels are inactive or missing';
+  }
+
+  for (const panel of panels) {
+    if (req.user.role === 'admin' && panel.createdBy && panel.createdBy.toString() !== req.user._id.toString()) {
+      return `${panel.name} belongs to another instructor`;
+    }
+
+    if (panel.createdBy) {
+      const owner = await Admin.findOne({
+        _id: panel.createdBy,
+        role: 'admin',
+        isActive: true,
+        assignedSubjects: subject,
+      }).select('_id');
+      if (!owner) return `${panel.name}'s instructor is not assigned to this subject`;
+    }
+  }
+
+  return null;
+};
 
 exports.createGroup = async (req, res) => {
   const { name, section, members, assignedPanels } = req.body;
@@ -16,6 +70,8 @@ exports.createGroup = async (req, res) => {
   if (req.user && !canAccessSubject(req, sectionDoc.subject)) {
     return res.status(403).json({ message: 'You are not assigned to this subject' });
   }
+  const assignmentError = await validatePanelAssignments(req, assignedPanels, sectionDoc.subject);
+  if (assignmentError) return res.status(400).json({ message: assignmentError });
   
   // Check for duplication in the same section
   const existing = await Group.findOne({ name: { $regex: new RegExp(`^${name}$`, 'i') }, section });
@@ -74,7 +130,7 @@ exports.bulkCreateGroups = async (req, res) => {
       await Group.create({
         name,
         section: sectionId,
-        members: members ? members.split(';').map(m => m.trim()) : []
+        members: normalizeMembers(members)
       });
       results.created++;
     } catch (err) {
@@ -91,9 +147,19 @@ exports.getGroups = async (req, res) => {
 
   // If the user is a panel, only return groups from sections they are assigned to
   if (req.user.role === 'panel') {
-    const assignedSections = await Section.find({
+    const sectionFilter = {
       assignedPanels: req.user._id,
-    }).select('_id');
+    };
+    let allowedSubjectIds = [];
+
+    if (req.user.createdBy) {
+      const instructor = await Admin.findOne({ _id: req.user.createdBy, role: 'admin', isActive: true }).select('assignedSubjects');
+      if (!instructor) return res.json([]);
+      allowedSubjectIds = (instructor.assignedSubjects || []).map((id) => id.toString());
+      sectionFilter.subject = { $in: instructor.assignedSubjects || [] };
+    }
+
+    const assignedSections = await Section.find(sectionFilter).select('_id subject');
     const sectionIds = assignedSections.map((s) => s._id);
 
 
@@ -119,11 +185,13 @@ exports.getGroups = async (req, res) => {
     const groups = allGroups.filter(g => {
       const gSecId = g.section ? g.section._id.toString() : null;
       const isInSection = gSecId && strSectionIds.includes(gSecId);
+      const gSubjectId = g.section?.subject?._id?.toString() || g.section?.subject?.toString();
+      const isOwnedSubject = !req.user.createdBy || (gSubjectId && allowedSubjectIds.includes(gSubjectId));
       
       const gPanels = g.assignedPanels || [];
       const isAssignedDirectly = gPanels.some(p => (p._id || p).toString() === panelIdStr);
       
-      return isInSection || isAssignedDirectly;
+      return isOwnedSubject && (isInSection || isAssignedDirectly);
     }).map(g => {
       const gObj = g.toObject();
       gObj.isGraded = gradedGroupIds.includes(g._id.toString());
@@ -145,7 +213,7 @@ exports.getGroups = async (req, res) => {
   const groups = await Group.find(filter)
     .populate({
       path: 'section',
-      select: 'name block subject',
+      select: 'name block subject assignedPanels',
       populate: { path: 'subject', select: 'code title' },
     })
     .populate('assignedPanels', 'name email')
@@ -157,7 +225,7 @@ exports.getGroup = async (req, res) => {
   const group = await Group.findById(req.params.id)
     .populate({
       path: 'section',
-      select: 'name block subject',
+      select: 'name block subject assignedPanels',
       populate: { path: 'subject', select: 'code title' },
     })
     .populate('assignedPanels', 'name email');
@@ -165,14 +233,38 @@ exports.getGroup = async (req, res) => {
   if (req.user.role !== 'panel' && !canAccessSubject(req, group.section?.subject)) {
     return res.status(403).json({ message: 'You are not assigned to this subject' });
   }
+  if (req.user.role === 'panel' && req.user.createdBy) {
+    const groupSubjectId = group.section?.subject?._id || group.section?.subject;
+    const instructor = await Admin.findOne({
+      _id: req.user.createdBy,
+      role: 'admin',
+      isActive: true,
+      assignedSubjects: groupSubjectId,
+    }).select('_id');
+    if (!instructor) {
+      return res.status(403).json({ message: 'This group belongs to another instructor subject' });
+    }
+  }
+  if (req.user.role === 'panel') {
+    const isSectionAssigned = (group.section?.assignedPanels || []).some(
+      (panelId) => panelId.toString() === req.user._id.toString()
+    );
+    const isGroupAssigned = (group.assignedPanels || []).some(
+      (panelId) => panelId.toString() === req.user._id.toString()
+    );
+    if (!isSectionAssigned && !isGroupAssigned) {
+      return res.status(403).json({ message: 'You are not assigned to this group' });
+    }
+  }
   res.json(group);
 };
 
 exports.updateGroup = async (req, res) => {
   const { name, section } = req.body;
+  const current = await Group.findById(req.params.id);
+  if (!current) return res.status(404).json({ message: 'Group not found' });
   
   if (name || section) {
-    const current = await Group.findById(req.params.id);
     const currentSection = await Section.findById(section || current.section);
     if (!canAccessSubject(req, currentSection?.subject)) {
       return res.status(403).json({ message: 'You are not assigned to this subject' });
@@ -189,6 +281,12 @@ exports.updateGroup = async (req, res) => {
     if (existing) {
       return res.status(400).json({ message: `Another group with the name "${checkName}" already exists in this block.` });
     }
+  }
+
+  if (req.body.assignedPanels) {
+    const currentSection = await Section.findById(section || current.section);
+    const assignmentError = await validatePanelAssignments(req, req.body.assignedPanels, currentSection?.subject);
+    if (assignmentError) return res.status(400).json({ message: assignmentError });
   }
 
   const group = await Group.findByIdAndUpdate(req.params.id, req.body, { new: true });

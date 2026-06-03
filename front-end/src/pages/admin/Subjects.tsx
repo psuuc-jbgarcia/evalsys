@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { notify } from '../../utils/notify';
 
 interface Subject {
   _id: string;
@@ -103,7 +104,7 @@ export default function Subjects() {
       setCreateTitle('');
       setCreateAdminIds([]);
     } catch (err: unknown) {
-      alert(getErrorMessage(err, 'Failed to create subject'));
+      notify(getErrorMessage(err, 'Failed to create subject'), { type: 'error' });
     } finally {
       setCreating(false);
     }
@@ -130,7 +131,7 @@ export default function Subjects() {
       await fetchSubjects();
       setEditSubject(null);
     } catch (err: unknown) {
-      alert(getErrorMessage(err, 'Failed to update subject'));
+      notify(getErrorMessage(err, 'Failed to update subject'), { type: 'error' });
     } finally {
       setSaving(false);
     }
@@ -154,7 +155,7 @@ export default function Subjects() {
       await fetchAdmins();
       setAssignSubject(null);
     } catch (err: unknown) {
-      alert(getErrorMessage(err, 'Failed to assign instructors'));
+      notify(getErrorMessage(err, 'Failed to assign instructors'), { type: 'error' });
     } finally {
       setAssigning(false);
     }
@@ -177,7 +178,7 @@ export default function Subjects() {
       setSubjectToDelete(null);
       setDeleteConfirmCode('');
     } catch (err: unknown) {
-      alert(getErrorMessage(err, 'Failed to delete subject'));
+      notify(getErrorMessage(err, 'Failed to delete subject'), { type: 'error' });
     } finally {
       setDeleting(false);
     }

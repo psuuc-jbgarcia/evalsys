@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import api from '../services/api';
+import { notify } from '../utils/notify';
 
 interface User {
   id: string;
@@ -7,6 +8,9 @@ interface User {
   name: string;
   email: string;
   role: 'superadmin' | 'admin' | 'panel';
+  csvExportLocked?: boolean;
+  gradingLocked?: boolean;
+  gradingLockedSubjects?: string[];
 }
 
 interface AuthContextType {
@@ -38,7 +42,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (err.response?.status !== 429) {
             localStorage.removeItem('token');
           } else {
-            alert('Too many requests. Please wait a moment before refreshing again.');
+            notify('Too many requests. Please wait a moment before refreshing again.', { type: 'error' });
           }
         })
         .finally(() => setLoading(false));

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import api from '../../services/api';
 import { CardSkeleton } from '../../components/LoadingSkeleton';
+import { notify } from '../../utils/notify';
+import { useAuth } from '../../context/AuthContext';
 
 interface Level {
   label: string;
@@ -22,6 +24,7 @@ interface Rubric {
   criteria: Criteria[];
   isActive: boolean;
   createdAt: string;
+  createdBy?: string | { _id: string; name?: string; email?: string } | null;
 }
 
 const LEVEL_LABELS = ['Excellent', 'Good', 'Fair', 'Poor'];
@@ -42,7 +45,20 @@ const getErrorMessage = (err: unknown, fallback: string) => {
   return response?.data?.message || fallback;
 };
 
+const getOwnerId = (value: Rubric['createdBy']) => (
+  typeof value === 'string' ? value : value?._id || ''
+);
+
+const getOwnerLabel = (rubric: Rubric) => {
+  if (!rubric.createdBy) return 'No created by';
+  if (typeof rubric.createdBy === 'string') return 'Unknown instructor';
+  return rubric.createdBy.name || rubric.createdBy.email || 'Unknown instructor';
+};
+
 export default function Rubrics() {
+  const { user } = useAuth();
+  const isSuperadmin = user?.role === 'superadmin';
+  const userId = user?.id || user?._id || '';
   const [rubrics, setRubrics] = useState<Rubric[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -151,7 +167,7 @@ export default function Rubrics() {
       await api.delete(`/rubrics/${rubric._id}`);
       load();
     } catch (err: unknown) {
-      alert(getErrorMessage(err, 'Error'));
+      notify(getErrorMessage(err, 'Error'), { type: 'error' });
     }
   };
 
@@ -310,7 +326,7 @@ export default function Rubrics() {
           <>
             {rubrics.map((r) => (
               <div key={r._id} className="evl-card overflow-hidden">
-                <div className="flex items-center justify-between px-6 py-5">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 px-6 py-5">
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-bold text-sm shrink-0">
                       R
@@ -323,25 +339,32 @@ export default function Rubrics() {
                       <p className="text-text/50 text-xs mt-0.5">
                         {r.criteria.length} criteria · Created {new Date(r.createdAt).toLocaleDateString()}
                       </p>
+                      <p className="text-text/35 text-[11px] mt-1 font-semibold">
+                        Created by: {getOwnerLabel(r)}
+                      </p>
                     </div>
                   </div>
-                  <div className="flex gap-2 items-center">
+                  <div className="flex flex-wrap gap-2 items-center justify-start lg:justify-end">
                     <button onClick={() => setExpandedRubric(expandedRubric === r._id ? null : r._id)}
                       className="evl-btn-ghost">
                       {expandedRubric === r._id ? 'Hide' : 'View'}
                     </button>
-                    <button onClick={() => startEdit(r)}
-                      className="evl-btn-ghost text-primary hover:bg-primary/5">
-                      Edit
-                    </button>
-                    {!r.isActive && (
-                      <button onClick={() => handleActivate(r._id)} className="evl-btn-ghost text-success hover:bg-success/5">
+                    {(isSuperadmin || getOwnerId(r.createdBy) === userId) && (
+                      <>
+                        <button onClick={() => startEdit(r)}
+                          className="evl-btn-ghost text-primary border-primary/30 hover:bg-primary/5 hover:border-primary/50">
+                          Edit
+                        </button>
+                        <button onClick={() => handleDelete(r)} className="evl-btn-ghost text-danger border-danger/30 hover:bg-danger/5 hover:border-danger/50">
+                          Delete
+                        </button>
+                      </>
+                    )}
+                    {!r.isActive && (isSuperadmin || getOwnerId(r.createdBy) === userId) && (
+                      <button onClick={() => handleActivate(r._id)} className="evl-btn-ghost text-success border-success/30 hover:bg-success/5 hover:border-success/50">
                         Use for Grading
                       </button>
                     )}
-                    <button onClick={() => handleDelete(r)} className="evl-btn-ghost text-danger hover:bg-danger/5">
-                      Delete
-                    </button>
                   </div>
                 </div>
 

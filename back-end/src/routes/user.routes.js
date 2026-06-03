@@ -1,5 +1,5 @@
 const router = require('express').Router();
-const { createUser, getUsers, toggleActive, deleteUser, bulkCreateUsers, resetPassword, updateSubjectLimit } = require('../controllers/user.controller');
+const { createUser, getUsers, toggleActive, deleteUser, bulkCreateUsers, resetPassword, updateSubjectLimit, updateCsvExportLock, updateGradingLock } = require('../controllers/user.controller');
 const { protect, adminOnly } = require('../middleware/auth.middleware');
 
 router.use(protect, adminOnly);
@@ -9,6 +9,8 @@ router.get('/', getUsers);
 router.patch('/:id/toggle', toggleActive);
 router.patch('/:id/reset-password', resetPassword);
 router.patch('/:id/subject-limit', updateSubjectLimit);
+router.patch('/:id/csv-export-lock', updateCsvExportLock);
+router.patch('/:id/grading-lock', updateGradingLock);
 router.delete('/:id', deleteUser);
 
 module.exports = router;

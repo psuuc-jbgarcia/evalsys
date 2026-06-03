@@ -8,6 +8,9 @@ const adminSchema = new mongoose.Schema({
   role: { type: String, enum: ['superadmin', 'admin'], default: 'admin' },
   assignedSubjects: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Subject' }],
   subjectLimit: { type: Number, default: 1, min: 1 },
+  csvExportLocked: { type: Boolean, default: false },
+  gradingLocked: { type: Boolean, default: false },
+  gradingLockedSubjects: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Subject' }],
   isActive: { type: Boolean, default: true },
 }, { timestamps: true, collection: 'admin_acc' });
 

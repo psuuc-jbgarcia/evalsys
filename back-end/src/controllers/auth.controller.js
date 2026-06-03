@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const Admin = require('../models/Admin');
 const Panel = require('../models/Panel');
+const Section = require('../models/Section');
 
 const signToken = (id, role) =>
   jwt.sign({ id, role }, process.env.JWT_SECRET, { expiresIn: '7d' });
@@ -35,6 +36,57 @@ const findLegacyUserByUsername = async (email) => {
   return await Admin.findOne({ email: localPartRegex }) || await Panel.findOne({ email: localPartRegex });
 };
 
+const uniqueIds = (ids = []) => [
+  ...new Set(ids.filter(Boolean).map((id) => id.toString())),
+];
+
+const getPanelLockedSubjects = async (panel) => {
+  const assignedSections = await Section.find({
+    assignedPanels: panel._id,
+    subject: { $exists: true, $ne: null },
+  }).select('subject');
+  const assignedSubjectIds = uniqueIds(assignedSections.map((section) => section.subject));
+
+  if (!assignedSubjectIds.length && !panel.createdBy) return [];
+
+  const instructorFilter = panel.createdBy
+    ? {
+        $or: [
+          { _id: panel.createdBy },
+          { assignedSubjects: { $in: assignedSubjectIds } },
+        ],
+      }
+    : { assignedSubjects: { $in: assignedSubjectIds } };
+
+  const instructors = await Admin.find({
+    ...instructorFilter,
+    gradingLockedSubjects: { $in: assignedSubjectIds },
+  }).select('gradingLockedSubjects');
+
+  return uniqueIds(
+    instructors.flatMap((instructor) => instructor.gradingLockedSubjects || [])
+  ).filter((subjectId) => assignedSubjectIds.includes(subjectId));
+};
+
+const getUserFeatureLocks = async (user) => {
+  if (user.role === 'panel') {
+    const instructor = user.createdBy
+      ? await Admin.findById(user.createdBy).select('csvExportLocked')
+      : null;
+    return {
+      csvExportLocked: Boolean(instructor?.csvExportLocked),
+      gradingLocked: false,
+      gradingLockedSubjects: await getPanelLockedSubjects(user),
+    };
+  }
+
+  return {
+    csvExportLocked: Boolean(user.csvExportLocked),
+    gradingLocked: Boolean(user.gradingLocked),
+    gradingLockedSubjects: user.gradingLockedSubjects || [],
+  };
+};
+
 exports.login = async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password)
@@ -64,6 +116,8 @@ exports.login = async (req, res) => {
   if (!user.isActive)
     return res.status(403).json({ message: 'Account is deactivated' });
 
+  const locks = await getUserFeatureLocks(user);
+
   res.json({
     token: signToken(user._id, user.role),
     user: {
@@ -72,10 +126,13 @@ exports.login = async (req, res) => {
       email: user.email,
       role: user.role,
       assignedSubjects: user.assignedSubjects || [],
+      ...locks,
     },
   });
 };
 
 exports.getMe = async (req, res) => {
-  res.json(req.user);
+  const user = req.user.toObject ? req.user.toObject() : req.user;
+  const locks = await getUserFeatureLocks(req.user);
+  res.json({ ...user, ...locks });
 };

@@ -15,10 +15,12 @@ import Subscription from './pages/admin/Subscription';
 import Grade from './pages/panel/Grade';
 import RegisterGroup from './pages/RegisterGroup';
 import Landing from './pages/Landing';
+import AppAlert from './components/AppAlert';
 
 export default function App() {
   return (
     <AuthProvider>
+      <AppAlert />
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Landing />} />

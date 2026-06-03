@@ -98,9 +98,11 @@ body {
 
   .evl-btn-ghost {
     @apply inline-flex items-center justify-center gap-1.5
-           text-base font-semibold text-text/60
-           px-4 py-2 rounded-lg
-           hover:text-text hover:bg-gray-100
+           min-h-9 whitespace-nowrap
+           text-[11px] font-bold text-text/60
+           px-3 py-1.5 rounded-lg
+           border border-muted/60 bg-white
+           hover:text-text hover:bg-gray-50 hover:border-text/20
            transition-colors duration-150;
   }
 

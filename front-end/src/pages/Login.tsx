@@ -2,6 +2,7 @@ import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
+import { notify } from '../utils/notify';
 
 export default function Login() {
   const { login } = useAuth();
@@ -94,7 +95,7 @@ export default function Login() {
             <div className="flex justify-end mt-2">
               <button 
                 type="button" 
-                onClick={() => alert('Please contact the System Administrator to reset your password.')}
+                onClick={() => notify('Please contact the System Administrator to reset your password.')}
                 className="text-xs text-primary font-bold hover:underline"
               >
                 Forgot password?

@@ -41,6 +41,15 @@ const formatSavedTime = (value: string | null) => {
   if (!value) return '';
   return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
+const formatSubmittedTime = (value?: string | null) => {
+  if (!value) return '';
+  return new Date(value).toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
 
 export default function Grade() {
   const { user } = useAuth();
@@ -61,10 +70,12 @@ export default function Grade() {
   const [loadingSidebar, setLoadingSidebar] = useState(true);
 
   const [sections, setSections] = useState<Section[]>([]);
-  const [gradingLocked, setGradingLocked] = useState(false);
+  const [lockedSubjectIds, setLockedSubjectIds] = useState<string[]>([]);
+  const [gradingLockMessage, setGradingLockMessage] = useState('The instructor owner has temporarily disabled grading submissions for this subject.');
   const [submitting, setSubmitting] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const [hasCurrentDraft, setHasCurrentDraft] = useState(false);
+  const [missingCriteria, setMissingCriteria] = useState<string[]>([]);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
 
   const [searchParams] = useSearchParams();
@@ -74,6 +85,9 @@ export default function Grade() {
 
   const [selectedSidebarSectionId, setSelectedSidebarSectionId] = useState<string>('');
   const getGroupSubjectId = (group: Group | null) => getRefId(group?.section?.subject);
+  const selectedSubjectId = getGroupSubjectId(selectedGroup);
+  const subjectGradingLocked = Boolean(selectedSubjectId) && lockedSubjectIds.includes(selectedSubjectId);
+  const gradingLocked = subjectGradingLocked;
 
   const cacheGroupStatus = (nextGroups: Group[]) => {
     const groupNames = nextGroups.reduce((acc: Record<string, string>, group: Group) => {
@@ -111,18 +125,32 @@ export default function Grade() {
     })
       .finally(() => setLoadingSidebar(false));
 
-    api.get('/settings').then((r) => {
-      setGradingLocked(r.data.isGradingLocked);
-    });
+    refreshGradingLock();
   }, []);
 
+  const refreshGradingLock = () => {
+    api.get('/auth/me')
+      .then((meRes) => {
+        const subjectIds = (meRes.data.gradingLockedSubjects || []).map((subject: string | { _id?: string }) => getRefId(subject));
+        const subjectLocked = Boolean(selectedSubjectId) && subjectIds.includes(selectedSubjectId);
+        setLockedSubjectIds(subjectIds);
+        setGradingLockMessage(
+          subjectLocked
+            ? 'The instructor owner has temporarily disabled grading submissions for this subject.'
+            : 'The instructor owner has temporarily disabled grading submissions for this subject.'
+        );
+      })
+      .catch(() => undefined);
+  };
+
   useEffect(() => {
-    const refreshSettings = () => {
-      api.get('/settings')
-        .then((r) => setGradingLocked(r.data.isGradingLocked))
-        .catch(() => undefined);
-    };
-    const timer = window.setInterval(refreshSettings, 30000);
+    if (subjectGradingLocked) {
+      setGradingLockMessage('The instructor owner has temporarily disabled grading submissions for this subject.');
+    }
+  }, [subjectGradingLocked]);
+
+  useEffect(() => {
+    const timer = window.setInterval(refreshGradingLock, 30000);
     return () => window.clearInterval(timer);
   }, []);
 
@@ -141,14 +169,19 @@ export default function Grade() {
   const selectedExisting = selectedGroup && getRefId(existing?.group) === selectedGroup._id
     ? existing
     : null;
+  const submittedRubric = selectedExisting?.rubric && typeof selectedExisting.rubric === 'object'
+    ? selectedExisting.rubric as Rubric
+    : null;
+  const visibleRubric = gradingLocked && submittedRubric ? submittedRubric : activeRubric;
   const existingScores = selectedExisting?.scores || {};
   const total = Object.values(scores).reduce<number>(
     (a, b) => (typeof b === 'number' ? a + b : a), 0
   );
-  const maxTotal = activeRubric?.criteria.reduce((a, c) => a + c.maxScore, 0) ?? 100;
+  const maxTotal = visibleRubric?.criteria.reduce((a, c) => a + c.maxScore, 0) ?? 100;
   const submittedTotal = typeof selectedExisting?.total === 'number'
     ? selectedExisting.total
     : total;
+  const submittedAt = formatSubmittedTime(selectedExisting?.updatedAt || selectedExisting?.createdAt);
   const canEditScores = !gradingLocked && !submitting;
 
   const getStoredDraft = (groupId: string) => {
@@ -263,6 +296,7 @@ export default function Grade() {
     setExisting(null);
     setRubrics([]);
     setSelectedRubricId('');
+    setMissingCriteria([]);
     setSuccess(''); setError('');
     if (!subjectId) {
       setError('This group is not connected to a subject yet. Ask an administrator to run the subject migration.');
@@ -277,7 +311,10 @@ export default function Grade() {
       ]);
       if (requestId !== evaluationRequestIdRef.current) return;
       const active = rubricRes.data as Rubric;
-      setRubrics(active ? [active] : []);
+      const savedRubric = res.data?.rubric && typeof res.data.rubric === 'object'
+        ? res.data.rubric as Rubric
+        : null;
+      setRubrics([active, savedRubric].filter(Boolean) as Rubric[]);
       if (res.data) {
         setExisting(res.data);
         if (active) {
@@ -309,16 +346,20 @@ export default function Grade() {
       return;
     }
 
-    // Check if all scores are filled
-    const missing = activeRubric?.criteria.some(c => scores[c.key] === '');
-    if (missing) {
-      if (!confirm('Some criteria have no scores. Are you sure you want to submit?')) return;
+    const missing = activeRubric?.criteria
+      .filter((criteria) => scores[criteria.key] === '' || scores[criteria.key] === null || scores[criteria.key] === undefined)
+      .map((criteria) => criteria.label) || [];
+    setMissingCriteria(missing);
+    if (missing.length) {
+      setError(`Complete missing scores before submitting: ${missing.join(', ')}`);
+      return;
     }
 
     const confirmMsg = `Review your submission for ${selectedGroup?.name}:\n\nTotal Score: ${total}/${maxTotal}\n\nDo you want to proceed?`;
     if (!confirm(confirmMsg)) return;
 
     setError(''); setSuccess('');
+    setMissingCriteria([]);
     setSubmitting(true);
     try {
       await api.post(`/evaluations/group/${selectedGroup!._id}`, {
@@ -570,7 +611,7 @@ export default function Grade() {
               {Array(4).fill(0).map((_, i) => <CardSkeleton key={i} />)}
             </div>
           </div>
-        ) : !activeRubric && selectedExisting ? (
+        ) : !visibleRubric && selectedExisting ? (
           <div className="space-y-5">
             <div className="evl-card p-6 border-warning/30 bg-warning/5">
               <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
@@ -590,6 +631,11 @@ export default function Grade() {
                 <div className="evl-card px-6 py-5 text-center min-w-[160px] bg-surface">
                   <p className="text-text/40 text-[10px] font-extrabold uppercase tracking-widest mb-1">Submitted Total</p>
                   <p className="text-4xl font-black text-text">{submittedTotal}</p>
+                  {submittedAt && (
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-text/35 mt-2">
+                      Updated {submittedAt}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -620,7 +666,7 @@ export default function Grade() {
               </div>
             )}
           </div>
-        ) : !activeRubric ? (
+        ) : !visibleRubric ? (
           <div className="flex items-center justify-center h-64">
             <div className="text-center max-w-md">
               <p className="text-text/40 text-sm font-semibold mb-1">No rubrics available for this subject.</p>
@@ -638,13 +684,18 @@ export default function Grade() {
                   <span className="ml-2">{getSubjectLabel(selectedGroup.section)}</span>
                   {selectedGroup.members.length ? ` - ${formatMemberList(selectedGroup.members)}` : ''}
                 </p>
+                {gradingLocked && (
+                  <span className="inline-flex mt-3 px-2.5 py-1 rounded-md bg-danger/10 text-danger text-[10px] font-black uppercase tracking-widest">
+                    Read-only mode
+                  </span>
+                )}
 
                 <div className="mt-6 p-4 bg-surface rounded-xl border border-muted/20">
                   <label className="text-[10px] font-bold text-text/40 uppercase tracking-widest block mb-2">Grading Rubric In Use</label>
                   <div className="rounded-lg border border-muted/40 bg-bg px-4 py-2.5">
-                    <p className="text-sm font-bold text-text">{activeRubric.title}</p>
+                    <p className="text-sm font-bold text-text">{visibleRubric.title}</p>
                     <p className="text-[10px] text-success font-black uppercase tracking-widest mt-1">
-                      Active rubric selected by instructor
+                      {gradingLocked && submittedRubric ? 'Rubric used for submitted score' : 'Active rubric selected by instructor'}
                     </p>
                   </div>
                 </div>
@@ -685,9 +736,16 @@ export default function Grade() {
                 */}
                 <div className="flex flex-col items-stretch md:items-end gap-2 px-1">
                   {selectedExisting ? (
-                    <span className="text-[10px] font-bold text-success uppercase tracking-widest">
-                      Submitted Score: {submittedTotal}/{maxTotal}
-                    </span>
+                    <div className="flex flex-col items-start md:items-end gap-1">
+                      <span className="text-[10px] font-bold text-success uppercase tracking-widest">
+                        Submitted Score: {submittedTotal}/{maxTotal}
+                      </span>
+                      {submittedAt && (
+                        <span className="text-[10px] font-bold text-text/35 uppercase tracking-widest">
+                          Last updated {submittedAt}
+                        </span>
+                      )}
+                    </div>
                   ) : hasCurrentDraft ? (
                     <div className="flex flex-wrap items-center justify-start md:justify-end gap-3">
                       <span className="text-[10px] font-bold text-warning uppercase tracking-widest">
@@ -716,18 +774,25 @@ export default function Grade() {
             </div>
 
             {/* Alerts */}
-            {selectedExisting && getRefId(selectedExisting.rubric) === activeRubric._id && (
+            {!gradingLocked && selectedExisting && activeRubric && getRefId(selectedExisting.rubric) === activeRubric._id && (
               <div className="evl-alert-info mb-4">
                 You already submitted scores for this group using this rubric. You can update them below.
               </div>
             )}
-            {selectedExisting && getRefId(selectedExisting.rubric) !== activeRubric._id && (
+            {!gradingLocked && selectedExisting && activeRubric && getRefId(selectedExisting.rubric) !== activeRubric._id && (
               <div className="evl-alert-warning bg-warning/5 border border-warning/20 text-warning mb-4">
                 You previously graded this group using a different rubric. Saving now will overwrite those scores with the new rubric's criteria.
               </div>
             )}
             {success && <div className="evl-alert-success mb-4">{success}</div>}
             {error && <div className="evl-alert-error mb-4">{error}</div>}
+
+            {missingCriteria.length > 0 && (
+              <div className="evl-alert-warning bg-warning/5 border border-warning/20 text-warning mb-4">
+                <p className="font-bold mb-1">Missing Score Fields</p>
+                <p className="text-sm opacity-85">{missingCriteria.join(', ')}</p>
+              </div>
+            )}
 
             {!isOnline && (
               <div className="evl-alert-warning bg-warning/5 border border-warning/20 text-warning mb-4">
@@ -739,15 +804,15 @@ export default function Grade() {
               <div className="evl-alert-error bg-danger/5 border border-danger/20 text-danger mb-6 flex items-center gap-3">
                 <span className="text-xl">🔒</span>
                 <div>
-                  <p className="font-bold">Grading is Locked</p>
-                  <p className="text-sm opacity-80">An administrator has temporarily disabled grading submissions. You can still view or prepare scores, but saving is disabled.</p>
+                  <p className="font-bold">Read-only Mode</p>
+                  <p className="text-sm opacity-80">{gradingLockMessage} You can view submitted scores and feedback, but saving is disabled.</p>
                 </div>
               </div>
             )}
 
             {/* Score inputs */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-6">
-              {activeRubric.criteria.map((cat) => (
+              {visibleRubric.criteria.map((cat) => (
                 <ScoreInput
                   key={cat.key}
                   label={cat.label}
@@ -757,6 +822,7 @@ export default function Grade() {
                   onChange={(v) => {
                     const nextScores = { ...scores, [cat.key]: v };
                     setScores(nextScores);
+                    setMissingCriteria((current) => current.filter((label) => label !== cat.label));
                     saveDraft(selectedGroup, activeRubric, nextScores, comments);
                   }}
                   levels={cat.levels.map((l) => ({
@@ -794,7 +860,7 @@ export default function Grade() {
               disabled={gradingLocked || submitting || !isOnline}
               className={`evl-btn-primary px-8 py-3 ${(gradingLocked || submitting || !isOnline) ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
             >
-              {submitting ? 'Submitting...' : (selectedExisting ? 'Update Scores & Feedback' : 'Submit Scores & Feedback')}
+              {gradingLocked ? 'Read-only Mode' : submitting ? 'Submitting...' : (selectedExisting ? 'Update Scores & Feedback' : 'Submit Scores & Feedback')}
             </button>
           </form>
         )}

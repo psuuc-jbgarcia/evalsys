@@ -4,14 +4,18 @@ import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import { CardSkeleton } from '../components/LoadingSkeleton';
 import { formatMemberList, memberSearchText, type Member } from '../utils/members';
+import { notify } from '../utils/notify';
 
-interface Section { _id: string; name: string; block: string; }
+interface Section { _id: string; name: string; block: string; subject?: string | { _id?: string }; }
 interface Group { _id: string; name: string; section: Section; members: Member[]; isGraded?: boolean; }
 interface Subject { _id: string; code: string; title: string; }
 
 const currentSubjectKey = 'evalsys_current_subject_id';
 const groupNameCacheKey = 'grading_group_names';
 const groupStatusCacheKey = (panelId: string) => `grading_group_status_${panelId}`;
+const getRefId = (value: string | { _id?: string } | undefined | null) => (
+  typeof value === 'string' ? value : value?._id || ''
+);
 
 // SVG icons matching the sidebar NavIcon set exactly
 const CardIcon = ({ name }: { name: string }) => {
@@ -59,38 +63,46 @@ export default function Dashboard() {
   const { user } = useAuth();
 
   if (user?.role === 'admin' || user?.role === 'superadmin') {
-    return <AdminDashboard name={user.name} role={user.role} />;
+    return <AdminDashboard name={user.name} role={user.role} userId={user.id || user._id || ''} />;
   }
   return <PanelDashboard name={user?.name ?? ''} panelId={user?.id || user?._id || ''} />;
 }
 
 /* ── Instructor view ── */
-function AdminDashboard({ name, role }: { name: string; role: 'admin' | 'superadmin' }) {
+function AdminDashboard({ name, role, userId }: { name: string; role: 'admin' | 'superadmin'; userId: string }) {
   const [locked, setLocked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [currentSubject, setCurrentSubject] = useState<Subject | null>(null);
 
   useEffect(() => {
-    api.get('/settings').then(res => {
-      setLocked(res.data.isGradingLocked);
-      setLoading(false);
-    });
-    api.get('/subjects')
-      .then((res) => {
+    Promise.all([
+      api.get('/subjects'),
+      api.get('/auth/me'),
+    ])
+      .then(([res, meRes]) => {
         const savedSubjectId = localStorage.getItem(currentSubjectKey);
         const subjects: Subject[] = res.data;
         const selected = subjects.find((subject) => subject._id === savedSubjectId) || subjects[0] || null;
+        const lockedSubjects = (meRes.data.gradingLockedSubjects || []).map((subject: string | { _id?: string }) => getRefId(subject));
         setCurrentSubject(selected);
+        setLocked(Boolean(selected && lockedSubjects.includes(selected._id)));
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => setLoading(false));
   }, []);
 
   const toggleLock = async () => {
+    if (!currentSubject || !userId) return;
     try {
-      const res = await api.patch('/settings/toggle-lock');
-      setLocked(res.data.isGradingLocked);
+      const nextLocked = !locked;
+      const res = await api.patch(`/users/${userId}/grading-lock`, {
+        subject: currentSubject._id,
+        gradingLocked: nextLocked,
+      });
+      const lockedSubjects = (res.data.gradingLockedSubjects || []).map((subject: string | { _id?: string }) => getRefId(subject));
+      setLocked(lockedSubjects.includes(currentSubject._id));
     } catch {
-      alert('Failed to toggle lock');
+      notify('Failed to toggle lock', { type: 'error' });
     }
   };
 
@@ -119,26 +131,27 @@ function AdminDashboard({ name, role }: { name: string; role: 'admin' | 'superad
             </div>
           )}
 
-          {/* Global Lock Card */}
-          <div className={`evl-card min-h-[64px] px-4 py-3 flex items-center justify-between gap-3 transition-colors ${locked ? 'bg-danger/5 border-danger/20' : 'bg-success/5 border-success/20'}`}>
-            <div className="min-w-0">
-              <span className="block text-[10px] font-bold uppercase tracking-widest text-text/40">System Status</span>
-              <span className={`block text-xs font-extrabold uppercase truncate ${locked ? 'text-danger' : 'text-success'}`}>
-                {locked ? 'Grading Locked' : 'Grading Active'}
-              </span>
+          {role !== 'superadmin' && (
+            <div className={`evl-card min-h-[64px] px-4 py-3 flex items-center justify-between gap-3 transition-colors ${locked ? 'bg-danger/5 border-danger/20' : 'bg-success/5 border-success/20'}`}>
+              <div className="min-w-0">
+                <span className="block text-[10px] font-bold uppercase tracking-widest text-text/40">Subject Status</span>
+                <span className={`block text-xs font-extrabold uppercase truncate ${locked ? 'text-danger' : 'text-success'}`}>
+                  {locked ? 'Grading Locked' : 'Grading Active'}
+                </span>
+              </div>
+              <button 
+                disabled={loading || !currentSubject}
+                onClick={toggleLock}
+                className={`shrink-0 px-4 py-2 rounded-lg text-[10px] font-extrabold uppercase tracking-widest transition-all ${
+                  locked 
+                    ? 'bg-success text-white hover:bg-success/90' 
+                    : 'bg-danger text-white hover:bg-danger/90'
+                }`}
+              >
+                {locked ? 'Unlock' : 'Lock'}
+              </button>
             </div>
-            <button 
-              disabled={loading}
-              onClick={toggleLock}
-              className={`shrink-0 px-4 py-2 rounded-lg text-[10px] font-extrabold uppercase tracking-widest transition-all ${
-                locked 
-                  ? 'bg-success text-white hover:bg-success/90' 
-                  : 'bg-danger text-white hover:bg-danger/90'
-              }`}
-            >
-              {locked ? 'Unlock' : 'Lock'}
-            </button>
-          </div>
+          )}
         </div>
       </div>
 
@@ -177,7 +190,7 @@ function PanelDashboard({ name, panelId }: { name: string; panelId: string }) {
   const [sections, setSections] = useState<Section[]>([]);
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [locked, setLocked] = useState(false);
+  const [lockedSubjectIds, setLockedSubjectIds] = useState<string[]>([]);
   const [search, setSearch] = useState('');
 
 
@@ -185,8 +198,8 @@ function PanelDashboard({ name, panelId }: { name: string; panelId: string }) {
     Promise.all([
       api.get('/sections'),
       api.get('/groups'),
-      api.get('/settings')
-    ]).then(([secRes, grpRes, setRes]) => {
+      api.get('/auth/me')
+    ]).then(([secRes, grpRes, meRes]) => {
       const fetchedSections = secRes.data;
       setSections(fetchedSections);
       if (fetchedSections.length > 0) {
@@ -205,7 +218,7 @@ function PanelDashboard({ name, panelId }: { name: string; panelId: string }) {
         localStorage.setItem(groupNameCacheKey, JSON.stringify(groupNames));
         localStorage.setItem(groupStatusCacheKey(panelId), JSON.stringify(groupStatus));
       }
-      setLocked(setRes.data.isGradingLocked);
+      setLockedSubjectIds((meRes.data.gradingLockedSubjects || []).map((subject: string | { _id?: string }) => getRefId(subject)));
     })
     .catch((err) => console.error(err))
     .finally(() => setLoading(false));
@@ -227,6 +240,11 @@ function PanelDashboard({ name, panelId }: { name: string; panelId: string }) {
   const gradedCount = groups.filter(g => g.isGraded).length;
   const totalCount = groups.length;
   const progressPct = totalCount > 0 ? Math.round((gradedCount / totalCount) * 100) : 0;
+  const selectedSectionDoc = selectedSection
+    ? sections.find((section) => section._id === selectedSection)
+    : null;
+  const selectedSubjectId = getRefId(selectedSectionDoc?.subject);
+  const locked = Boolean(selectedSubjectId && lockedSubjectIds.includes(selectedSubjectId));
 
   return (
     <div>

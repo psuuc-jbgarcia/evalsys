@@ -116,7 +116,17 @@ exports.createUser = async (req, res) => {
     }
   }
   const user = await Model.create(payload);
-  res.status(201).json({ id: user._id, name: user.name, email: user.email, role: user.role, assignedSubjects: user.assignedSubjects || [], subjectLimit: user.subjectLimit });
+  res.status(201).json({
+    id: user._id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    assignedSubjects: user.assignedSubjects || [],
+    subjectLimit: user.subjectLimit,
+    csvExportLocked: Boolean(user.csvExportLocked),
+    gradingLocked: Boolean(user.gradingLocked),
+    gradingLockedSubjects: user.gradingLockedSubjects || [],
+  });
 };
 
 // Bulk create users (for CSV import)
@@ -181,7 +191,10 @@ exports.getUsers = async (req, res) => {
     };
   }
 
-  const panels = await Panel.find(panelFilter).select('-password').sort({ createdAt: -1 });
+  const panels = await Panel.find(panelFilter)
+    .select('-password')
+    .populate('createdBy', 'name email')
+    .sort({ createdAt: -1 });
   const normalizedAccounts = await normalizeLegacyAccountEmails([...admins, ...panels]);
   res.json(normalizedAccounts);
 };
@@ -223,6 +236,62 @@ exports.updateSubjectLimit = async (req, res) => {
   if (!instructor) return res.status(404).json({ message: 'Instructor not found' });
 
   instructor.subjectLimit = val;
+  await instructor.save();
+  res.json(instructor);
+};
+
+exports.updateCsvExportLock = async (req, res) => {
+  if (req.user.role !== 'superadmin') {
+    return res.status(403).json({ message: 'Only super admin can update instructor CSV export access' });
+  }
+
+  if (typeof req.body.csvExportLocked !== 'boolean') {
+    return res.status(400).json({ message: 'csvExportLocked must be true or false' });
+  }
+
+  const instructor = await Admin.findOne({ _id: req.params.id, role: 'admin' }).select('-password');
+  if (!instructor) return res.status(404).json({ message: 'Instructor not found' });
+
+  instructor.csvExportLocked = req.body.csvExportLocked;
+  await instructor.save();
+  res.json(instructor);
+};
+
+exports.updateGradingLock = async (req, res) => {
+  if (!['superadmin', 'admin'].includes(req.user.role)) {
+    return res.status(403).json({ message: 'Admin access required' });
+  }
+
+  if (typeof req.body.gradingLocked !== 'boolean') {
+    return res.status(400).json({ message: 'gradingLocked must be true or false' });
+  }
+  if (!req.body.subject) {
+    return res.status(400).json({ message: 'subject is required for instructor grading lock' });
+  }
+
+  if (req.user.role !== 'superadmin' && req.params.id !== req.user._id.toString()) {
+    return res.status(403).json({ message: 'You can only update grading access for your own subjects' });
+  }
+
+  const instructor = await Admin.findOne({ _id: req.params.id, role: 'admin' }).select('-password');
+  if (!instructor) return res.status(404).json({ message: 'Instructor not found' });
+
+  const subjectId = req.body.subject.toString();
+  const assignedSubjectIds = (instructor.assignedSubjects || []).map((id) => id.toString());
+  if (!assignedSubjectIds.includes(subjectId)) {
+    return res.status(400).json({ message: 'Instructor is not assigned to this subject' });
+  }
+
+  const currentLocked = (instructor.gradingLockedSubjects || []).map((id) => id.toString());
+  if (req.body.gradingLocked && !currentLocked.includes(subjectId)) {
+    instructor.gradingLockedSubjects.push(req.body.subject);
+  }
+  if (!req.body.gradingLocked) {
+    instructor.gradingLocked = false;
+    instructor.gradingLockedSubjects = instructor.gradingLockedSubjects.filter(
+      (id) => id.toString() !== subjectId
+    );
+  }
   await instructor.save();
   res.json(instructor);
 };

@@ -37,6 +37,7 @@ app.use('/api/rubrics', require('./routes/rubric.routes'));
 app.use('/api/settings', require('./routes/settings.routes'));
 app.use('/api/subjects', require('./routes/subject.routes'));
 app.use('/api/registration-links', require('./routes/registrationLink.routes'));
+app.use('/api/usage', require('./routes/usage.routes'));
 
 app.get('/api/health', (_, res) => res.json({ status: 'ok' }));
 

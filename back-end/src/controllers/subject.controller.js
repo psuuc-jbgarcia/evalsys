@@ -41,7 +41,7 @@ const ensureInstructorSubjectLimits = async (adminIds = [], subjectId = null) =>
     .map((instructor) => `${instructor.name} (${instructor.assignedSubjects.length}/${instructor.subjectLimit || 1})`)
     .join(', ');
 
-  return `The following instructor(s) have reached their subject limit: ${names}. Increase the instructor's limit in Manage Subscription to assign more subjects.`;
+  return `The following instructor(s) have reached their subject limit: ${names}. Contact the owner so they can increase their subject limit and assign more subjects.`;
 };
 
 exports.getSubjects = async (req, res) => {

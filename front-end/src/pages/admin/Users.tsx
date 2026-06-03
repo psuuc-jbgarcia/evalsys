@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import api from '../../services/api';
 import { TableSkeleton } from '../../components/LoadingSkeleton';
 import { useAuth } from '../../context/AuthContext';
+import { notify } from '../../utils/notify';
 
 interface User { _id: string; name: string; email: string; role: string; isActive: boolean; }
 
@@ -147,10 +148,10 @@ export default function Users() {
 
       try {
         const res = await api.post('/users/bulk', { users: data });
-        alert(`Import Complete!\nCreated: ${res.data.created}\nSkipped: ${res.data.skipped}`);
+        notify(`Import Complete!\nCreated: ${res.data.created}\nSkipped: ${res.data.skipped}`, { type: 'success' });
         load();
       } catch (err: unknown) {
-        alert(getErrorMessage(err, 'Error during bulk import'));
+        notify(getErrorMessage(err, 'Error during bulk import'), { type: 'error' });
       }
     };
     reader.readAsText(file);
@@ -329,20 +330,20 @@ export default function Users() {
                       </div>
                       <div className="flex items-center justify-start lg:justify-end gap-2 whitespace-nowrap">
                         <button onClick={() => handleToggle(u._id)}
-                          className="evl-btn-ghost text-primary hover:bg-primary/5">
+                          className="evl-btn-ghost text-primary border-primary/30 hover:bg-primary/5 hover:border-primary/50">
                           {u.isActive ? 'Block' : 'Unblock'}
                         </button>
                         <button onClick={async () => {
                           const pass = prompt('Enter new password for ' + u.name);
                           if (!pass) return;
                           await api.patch(`/users/${u._id}/reset-password`, { newPassword: pass });
-                          alert('Password updated!');
+                          notify('Password updated!', { type: 'success' });
                         }}
-                          className="evl-btn-ghost text-primary hover:bg-primary/5">
+                          className="evl-btn-ghost text-primary border-primary/30 hover:bg-primary/5 hover:border-primary/50">
                           Reset
                         </button>
                         <button onClick={() => handleDelete(u._id)}
-                          className="evl-btn-ghost text-danger hover:text-danger hover:bg-danger/5">
+                          className="evl-btn-ghost text-danger border-danger/30 hover:text-danger hover:bg-danger/5 hover:border-danger/50">
                           Delete
                         </button>
                       </div>

@@ -1,33 +1,83 @@
 import { useEffect, useState } from 'react';
 import api from '../../services/api';
-
-interface Settings {
-  isGradingLocked: boolean;
-  isCsvExportLocked: boolean;
-}
+import { notify } from '../../utils/notify';
 
 interface Instructor {
   _id: string;
   name: string;
   email: string;
   isActive: boolean;
+  assignedSubjects?: Array<string | { _id: string; code?: string; title?: string }>;
   subjectLimit?: number;
+  csvExportLocked?: boolean;
+  gradingLocked?: boolean;
+  gradingLockedSubjects?: Array<string | { _id: string; code?: string; title?: string }>;
 }
 
 type UserRow = Instructor & { role: string };
+interface Subject { _id: string; code: string; title: string; }
+interface BackupRow { [key: string]: string | number | null | undefined; }
+interface UsageStatus {
+  checkedAt: string;
+  mongo: {
+    database: string;
+    collections: number;
+    objects: number;
+    dataSizeMb: number;
+    storageSizeMb: number;
+    indexSizeMb: number;
+    estimatedTotalMb: number;
+    freeTierLimitMb: number;
+    estimatedUsagePercent: number;
+  };
+  render: {
+    configured: boolean;
+    message?: string;
+    error?: string;
+    name?: string;
+    type?: string;
+    plan?: string;
+    status?: string;
+    note?: string;
+  };
+}
 
 const getErrorMessage = (err: unknown, fallback: string) => {
   const response = (err as { response?: { data?: { message?: string } } })?.response;
   return response?.data?.message || fallback;
 };
 
+const currentSubjectKey = 'evalsys_current_subject_id';
+const csvEscape = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+const getRefId = (value: string | { _id?: string } | undefined) => (
+  typeof value === 'string' ? value : value?._id || ''
+);
+const downloadCsv = (filename: string, rows: BackupRow[]) => {
+  const headers = rows.length ? Object.keys(rows[0]) : ['Status'];
+  const dataRows = rows.length ? rows : [{ Status: 'No records found' }];
+  const csv = [
+    headers.map(csvEscape).join(','),
+    ...dataRows.map((row) => headers.map((header) => csvEscape(row[header])).join(',')),
+  ].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
+};
+
 export default function Subscription() {
-  const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
-  const [togglingCsv, setTogglingCsv] = useState(false);
   const [instructors, setInstructors] = useState<Instructor[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [currentSubjectId, setCurrentSubjectId] = useState(() => localStorage.getItem(currentSubjectKey) || '');
   const [limitInputs, setLimitInputs] = useState<Record<string, string>>({});
   const [savingLimitId, setSavingLimitId] = useState<string | null>(null);
+  const [savingCsvLockId, setSavingCsvLockId] = useState<string | null>(null);
+  const [savingGradingLockId, setSavingGradingLockId] = useState<string | null>(null);
+  const [dataAction, setDataAction] = useState('');
+  const [usage, setUsage] = useState<UsageStatus | null>(null);
 
   const fetchInstructors = async () => {
     const res = await api.get('/users');
@@ -47,14 +97,22 @@ export default function Subscription() {
   useEffect(() => {
     const init = async () => {
       try {
-        const setRes = await api.get('/settings');
-        setSettings(setRes.data);
+        const [subjectRes] = await Promise.all([
+          api.get('/subjects'),
+          fetchInstructors(),
+        ]);
+        setSubjects(subjectRes.data);
+        const saved = localStorage.getItem(currentSubjectKey);
+        if (!saved && subjectRes.data[0]?._id) {
+          setCurrentSubjectId(subjectRes.data[0]._id);
+        }
       } catch {
         // non-critical
       }
 
       try {
-        await fetchInstructors();
+        const usageRes = await api.get('/usage');
+        setUsage(usageRes.data);
       } catch {
         // non-critical
       }
@@ -76,21 +134,104 @@ export default function Subscription() {
       );
       setLimitInputs((prev) => ({ ...prev, [instructor._id]: String(res.data.subjectLimit) }));
     } catch (err: unknown) {
-      alert(getErrorMessage(err, 'Failed to update instructor limit'));
+      notify(getErrorMessage(err, 'Failed to update instructor limit'), { type: 'error' });
     } finally {
       setSavingLimitId(null);
     }
   };
 
-  const handleToggleCsv = async () => {
-    setTogglingCsv(true);
+  const handleToggleInstructorCsv = async (instructor: Instructor) => {
+    setSavingCsvLockId(instructor._id);
     try {
-      const res = await api.patch('/settings/toggle-csv-lock');
-      setSettings(res.data);
+      const nextLocked = !instructor.csvExportLocked;
+      const res = await api.patch(`/users/${instructor._id}/csv-export-lock`, { csvExportLocked: nextLocked });
+      setInstructors((prev) =>
+        prev.map((item) => (item._id === instructor._id ? { ...item, csvExportLocked: res.data.csvExportLocked } : item))
+      );
     } catch (err: unknown) {
-      alert(getErrorMessage(err, 'Failed to toggle CSV lock'));
+      notify(getErrorMessage(err, 'Failed to update CSV export access'), { type: 'error' });
     } finally {
-      setTogglingCsv(false);
+      setSavingCsvLockId(null);
+    }
+  };
+
+  const isSubjectAssigned = (instructor: Instructor, subjectId = currentSubjectId) => (
+    Boolean(subjectId) &&
+    (instructor.assignedSubjects || []).some((subject) => getRefId(subject) === subjectId)
+  );
+
+  const isSubjectGradingLocked = (instructor: Instructor, subjectId = currentSubjectId) => (
+    Boolean(subjectId) &&
+    (instructor.gradingLockedSubjects || []).some((subject) => getRefId(subject) === subjectId)
+  );
+
+  const handleToggleInstructorGrading = async (instructor: Instructor) => {
+    if (!currentSubjectId) return;
+    const savingKey = `${instructor._id}:${currentSubjectId}`;
+    setSavingGradingLockId(savingKey);
+    try {
+      const nextLocked = !isSubjectGradingLocked(instructor);
+      const res = await api.patch(`/users/${instructor._id}/grading-lock`, {
+        subject: currentSubjectId,
+        gradingLocked: nextLocked,
+      });
+      setInstructors((prev) =>
+        prev.map((item) => (
+          item._id === instructor._id
+            ? {
+                ...item,
+                gradingLocked: res.data.gradingLocked,
+                gradingLockedSubjects: res.data.gradingLockedSubjects,
+              }
+            : item
+        ))
+      );
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, 'Failed to update grading access'), { type: 'error' });
+    } finally {
+      setSavingGradingLockId(null);
+    }
+  };
+
+  const currentSubject = subjects.find((subject) => subject._id === currentSubjectId) || null;
+
+  const handleSubjectChange = (subjectId: string) => {
+    setCurrentSubjectId(subjectId);
+    if (subjectId) localStorage.setItem(currentSubjectKey, subjectId);
+  };
+
+  const handleExportBackup = async (scope: 'subject' | 'global') => {
+    setDataAction(`export-${scope}`);
+    try {
+      const res = await api.get('/evaluations/export-all', {
+        headers: { 'x-subject-id': scope === 'subject' ? currentSubjectId : '' },
+      });
+      const label = scope === 'subject' ? currentSubject?.code || 'subject' : 'global';
+      downloadCsv(`evalsys_${label}_backup.csv`, res.data);
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, 'Failed to export backup'), { type: 'error' });
+    } finally {
+      setDataAction('');
+    }
+  };
+
+  const handleReset = async (scope: 'subject' | 'global') => {
+    const label = scope === 'subject'
+      ? `${currentSubject?.code || 'current subject'}`
+      : 'the entire platform';
+    const ok = confirm(`This will permanently reset evaluation event data for ${label}. Export a backup first.\n\nType RESET in the next confirmation is not required, but this action cannot be undone.\n\nContinue?`);
+    if (!ok) return;
+
+    setDataAction(`reset-${scope}`);
+    try {
+      await api.post('/evaluations/master-reset', { confirmText: 'RESET' }, {
+        headers: { 'x-subject-id': scope === 'subject' ? currentSubjectId : '' },
+      });
+      notify(scope === 'subject' ? 'Current subject data reset complete.' : 'Global reset complete.', { type: 'success' });
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, 'Reset failed'), { type: 'error' });
+    } finally {
+      setDataAction('');
     }
   };
 
@@ -116,16 +257,105 @@ export default function Subscription() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_520px] gap-6 mb-8">
+      <div className="mb-8">
+        {usage && (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-6">
+            <div className="evl-card p-5">
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <div>
+                  <h3 className="font-bold text-text text-sm">MongoDB Storage</h3>
+                  <p className="text-text/45 text-xs mt-0.5">{usage.mongo.database}</p>
+                </div>
+                <span className="evl-badge-primary">{usage.mongo.estimatedUsagePercent}% used</span>
+              </div>
+              <div className="h-2 rounded-full bg-muted/30 overflow-hidden mb-4">
+                <div
+                  className="h-full bg-primary rounded-full"
+                  style={{ width: `${Math.min(100, usage.mongo.estimatedUsagePercent)}%` }}
+                />
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-text/35">Total</p>
+                  <p className="text-sm font-black text-text">{usage.mongo.estimatedTotalMb} MB</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-text/35">Limit</p>
+                  <p className="text-sm font-black text-text">{usage.mongo.freeTierLimitMb} MB</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-text/35">Collections</p>
+                  <p className="text-sm font-black text-text">{usage.mongo.collections}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-text/35">Records</p>
+                  <p className="text-sm font-black text-text">{usage.mongo.objects}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="evl-card p-5">
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <div>
+                  <h3 className="font-bold text-text text-sm">Render Service</h3>
+                  <p className="text-text/45 text-xs mt-0.5">
+                    Checked {new Date(usage.checkedAt).toLocaleString()}
+                  </p>
+                </div>
+                <span className={usage.render.configured && !usage.render.error ? 'evl-badge-success' : 'evl-badge-warning'}>
+                  {usage.render.configured ? 'Configured' : 'Not Configured'}
+                </span>
+              </div>
+              {usage.render.configured && !usage.render.error ? (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-text/35">Service</p>
+                    <p className="text-sm font-black text-text">{usage.render.name || 'Render'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-text/35">Plan</p>
+                    <p className="text-sm font-black text-text">{usage.render.plan || 'Unknown'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-text/35">Status</p>
+                    <p className="text-sm font-black text-text">{usage.render.status || 'Unknown'}</p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-text/55 leading-relaxed">
+                  {usage.render.error || usage.render.message || 'Render usage is not available.'}
+                </p>
+              )}
+              <p className="text-[11px] text-text/35 mt-4 leading-relaxed">
+                Render free-tier hours are account-level, so exact remaining hours may need checking in the Render dashboard.
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="evl-card overflow-hidden">
           <div className="px-6 py-4 border-b border-muted/30 flex items-center justify-between">
             <div>
               <h3 className="font-bold text-text text-sm">Instructor Subject Limits</h3>
-              <p className="text-text/50 text-xs mt-0.5">Set each instructor's paid allowance individually.</p>
+              <p className="text-text/50 text-xs mt-0.5">Set paid allowance and subject-level feature access per instructor.</p>
             </div>
-            <span className="text-[10px] font-black uppercase tracking-widest text-text/30 bg-muted/20 px-2 py-1 rounded-md">
-              {instructors.length} Instructor{instructors.length !== 1 ? 's' : ''}
-            </span>
+            <div className="flex items-center gap-3">
+              <label className="text-[10px] font-black uppercase tracking-widest text-text/35">
+                Grading Subject
+              </label>
+              <select
+                value={currentSubjectId}
+                onChange={(e) => handleSubjectChange(e.target.value)}
+                className="evl-select !py-2 !text-xs w-56"
+              >
+                {subjects.map((subject) => (
+                  <option key={subject._id} value={subject._id}>{subject.code}</option>
+                ))}
+              </select>
+              <span className="text-[10px] font-black uppercase tracking-widest text-text/30 bg-muted/20 px-2 py-1 rounded-md">
+                {instructors.length} Instructor{instructors.length !== 1 ? 's' : ''}
+              </span>
+            </div>
           </div>
 
           {instructors.length === 0 ? (
@@ -139,17 +369,24 @@ export default function Subscription() {
                   <th>Instructor</th>
                   <th>Email</th>
                   <th>Status</th>
+                  <th className="text-center">Subjects Used</th>
                   <th className="text-center">Paid Limit</th>
+                  <th className="text-center">CSV Export</th>
+                  <th className="text-center">Grading</th>
                   <th className="col-actions">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {instructors.map((instructor) => {
                   const currentLimit = instructor.subjectLimit ?? 1;
+                  const subjectCount = instructor.assignedSubjects?.length ?? 0;
                   const inputValue = limitInputs[instructor._id] ?? String(currentLimit);
                   const parsedInput = parseInt(inputValue, 10);
                   const unchanged = parsedInput === currentLimit;
                   const invalid = !parsedInput || parsedInput < 1;
+                  const assignedToCurrentSubject = isSubjectAssigned(instructor);
+                  const currentSubjectLocked = isSubjectGradingLocked(instructor);
+                  const gradingSavingKey = `${instructor._id}:${currentSubjectId}`;
 
                   return (
                     <tr key={instructor._id}>
@@ -167,6 +404,9 @@ export default function Subscription() {
                           {instructor.isActive ? 'Active' : 'Blocked'}
                         </span>
                       </td>
+                      <td className="text-center">
+                        <span className="text-xs font-black text-text/60">{subjectCount}/{currentLimit}</span>
+                      </td>
                       <td>
                         <input
                           type="number"
@@ -177,14 +417,56 @@ export default function Subscription() {
                           className="evl-input !py-2 text-center max-w-28 mx-auto"
                         />
                       </td>
+                      <td className="text-center">
+                        <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full ${instructor.csvExportLocked ? 'bg-danger/10 text-danger' : 'bg-success/10 text-success'}`}>
+                          {instructor.csvExportLocked ? 'Locked' : 'Allowed'}
+                        </span>
+                      </td>
+                      <td className="text-center">
+                        <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full ${
+                          !assignedToCurrentSubject
+                            ? 'bg-muted/20 text-text/35'
+                            : currentSubjectLocked ? 'bg-danger/10 text-danger' : 'bg-success/10 text-success'
+                        }`}>
+                          {!assignedToCurrentSubject ? 'Not Assigned' : currentSubjectLocked ? 'Locked' : 'Allowed'}
+                        </span>
+                      </td>
                       <td className="col-actions">
-                        <button
-                          onClick={() => handleSaveLimit(instructor)}
-                          disabled={savingLimitId === instructor._id || unchanged || invalid}
-                          className="px-3 py-1.5 rounded-lg text-[11px] font-bold border border-primary/30 text-primary bg-primary/5 hover:bg-primary/15 transition-all disabled:opacity-40 whitespace-nowrap"
-                        >
-                          {savingLimitId === instructor._id ? 'Saving...' : 'Update Limit'}
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleSaveLimit(instructor)}
+                            disabled={savingLimitId === instructor._id || unchanged || invalid}
+                            className="px-3 py-1.5 rounded-lg text-[11px] font-bold border border-primary/30 text-primary bg-primary/5 hover:bg-primary/15 transition-all disabled:opacity-40 whitespace-nowrap"
+                          >
+                            {savingLimitId === instructor._id ? 'Saving...' : 'Update Limit'}
+                          </button>
+                          <button
+                            onClick={() => handleToggleInstructorCsv(instructor)}
+                            disabled={savingCsvLockId === instructor._id}
+                            className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all disabled:opacity-40 whitespace-nowrap ${
+                              instructor.csvExportLocked
+                                ? 'border-success/30 text-success bg-success/5 hover:bg-success/15'
+                                : 'border-danger/30 text-danger bg-danger/5 hover:bg-danger/15'
+                            }`}
+                          >
+                            {savingCsvLockId === instructor._id
+                              ? 'Saving...'
+                              : instructor.csvExportLocked ? 'Unlock CSV' : 'Lock CSV'}
+                          </button>
+                          <button
+                            onClick={() => handleToggleInstructorGrading(instructor)}
+                            disabled={!assignedToCurrentSubject || savingGradingLockId === gradingSavingKey}
+                            className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all disabled:opacity-40 whitespace-nowrap ${
+                              currentSubjectLocked
+                                ? 'border-success/30 text-success bg-success/5 hover:bg-success/15'
+                                : 'border-danger/30 text-danger bg-danger/5 hover:bg-danger/15'
+                            }`}
+                          >
+                            {savingGradingLockId === gradingSavingKey
+                              ? 'Saving...'
+                              : currentSubjectLocked ? 'Unlock Grading' : 'Lock Grading'}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -194,48 +476,64 @@ export default function Subscription() {
           )}
           <div className="px-6 py-3 border-t border-muted/30 bg-bg/60">
             <p className="text-[11px] text-text/40 leading-relaxed">
-              Updating a limit changes how many paid subjects the instructor can manage.
+              Updating a limit changes how many paid subjects the instructor can manage. CSV export is per instructor. Grading lock applies only to the selected subject.
             </p>
           </div>
         </div>
+      </div>
 
-        <div className={`evl-card p-6 transition-colors ${settings?.isCsvExportLocked ? 'border-danger/30 bg-danger/5' : 'border-success/20 bg-success/5'}`}>
-          <div className="flex items-start gap-4 mb-5">
-            <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${settings?.isCsvExportLocked ? 'bg-danger/10 text-danger' : 'bg-success/10 text-success'}`}>
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                {settings?.isCsvExportLocked
-                  ? <><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>
-                  : <><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 9.9-1" /></>
-                }
-              </svg>
-            </div>
-            <div>
-              <h3 className="font-bold text-text text-sm">CSV Grade Export</h3>
-              <p className="text-text/50 text-xs mt-1 leading-relaxed">
-                When locked, instructors cannot download CSV exports from Results. Super Admin can always export.
-              </p>
-            </div>
+      <div className="evl-card overflow-hidden">
+        <div className="px-6 py-4 border-b border-muted/30">
+          <h3 className="font-bold text-text text-sm">Data Safety</h3>
+          <p className="text-text/50 text-xs mt-0.5">Export backups before resetting scoped or global event data.</p>
+        </div>
+        <div className="p-6 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto] gap-4 items-end">
+          <div>
+            <label className="evl-label">Subject Scope</label>
+            <select
+              value={currentSubjectId}
+              onChange={(e) => handleSubjectChange(e.target.value)}
+              className="evl-select max-w-xl"
+            >
+              {subjects.map((subject) => (
+                <option key={subject._id} value={subject._id}>{subject.code} - {subject.title}</option>
+              ))}
+            </select>
           </div>
-          <div className={`rounded-xl border px-4 py-3 mb-5 flex items-center justify-between ${settings?.isCsvExportLocked ? 'border-danger/20 bg-danger/5' : 'border-success/20 bg-success/5'}`}>
-            <span className="text-xs text-text/50 font-medium">Current status</span>
-            <span className={`text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full ${settings?.isCsvExportLocked ? 'bg-danger/10 text-danger' : 'bg-success/10 text-success'}`}>
-              {settings?.isCsvExportLocked ? 'Export Locked' : 'Export Allowed'}
-            </span>
+          <div className="flex flex-wrap gap-2 lg:justify-end">
+            <button
+              type="button"
+              onClick={() => handleExportBackup('subject')}
+              disabled={!currentSubjectId || Boolean(dataAction)}
+              className="evl-btn-secondary !py-2 !text-xs"
+            >
+              {dataAction === 'export-subject' ? 'Exporting...' : 'Export Subject Backup'}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleReset('subject')}
+              disabled={!currentSubjectId || Boolean(dataAction)}
+              className="evl-btn-danger !py-2 !text-xs"
+            >
+              {dataAction === 'reset-subject' ? 'Resetting...' : 'Reset Subject Data'}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleExportBackup('global')}
+              disabled={Boolean(dataAction)}
+              className="evl-btn-secondary !py-2 !text-xs"
+            >
+              {dataAction === 'export-global' ? 'Exporting...' : 'Export Global Backup'}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleReset('global')}
+              disabled={Boolean(dataAction)}
+              className="evl-btn-danger !py-2 !text-xs"
+            >
+              {dataAction === 'reset-global' ? 'Resetting...' : 'Global Reset'}
+            </button>
           </div>
-          <button
-            onClick={handleToggleCsv}
-            disabled={togglingCsv}
-            className={`w-full py-2.5 rounded-lg text-xs font-extrabold uppercase tracking-widest transition-all disabled:opacity-50 ${
-              settings?.isCsvExportLocked
-                ? 'bg-success text-white hover:bg-success/90'
-                : 'bg-danger text-white hover:bg-danger/90'
-            }`}
-          >
-            {togglingCsv ? 'Updating...' : settings?.isCsvExportLocked ? 'Unlock CSV Export' : 'Lock CSV Export'}
-          </button>
-          <p className="text-[11px] text-text/40 mt-3 leading-relaxed">
-            Use this to prevent instructors from exporting results before the evaluation period is officially closed.
-          </p>
         </div>
       </div>
     </div>

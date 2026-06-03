@@ -9,6 +9,7 @@ interface RegistrationLink {
   token: string;
   subject: Subject;
   sections: Section[];
+  createdBy?: { name?: string; email?: string };
   expiresAt: string;
   isActive: boolean;
   createdAt: string;
@@ -235,14 +236,17 @@ export default function RegistrationLinks() {
                         <p className="text-xs text-text/45 mt-2">
                           Blocks: {link.sections.length ? link.sections.map((section) => section.block).join(', ') : 'All blocks in subject'}
                         </p>
+                        <p className="text-xs text-text/35 mt-1">
+                          Created by: {link.createdBy?.name || link.createdBy?.email || 'Unknown'}
+                        </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <button onClick={() => handleCopy(link.token)} className="evl-btn-ghost text-primary">
+                        <button onClick={() => handleCopy(link.token)} className="evl-btn-ghost text-primary border-primary/30 hover:border-primary/50">
                           {copiedToken === link.token ? 'Copied' : 'Copy Link'}
                         </button>
                         <button
                           onClick={() => handleStatus(link, !link.isActive)}
-                          className={`evl-btn-ghost ${link.isActive ? 'text-danger hover:text-danger hover:bg-danger/5' : 'text-success hover:text-success hover:bg-success/5'}`}
+                          className={`evl-btn-ghost ${link.isActive ? 'text-danger border-danger/30 hover:text-danger hover:bg-danger/5 hover:border-danger/50' : 'text-success border-success/30 hover:text-success hover:bg-success/5 hover:border-success/50'}`}
                         >
                           {link.isActive ? 'Stop Accepting' : 'Reopen'}
                         </button>
