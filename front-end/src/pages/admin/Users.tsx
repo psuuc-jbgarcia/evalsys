@@ -112,15 +112,6 @@ export default function Users() {
     }
   };
 
-  const toggleSubject = (subjectId: string) => {
-    setForm((current) => ({
-      ...current,
-      assignedSubjects: current.assignedSubjects.includes(subjectId)
-        ? current.assignedSubjects.filter((id) => id !== subjectId)
-        : [...current.assignedSubjects, subjectId],
-    }));
-  };
-
   const handleToggle = async (id: string) => {
     await api.patch(`/users/${id}/toggle`);
     load();
