@@ -172,13 +172,8 @@ export default function Users() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <div>
-<<<<<<< HEAD
-          <h2 className="evl-page-title">Accounts</h2>
-          <p className="evl-page-subtitle">Create and manage panel accounts. Super admins can also create instructor accounts.</p>
-=======
           <h2 className="evl-page-title">{pageTitle}</h2>
           <p className="evl-page-subtitle">{pageSubtitle}</p>
->>>>>>> origin/dev
         </div>
         <div className="flex gap-2">
           <button onClick={downloadTemplate} className="evl-btn-secondary !text-xs !py-1.5">

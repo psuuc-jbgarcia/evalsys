@@ -804,13 +804,8 @@ export default function Grade() {
               <div className="evl-alert-error bg-danger/5 border border-danger/20 text-danger mb-6 flex items-center gap-3">
                 <span className="text-xl">🔒</span>
                 <div>
-<<<<<<< HEAD
-                  <p className="font-bold">Grading is Locked</p>
-                  <p className="text-sm opacity-80">The instructor has temporarily disabled grading submissions. You can still view or prepare scores, but saving is disabled.</p>
-=======
                   <p className="font-bold">Read-only Mode</p>
                   <p className="text-sm opacity-80">{gradingLockMessage} You can view submitted scores and feedback, but saving is disabled.</p>
->>>>>>> origin/dev
                 </div>
               </div>
             )}
