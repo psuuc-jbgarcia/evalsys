@@ -177,6 +177,8 @@ function AdminDashboard({ name, role, userId }: { name: string; role: 'admin' | 
               Open →
             </div>
           </Link>
+        ))}
+      </div>
     </div>
   );
 }
