@@ -1,7 +1,8 @@
 import { useState, useEffect, type FormEvent } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
+import { notify } from '../utils/notify';
 
 export default function Login() {
   const { login } = useAuth();
@@ -94,7 +95,7 @@ export default function Login() {
             <div className="flex justify-end mt-2">
               <button 
                 type="button" 
-                onClick={() => alert('Please contact the System Administrator to reset your password.')}
+                onClick={() => notify('Please contact the System Administrator to reset your password.')}
                 className="text-xs text-primary font-bold hover:underline"
               >
                 Forgot password?
@@ -115,12 +116,6 @@ export default function Login() {
               )}
             </button>
           </form>
-        </div>
-        <div className="mt-8 text-center">
-          <p className="text-text/40 text-xs mb-3 font-medium tracking-wide uppercase">Are you a student?</p>
-          <Link to="/register" className="evl-btn-secondary w-full py-3 inline-block">
-            Register your Group →
-          </Link>
         </div>
         <div className="mt-8 text-center border-t border-muted/20 pt-8">
           <p className="text-text/20 text-[10px] font-bold uppercase tracking-widest mb-1">Developed & Maintained by</p>

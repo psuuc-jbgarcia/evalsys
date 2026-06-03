@@ -1,8 +1,8 @@
 const Evaluation = require('../models/Evaluation');
 const Group = require('../models/Group');
 const Section = require('../models/Section');
-const Settings = require('../models/Settings');
 const Rubric = require('../models/Rubric');
+const Admin = require('../models/Admin');
 
 const getSubjectId = (req) => req.headers['x-subject-id'] || req.query.subject || req.body.subject;
 const canAccessSubject = (req, subjectId) => (
@@ -17,6 +17,16 @@ const scoresToObject = (scores) => {
   return scores;
 };
 
+const formatMemberName = (member) => {
+  if (typeof member === 'string') return member;
+  return [member.firstName, member.middleName, member.lastName].filter(Boolean).join(' ');
+};
+
+const formatMemberList = (members = [], separator = '; ') => members
+  .map(formatMemberName)
+  .filter(Boolean)
+  .join(separator);
+
 const serializeEvaluation = (evaluation) => {
   if (!evaluation) return null;
   const obj = evaluation.toObject ? evaluation.toObject() : evaluation;
@@ -24,6 +34,23 @@ const serializeEvaluation = (evaluation) => {
     ...obj,
     scores: scoresToObject(evaluation.scores),
   };
+};
+
+const serializeCriteria = (criteria = []) => criteria.map((item) => ({
+  key: item.key,
+  label: item.label,
+  maxScore: item.maxScore,
+}));
+
+const mergeCriteria = (...criteriaLists) => {
+  const criteriaByKey = new Map();
+
+  criteriaLists.flat().forEach((criteria) => {
+    if (!criteria?.key || criteriaByKey.has(criteria.key)) return;
+    criteriaByKey.set(criteria.key, criteria);
+  });
+
+  return Array.from(criteriaByKey.values());
 };
 
 // Admin: Clear (delete) a single evaluation record
@@ -43,18 +70,41 @@ exports.submitEvaluation = async (req, res) => {
   const { groupId } = req.params;
   const { scores, rubricId } = req.body;
 
-  // Global Lock Check - Panels are restricted when locked, Admins can bypass
-  const settings = await Settings.findOne();
-  if (settings && settings.isGradingLocked && req.user.role !== 'admin') {
-    return res.status(403).json({ message: 'Grading is currently locked by administrator' });
-  }
-
-
   const group = await Group.findById(groupId).populate('section');
   if (!group) return res.status(404).json({ message: 'Group not found' });
 
   // Check section-level panel assignment
   const section = await Section.findById(group.section._id || group.section);
+  if (req.user.role === 'panel') {
+    const subjectId = section?.subject?.toString();
+    if (req.user.createdBy) {
+      const ownerCanGradeSubject = Boolean(subjectId) && await Admin.exists({
+        _id: req.user.createdBy,
+        role: 'admin',
+        isActive: true,
+        assignedSubjects: subjectId,
+      });
+      if (!ownerCanGradeSubject) {
+        return res.status(403).json({ message: 'This group belongs to another instructor subject' });
+      }
+    }
+    const instructorFilter = req.user.createdBy
+      ? {
+          $or: [
+            { _id: req.user.createdBy },
+            { assignedSubjects: subjectId },
+          ],
+        }
+      : { assignedSubjects: subjectId };
+    const subjectLocked = Boolean(subjectId) && await Admin.exists({
+      ...instructorFilter,
+      gradingLockedSubjects: subjectId,
+    });
+    if (subjectLocked) {
+      return res.status(403).json({ message: 'Grading is currently locked for this subject' });
+    }
+  }
+
   const rubric = await Rubric.findById(rubricId);
   if (!rubric) return res.status(404).json({ message: 'Rubric not found' });
   if (
@@ -63,6 +113,16 @@ exports.submitEvaluation = async (req, res) => {
     rubric.subject.toString() !== section.subject.toString()
   ) {
     return res.status(400).json({ message: 'Selected rubric does not belong to this group subject' });
+  }
+  if (req.user.role === 'panel') {
+    const rubricOwner = req.user.createdBy ||
+      (await Admin.findOne({ role: 'admin', assignedSubjects: section?.subject }).select('_id').sort({ createdAt: -1 }))?._id;
+    if (
+      rubricOwner &&
+      (!rubric.createdBy || rubric.createdBy.toString() !== rubricOwner.toString())
+    ) {
+      return res.status(400).json({ message: 'Selected rubric does not belong to this panel instructor' });
+    }
   }
 
   const isAssigned = section && section.assignedPanels.some(
@@ -165,13 +225,20 @@ exports.getSectionResults = async (req, res) => {
   if (!section) return res.status(404).json({ message: 'Section not found' });
   if (!canAccessSubject(req, section.subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
 
+  const activeRubricFilter = { subject: section.subject, isActive: true };
+  if (req.user.role === 'admin') activeRubricFilter.createdBy = req.user._id;
+  if (req.user.role === 'superadmin' && (req.query.createdBy || req.headers['x-instructor-id'])) {
+    activeRubricFilter.createdBy = req.query.createdBy || req.headers['x-instructor-id'];
+  }
+  const activeRubric = await Rubric.findOne(activeRubricFilter);
+  const activeCriteria = serializeCriteria(activeRubric?.criteria || []);
   const groups = await Group.find({ section: req.params.sectionId });
   const results = await Promise.all(
     groups.map(async (group) => {
       const evaluations = await Evaluation.find({
         group: group._id,
         isSubmitted: true,
-      }).populate('panel', 'name email');
+      }).populate('panel', 'name email').populate('rubric');
 
       // if (!evaluations.length) return { group, averaged: null, finalTotal: null };
 
@@ -238,8 +305,10 @@ exports.getSectionResults = async (req, res) => {
         panelId: ev.panel?._id,
         panelName: ev.panel?.name || 'Unknown',
       }));
+      const evaluationCriteria = evaluations.flatMap(ev => serializeCriteria(ev.rubric?.criteria || []));
+      const rubricCriteria = mergeCriteria(evaluationCriteria, activeCriteria);
 
-      return { group, averaged, finalTotal, evaluatedBy, missingPanels, isIncomplete, comments, evaluationRecords };
+      return { group, averaged, finalTotal, rubricCriteria, evaluatedBy, missingPanels, isIncomplete, comments, evaluationRecords };
     })
   );
   res.json(results);
@@ -296,7 +365,7 @@ exports.exportAllResults = async (req, res) => {
       allResults.push({
         Section: section.block,
         GroupName: group.name,
-        Members: group.members.join('; '),
+        Members: formatMemberList(group.members),
         AverageScore: isIncomplete ? 'Pending Complete Evaluation' : avgScore,
         EvaluatedBy: evaluations.map(ev => ev.panel?.name).join(', '),
         MissingPanels: missingPanels.join(', '),

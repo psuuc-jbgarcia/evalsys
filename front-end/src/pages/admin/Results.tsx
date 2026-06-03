@@ -1,13 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import api from '../../services/api';
 import { TableSkeleton } from '../../components/LoadingSkeleton';
+import { formatMemberList, type Member, type StructuredMember } from '../../utils/members';
+import { useAuth } from '../../context/AuthContext';
 
 interface Section { _id: string; name: string; block: string; }
 interface EvaluationRecord { _id: string; panelId: string; panelName: string; }
+interface RubricCriteria { key: string; label: string; maxScore: number; }
 interface GroupResult {
-  group: { _id: string; name: string; members: string[] };
+  group: { _id: string; name: string; members: Member[] };
   averaged: Record<string, number> | null;
   finalTotal: number | null;
+  rubricCriteria?: RubricCriteria[];
   evaluatedBy?: string[];
   missingPanels?: string[];
   isIncomplete?: boolean;
@@ -15,20 +19,8 @@ interface GroupResult {
   evaluationRecords?: EvaluationRecord[];
 }
 
-const LABELS: Record<string, string> = {
-  systemFunctionality: 'System',
-  apiIntegration: 'API/DB',
-  presentation: 'Presentation',
-  uiUx: 'UI/UX',
-  qa: 'Q&A',
-};
-
-const MAX: Record<string, number> = {
-  systemFunctionality: 25, apiIntegration: 25,
-  presentation: 15, uiUx: 10, qa: 25,
-};
-
 const scoreColor = (score: number, max: number) => {
+  if (!max) return 'text-text/70 font-bold';
   const pct = score / max;
   if (pct >= 0.84) return 'text-success font-bold';
   if (pct >= 0.64) return 'text-primary font-bold';
@@ -36,31 +28,99 @@ const scoreColor = (score: number, max: number) => {
   return 'text-danger font-bold';
 };
 
-const scoreBadge = (total: number) => {
-  if (total >= 84) return 'evl-badge-success';
-  if (total >= 64) return 'evl-badge-primary';
-  if (total >= 44) return 'evl-badge-warning';
+const scoreBadge = (total: number, max: number) => {
+  const pct = max > 0 ? total / max : 0;
+  if (pct >= 0.84) return 'evl-badge-success';
+  if (pct >= 0.64) return 'evl-badge-primary';
+  if (pct >= 0.44) return 'evl-badge-warning';
   return 'evl-badge-danger';
 };
 
+const csvEscape = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+
+const downloadCsvFile = (filename: string, headers: string[], rows: unknown[][]) => {
+  const csvContent = [
+    headers.map(csvEscape).join(','),
+    ...rows.map((row) => row.map(csvEscape).join(',')),
+  ].join('\n');
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  link.setAttribute('href', url);
+  link.setAttribute('download', filename);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+const safeFilename = (value: string) => value.replace(/[^a-z0-9_-]+/gi, '_');
+
+const getGroupScore = (result: GroupResult) => (
+  result.isIncomplete || result.finalTotal === null
+    ? 'Pending Complete Evaluation'
+    : (result.finalTotal?.toFixed(2) ?? 'Pending Complete Evaluation')
+);
+
+const isStructuredMember = (member: Member): member is StructuredMember => typeof member !== 'string';
+
+const getMemberNameParts = (member: Member) => {
+  if (isStructuredMember(member)) {
+    return {
+      lastName: member.lastName || '',
+      firstName: member.firstName || '',
+      middleName: member.middleName || '',
+    };
+  }
+
+  return {
+    lastName: member,
+    firstName: '',
+    middleName: '',
+  };
+};
+
 export default function Results() {
+  const { user } = useAuth();
+  const isSuperadmin = user?.role === 'superadmin';
   const [sections, setSections] = useState<Section[]>([]);
   const [selected, setSelected] = useState<Section | null>(null);
   const [results, setResults] = useState<GroupResult[]>([]);
   const [viewFeedback, setViewFeedback] = useState<{ group: string, items: { panel: string, text: string }[] } | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingSections, setLoadingSections] = useState(true);
+  const [accountCsvLocked, setAccountCsvLocked] = useState(Boolean(user?.csvExportLocked));
+  const csvLocked = user?.role === 'admin' && accountCsvLocked;
 
   // Clear score modal state
   const [clearModal, setClearModal] = useState<{ group: GroupResult } | null>(null);
   const [clearingId, setClearingId] = useState<string | null>(null);
   const [confirmClearId, setConfirmClearId] = useState<string | null>(null);
 
-  useEffect(() => { 
-    setLoadingSections(true);
-    api.get('/sections')
-      .then((r) => setSections(r.data))
-      .finally(() => setLoadingSections(false)); 
+  const criteriaColumns = useMemo(() => {
+    const byKey = new Map<string, RubricCriteria>();
+
+    results.forEach((result) => {
+      result.rubricCriteria?.forEach((criteria) => {
+        if (!byKey.has(criteria.key)) byKey.set(criteria.key, criteria);
+      });
+    });
+
+    return Array.from(byKey.values());
+  }, [results]);
+
+  const maxTotal = criteriaColumns.reduce((sum, criteria) => sum + criteria.maxScore, 0);
+
+  useEffect(() => {
+    Promise.all([
+      api.get('/sections'),
+      api.get('/auth/me'),
+    ]).then(([secRes, meRes]) => {
+      setSections(secRes.data);
+      setAccountCsvLocked(Boolean(meRes.data.csvExportLocked));
+    }).finally(() => setLoadingSections(false));
   }, []);
 
   const loadResults = async (section: Section) => {
@@ -104,36 +164,52 @@ export default function Results() {
     }
   };
 
-  const downloadCSV = () => {
+  const downloadGroupSummaryCSV = () => {
     if (!selected || !results.length) return;
 
-    const headers = ['Group', 'Members', ...Object.values(LABELS), 'Final Total', 'Evaluated By', 'Did Not Evaluate Yet', 'Comments'];
+    const headers = ['Block', 'Group', 'Members', 'Group Score', 'Evaluated By', 'Missing Panels', 'Comments'];
     const rows = results.map((r) => [
+      selected.block,
       r.group.name,
-      r.group.members.join('; '),
-      ...Object.keys(LABELS).map((k) => 
-        !r.isIncomplete && r.averaged ? (r.averaged[k] || 0).toFixed(2) : '—'
-      ),
-      (r.isIncomplete || r.finalTotal === null) ? 'Pending Complete Evaluation' : (r.finalTotal?.toFixed(2) ?? 'Pending'),
+      formatMemberList(r.group.members, '; '),
+      getGroupScore(r),
       r.evaluatedBy?.join('; ') ?? '',
       r.missingPanels?.join('; ') ?? '',
       r.comments?.map(c => `[${c.panel}]: ${c.text}`).join(' | ') ?? '',
     ]);
 
-    const csvContent = [
-      headers.join(','),
-      ...rows.map((row) => row.map((cell) => `"${cell}"`).join(',')),
-    ].join('\n');
+    downloadCsvFile(`${safeFilename(selected.block)}_Group_Summary.csv`, headers, rows);
+  };
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `${selected.block}_Results.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const downloadMemberGradesCSV = () => {
+    if (!selected || !results.length) return;
+
+    const headers = ['Block', 'Group', 'Last Name', 'First Name', 'Middle Name', 'Group Score'];
+    const rows = results
+      .flatMap((result) => result.group.members.map((member) => {
+        const memberParts = getMemberNameParts(member);
+        return {
+          block: selected.block,
+          group: result.group.name,
+          ...memberParts,
+          score: getGroupScore(result),
+        };
+      }))
+      .sort((a, b) => (
+        a.lastName.localeCompare(b.lastName) ||
+        a.firstName.localeCompare(b.firstName) ||
+        a.middleName.localeCompare(b.middleName)
+      ))
+      .map((row) => [
+        row.block,
+        row.group,
+        row.lastName,
+        row.firstName,
+        row.middleName,
+        row.score,
+      ]);
+
+    downloadCsvFile(`${safeFilename(selected.block)}_Member_Grades.csv`, headers, rows);
   };
 
   return (
@@ -168,34 +244,49 @@ export default function Results() {
       {loading ? (
         <TableSkeleton rows={6} cols={8} />
       ) : selected && (
-        <div className="evl-card overflow-hidden">
-          <div className="px-6 py-4 border-b border-muted/40 flex justify-between items-center">
+        <div className="overflow-hidden border-y border-muted/30 bg-surface">
+          <div className="px-2 sm:px-0 py-4 border-b border-muted/40 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
             <h3 className="text-text font-bold text-sm">
-              {selected.name === selected.block ? selected.block : `${selected.name} — ${selected.block}`}
+              {selected.name === selected.block ? selected.block : `${selected.name} - ${selected.block}`}
             </h3>
-            <button
-              onClick={downloadCSV}
-              className="evl-btn-primary !py-1.5 !text-xs flex items-center gap-2"
-            >
-              <span>⬇</span> Download CSV
-            </button>
-          </div>
-          <div className="overflow-x-auto">
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={downloadGroupSummaryCSV}
+                disabled={csvLocked && !isSuperadmin}
+                title={csvLocked && !isSuperadmin ? 'CSV export is currently disabled by the administrator' : ''}
+                className={`evl-btn-primary !py-1.5 !text-xs ${csvLocked && !isSuperadmin ? 'opacity-40 cursor-not-allowed' : ''}`}
+              >
+                {csvLocked && !isSuperadmin ? 'Export Locked' : 'Download Group Summary CSV'}
+              </button>
+              <button
+                onClick={downloadMemberGradesCSV}
+                disabled={csvLocked && !isSuperadmin}
+                title={csvLocked && !isSuperadmin ? 'CSV export is currently disabled by the administrator' : ''}
+                className={`evl-btn-secondary !py-1.5 !text-xs ${csvLocked && !isSuperadmin ? 'opacity-40 cursor-not-allowed' : ''}`}
+              >
+                {csvLocked && !isSuperadmin ? 'Export Locked' : 'Download Member Grades CSV'}
+              </button>
+            </div>
+          </div>          <div className="overflow-x-auto">
             <table className="evl-table">
               <thead>
                 <tr>
                   <th>Group</th>
                   <th>Members</th>
-                  {Object.keys(LABELS).map((k) => (
-                    <th key={k} className="text-center">{LABELS[k]}</th>
+                  {criteriaColumns.map((criteria) => (
+                    <th key={criteria.key} className="text-center">
+                      {criteria.label}
+                      <span className="block text-[10px] font-semibold text-text/35">/{criteria.maxScore}</span>
+                    </th>
                   ))}
                   <th className="text-center">Final</th>
-                  <th className="text-center">Actions</th>
+                  <th className="col-actions">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {results.map((result) => {
                   const { group, averaged, finalTotal, evaluatedBy, missingPanels, isIncomplete, comments, evaluationRecords } = result;
+                  const resultMaxTotal = result.rubricCriteria?.reduce((sum, criteria) => sum + criteria.maxScore, 0) ?? maxTotal;
                   return (
                     <tr key={group._id}>
                       <td className="whitespace-nowrap">
@@ -221,10 +312,10 @@ export default function Results() {
                           )}
                         </div>
                       </td>
-                      <td className="text-text/50 text-xs max-w-[200px]">{group.members.join(', ') || '—'}</td>
-                      {Object.keys(LABELS).map((k) => (
-                        <td key={k} className={`text-center ${!isIncomplete && averaged ? scoreColor(averaged[k], MAX[k]) : 'text-text/40'}`}>
-                          {!isIncomplete && averaged ? averaged[k] : '—'}
+                      <td className="text-text/50 text-xs max-w-[200px]">{formatMemberList(group.members) || '—'}</td>
+                      {criteriaColumns.map((criteria) => (
+                        <td key={criteria.key} className={`text-center ${!isIncomplete && averaged ? scoreColor(averaged[criteria.key] || 0, criteria.maxScore) : 'text-text/40'}`}>
+                          {!isIncomplete && averaged ? (averaged[criteria.key] ?? 0) : '—'}
                         </td>
                       ))}
                       <td className="text-center">
@@ -233,12 +324,13 @@ export default function Results() {
                             Pending Complete Evaluation
                           </span>
                         ) : (
-                          <span className={`text-lg ${scoreBadge(finalTotal)} !text-base`}>
+                          <span className={`text-lg ${scoreBadge(finalTotal, resultMaxTotal)} !text-base`}>
                             {finalTotal}
+                            {resultMaxTotal > 0 && <span className="ml-1 text-[10px] font-semibold opacity-60">/{resultMaxTotal}</span>}
                           </span>
                         )}
                       </td>
-                      <td className="text-center">
+                      <td className="col-actions">
                         {evaluationRecords && evaluationRecords.length > 0 ? (
                           <button
                             onClick={() => setClearModal({ group: result })}
@@ -255,7 +347,7 @@ export default function Results() {
                   );
                 })}
                 {!results.length && (
-                  <tr><td colSpan={9} className="text-center text-text/40 py-12">No results for this section yet.</td></tr>
+                  <tr><td colSpan={criteriaColumns.length + 4} className="text-center text-text/40 py-12">No results for this section yet.</td></tr>
                 )}
               </tbody>
             </table>
@@ -372,3 +464,5 @@ export default function Results() {
     </div>
   );
 }
+
+

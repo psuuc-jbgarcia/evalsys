@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import api from '../../services/api';
 import { CardSkeleton } from '../../components/LoadingSkeleton';
+import { notify } from '../../utils/notify';
+import { useAuth } from '../../context/AuthContext';
 
 interface Level {
   label: string;
@@ -22,6 +24,7 @@ interface Rubric {
   criteria: Criteria[];
   isActive: boolean;
   createdAt: string;
+  createdBy?: string | { _id: string; name?: string; email?: string } | null;
 }
 
 const LEVEL_LABELS = ['Excellent', 'Good', 'Fair', 'Poor'];
@@ -34,54 +37,28 @@ const emptyCriteria = (): Criteria => ({
 });
 
 const DEFAULT_CRITERIA: Criteria[] = [
-  {
-    key: 'systemFunctionality', label: '1. System Functionality', maxScore: 25,
-    levels: [
-      { label: 'Excellent', minScore: 21, maxScore: 25, description: 'System is complete, responsive, and works without errors.' },
-      { label: 'Good',      minScore: 16, maxScore: 20, description: 'System works with minimal issues.' },
-      { label: 'Fair',      minScore: 11, maxScore: 15, description: 'System is partially working with several issues.' },
-      { label: 'Poor',      minScore: 0,  maxScore: 10, description: 'System has many missing or non-working features.' },
-    ],
-  },
-  {
-    key: 'apiIntegration', label: '2. API Integration and Database', maxScore: 25,
-    levels: [
-      { label: 'Excellent', minScore: 21, maxScore: 25, description: 'Advanced API integration and database are fully working, secure, and accurate.' },
-      { label: 'Good',      minScore: 16, maxScore: 20, description: 'API and database work with minor issues.' },
-      { label: 'Fair',      minScore: 11, maxScore: 15, description: 'API/database works partially with noticeable errors.' },
-      { label: 'Poor',      minScore: 0,  maxScore: 10, description: 'API/database is incomplete or not working properly.' },
-    ],
-  },
-  {
-    key: 'presentation', label: '3. Presentation and System Demonstration', maxScore: 15,
-    levels: [
-      { label: 'Excellent', minScore: 13, maxScore: 15, description: 'Presentation is clear, organized, and confident.' },
-      { label: 'Good',      minScore: 10, maxScore: 12, description: 'Presentation is good with minor issues.' },
-      { label: 'Fair',      minScore: 6,  maxScore: 9,  description: 'Presentation lacks clarity or has demonstration issues.' },
-      { label: 'Poor',      minScore: 0,  maxScore: 5,  description: 'Presentation and demonstration are weak.' },
-    ],
-  },
-  {
-    key: 'uiUx', label: '4. User Interface and User Experience', maxScore: 10,
-    levels: [
-      { label: 'Excellent', minScore: 9, maxScore: 10, description: 'Interface is clean, responsive, and easy to use.' },
-      { label: 'Good',      minScore: 7, maxScore: 8,  description: 'Interface is good with minimal issues.' },
-      { label: 'Fair',      minScore: 4, maxScore: 6,  description: 'Interface is usable but inconsistent.' },
-      { label: 'Poor',      minScore: 0, maxScore: 3,  description: 'Interface is confusing or difficult to use.' },
-    ],
-  },
-  {
-    key: 'qa', label: '5. Question and Answer', maxScore: 25,
-    levels: [
-      { label: 'Excellent', minScore: 21, maxScore: 25, description: 'Answers questions correctly and confidently.' },
-      { label: 'Good',      minScore: 16, maxScore: 20, description: 'Answers most questions with minor mistakes.' },
-      { label: 'Fair',      minScore: 11, maxScore: 15, description: 'Answers some questions but lacks confidence.' },
-      { label: 'Poor',      minScore: 0,  maxScore: 10, description: 'Unable to answer most questions properly.' },
-    ],
-  },
+  emptyCriteria(),
 ];
 
+const getErrorMessage = (err: unknown, fallback: string) => {
+  const response = (err as { response?: { data?: { message?: string } } })?.response;
+  return response?.data?.message || fallback;
+};
+
+const getOwnerId = (value: Rubric['createdBy']) => (
+  typeof value === 'string' ? value : value?._id || ''
+);
+
+const getOwnerLabel = (rubric: Rubric) => {
+  if (!rubric.createdBy) return 'No created by';
+  if (typeof rubric.createdBy === 'string') return 'Unknown instructor';
+  return rubric.createdBy.name || rubric.createdBy.email || 'Unknown instructor';
+};
+
 export default function Rubrics() {
+  const { user } = useAuth();
+  const isSuperadmin = user?.role === 'superadmin';
+  const userId = user?.id || user?._id || '';
   const [rubrics, setRubrics] = useState<Rubric[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -97,7 +74,11 @@ export default function Rubrics() {
       .then((r) => setRubrics(r.data))
       .finally(() => setLoading(false));
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    api.get('/rubrics')
+      .then((r) => setRubrics(r.data))
+      .finally(() => setLoading(false));
+  }, []);
 
   const resetForm = () => {
     setTitle('');
@@ -132,18 +113,18 @@ export default function Rubrics() {
       .slice(0, 30);
   };
 
-  const updateCriteria = (ci: number, field: keyof Criteria, value: any) => {
+  const updateCriteria = (ci: number, field: keyof Criteria, value: string | number) => {
     setCriteria((prev) => prev.map((c, i) => {
       if (i !== ci) return c;
       const updated = { ...c, [field]: value };
-      if (field === 'label') {
+      if (field === 'label' && typeof value === 'string') {
         updated.key = slugify(value);
       }
       return updated;
     }));
   };
 
-  const updateLevel = (ci: number, li: number, field: keyof Level, value: any) => {
+  const updateLevel = (ci: number, li: number, field: keyof Level, value: string | number) => {
     setCriteria((prev) => prev.map((c, i) => {
       if (i !== ci) return c;
       return { ...c, levels: c.levels.map((l, j) => j === li ? { ...l, [field]: value } : l) };
@@ -164,8 +145,8 @@ export default function Rubrics() {
       }
       resetForm();
       load();
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Error saving rubric');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Error saving rubric'));
     }
   };
 
@@ -174,13 +155,19 @@ export default function Rubrics() {
     load();
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Delete this rubric?')) return;
+  const handleDelete = async (rubric: Rubric) => {
+    const activeMessage = rubric.isActive
+      ? '\n\nThis is the active rubric. If another rubric exists for this subject, it will become active after deletion.'
+      : '';
+    if (!confirm(
+      `Delete "${rubric.title}"?${activeMessage}\n\n` +
+      'Saved evaluations and results that used this rubric will NOT be deleted.'
+    )) return;
     try {
-      await api.delete(`/rubrics/${id}`);
+      await api.delete(`/rubrics/${rubric._id}`);
       load();
-    } catch (err: any) {
-      alert(err.response?.data?.message || 'Error');
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, 'Error'), { type: 'error' });
     }
   };
 
@@ -246,7 +233,7 @@ export default function Rubrics() {
                     <div className="md:col-span-5">
                       <label className="evl-label !mb-1.5">Criteria Name</label>
                       <input value={c.label} onChange={(e) => updateCriteria(ci, 'label', e.target.value)} required
-                        className="evl-input" placeholder="e.g. 1. System Functionality" />
+                        className="evl-input" placeholder="e.g. System Functionality" />
                     </div>
                     <div className="md:col-span-4">
                       <label className="evl-label !mb-1.5 flex items-center gap-2">
@@ -295,7 +282,7 @@ export default function Rubrics() {
                             <div className="lg:col-span-7">
                               <label className="text-[9px] font-bold text-text/40 uppercase block mb-1">Grading Description</label>
                               <input value={l.description} onChange={(e) => updateLevel(ci, li, 'description', e.target.value)}
-                                className="evl-input !py-1.5 !text-xs" placeholder="What qualifies for this score?" />
+                                className="evl-input !py-1.5 !text-xs" placeholder={`Describe what qualifies for ${l.label || 'this level'}...`} />
                             </div>
                           </div>
                         </div>
@@ -339,7 +326,7 @@ export default function Rubrics() {
           <>
             {rubrics.map((r) => (
               <div key={r._id} className="evl-card overflow-hidden">
-                <div className="flex items-center justify-between px-6 py-5">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 px-6 py-5">
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-bold text-sm shrink-0">
                       R
@@ -352,25 +339,30 @@ export default function Rubrics() {
                       <p className="text-text/50 text-xs mt-0.5">
                         {r.criteria.length} criteria · Created {new Date(r.createdAt).toLocaleDateString()}
                       </p>
+                      <p className="text-text/35 text-[11px] mt-1 font-semibold">
+                        Created by: {getOwnerLabel(r)}
+                      </p>
                     </div>
                   </div>
-                  <div className="flex gap-2 items-center">
+                  <div className="flex flex-wrap gap-2 items-center justify-start lg:justify-end">
                     <button onClick={() => setExpandedRubric(expandedRubric === r._id ? null : r._id)}
                       className="evl-btn-ghost">
                       {expandedRubric === r._id ? 'Hide' : 'View'}
                     </button>
-                    <button onClick={() => startEdit(r)}
-                      className="evl-btn-ghost text-primary hover:bg-primary/5">
-                      Edit
-                    </button>
-                    {!r.isActive && (
-                      <button onClick={() => handleActivate(r._id)} className="evl-btn-ghost text-success hover:bg-success/5">
-                        Set Active
-                      </button>
+                    {(isSuperadmin || getOwnerId(r.createdBy) === userId) && (
+                      <>
+                        <button onClick={() => startEdit(r)}
+                          className="evl-btn-ghost text-primary border-primary/30 hover:bg-primary/5 hover:border-primary/50">
+                          Edit
+                        </button>
+                        <button onClick={() => handleDelete(r)} className="evl-btn-ghost text-danger border-danger/30 hover:bg-danger/5 hover:border-danger/50">
+                          Delete
+                        </button>
+                      </>
                     )}
-                    {!r.isActive && (
-                      <button onClick={() => handleDelete(r._id)} className="evl-btn-ghost text-danger hover:bg-danger/5">
-                        Delete
+                    {!r.isActive && (isSuperadmin || getOwnerId(r.createdBy) === userId) && (
+                      <button onClick={() => handleActivate(r._id)} className="evl-btn-ghost text-success border-success/30 hover:bg-success/5 hover:border-success/50">
+                        Use for Grading
                       </button>
                     )}
                   </div>

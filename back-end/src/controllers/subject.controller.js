@@ -1,5 +1,10 @@
 const Admin = require('../models/Admin');
 const Subject = require('../models/Subject');
+const Section = require('../models/Section');
+const Group = require('../models/Group');
+const Evaluation = require('../models/Evaluation');
+const Rubric = require('../models/Rubric');
+const RegistrationLink = require('../models/RegistrationLink');
 const {
   migrateDefaultSubject,
   getDefaultSubjectMigrationStatus,
@@ -11,11 +16,44 @@ const isAssignedToSubject = (user, subjectId) => (
   (user?.assignedSubjects || []).some((id) => id.toString() === subjectId.toString())
 );
 
+const ensureInstructorSubjectLimits = async (adminIds = [], subjectId = null) => {
+  if (!adminIds.length) return null;
+
+  const instructors = await Admin.find({
+    _id: { $in: adminIds },
+    role: 'admin',
+  }).select('name assignedSubjects subjectLimit');
+  const instructorById = new Map(instructors.map((instructor) => [instructor._id.toString(), instructor]));
+
+  const exceeded = adminIds
+    .map((id) => instructorById.get(id.toString()))
+    .filter(Boolean)
+    .filter((instructor) => {
+      const assignedSubjectIds = (instructor.assignedSubjects || []).map((id) => id.toString());
+      const alreadyAssigned = subjectId && assignedSubjectIds.includes(subjectId.toString());
+      const nextCount = assignedSubjectIds.length + (alreadyAssigned ? 0 : 1);
+      return nextCount > (instructor.subjectLimit || 1);
+    });
+
+  if (!exceeded.length) return null;
+
+  const names = exceeded
+    .map((instructor) => `${instructor.name} (${instructor.assignedSubjects.length}/${instructor.subjectLimit || 1})`)
+    .join(', ');
+
+  return `The following instructor(s) have reached their subject limit: ${names}. Contact the owner so they can increase their subject limit and assign more subjects.`;
+};
+
 exports.getSubjects = async (req, res) => {
   const filter = isSuperadmin(req.user)
     ? {}
     : { _id: { $in: req.user.assignedSubjects || [] } };
   const subjects = await Subject.find(filter).sort({ createdAt: -1 });
+  res.json(subjects);
+};
+
+exports.getPublicSubjects = async (_req, res) => {
+  const subjects = await Subject.find({ isActive: true }).sort({ code: 1 });
   res.json(subjects);
 };
 
@@ -30,6 +68,12 @@ exports.createSubject = async (req, res) => {
   });
 
   const assignedAdminIds = isSuperadmin(req.user) ? adminIds : [req.user._id];
+  const limitMessage = await ensureInstructorSubjectLimits(assignedAdminIds, subject._id);
+  if (limitMessage) {
+    await Subject.findByIdAndDelete(subject._id);
+    return res.status(400).json({ message: limitMessage });
+  }
+
   if (assignedAdminIds.length > 0) {
     await Admin.updateMany(
       { _id: { $in: assignedAdminIds }, role: 'admin' },
@@ -62,6 +106,9 @@ exports.assignSubjectAdmins = async (req, res) => {
   const subject = await Subject.findById(req.params.id);
   if (!subject) return res.status(404).json({ message: 'Subject not found' });
 
+  const limitMessage = await ensureInstructorSubjectLimits(adminIds, subject._id);
+  if (limitMessage) return res.status(400).json({ message: limitMessage });
+
   await Admin.updateMany({ role: 'admin' }, { $pull: { assignedSubjects: subject._id } });
   if (adminIds.length > 0) {
     await Admin.updateMany(
@@ -71,6 +118,59 @@ exports.assignSubjectAdmins = async (req, res) => {
   }
 
   res.json({ message: 'Subject instructor assignments updated' });
+};
+
+exports.deleteSubject = async (req, res) => {
+  try {
+    const subject = await Subject.findById(req.params.id);
+    if (!subject) return res.status(404).json({ message: 'Subject not found' });
+
+    // 1. Find all sections belonging to this subject
+    const sections = await Section.find({ subject: subject._id }).select('_id');
+    const sectionIds = sections.map((s) => s._id);
+
+    // 2. Find all groups in those sections
+    const groups = await Group.find({ section: { $in: sectionIds } }).select('_id');
+    const groupIds = groups.map((g) => g._id);
+
+    // 3. Delete evaluations for those groups (also catch any directly subject-tagged)
+    await Evaluation.deleteMany({ $or: [{ group: { $in: groupIds } }, { subject: subject._id }] });
+
+    // 4. Delete groups
+    await Group.deleteMany({ section: { $in: sectionIds } });
+
+    // 5. Delete sections
+    await Section.deleteMany({ subject: subject._id });
+
+    // 6. Delete rubrics
+    await Rubric.deleteMany({ subject: subject._id });
+
+    // 7. Delete registration links
+    await RegistrationLink.deleteMany({ subject: subject._id });
+
+    // 8. Remove subject from all admins' assignedSubjects
+    await Admin.updateMany(
+      { assignedSubjects: subject._id },
+      { $pull: { assignedSubjects: subject._id } }
+    );
+
+    // 9. Delete the subject itself
+    await Subject.findByIdAndDelete(subject._id);
+
+    res.json({
+      message: `Subject "${subject.code} - ${subject.title}" and all related data deleted successfully.`,
+      deleted: {
+        sections: sectionIds.length,
+        groups: groupIds.length,
+        evaluations: groupIds.length > 0 ? '(all for above groups)' : 0,
+        rubrics: '(all for subject)',
+        registrationLinks: '(all for subject)',
+      },
+    });
+  } catch (err) {
+    console.error('Delete subject failed:', err);
+    res.status(500).json({ message: 'Failed to delete subject', error: err.message });
+  }
 };
 
 exports.getDefaultSubjectMigrationStatus = async (_req, res) => {
