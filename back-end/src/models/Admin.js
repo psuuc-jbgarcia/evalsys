@@ -11,6 +11,7 @@ const adminSchema = new mongoose.Schema({
   csvExportLocked: { type: Boolean, default: false },
   gradingLocked: { type: Boolean, default: false },
   gradingLockedSubjects: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Subject' }],
+  mustChangePassword: { type: Boolean, default: false },
   isActive: { type: Boolean, default: true },
 }, { timestamps: true, collection: 'admin_acc' });
 

@@ -1,30 +1,13 @@
 const Admin = require('../models/Admin');
 const Panel = require('../models/Panel');
+const Evaluation = require('../models/Evaluation');
+const Group = require('../models/Group');
 const Section = require('../models/Section');
 
-const getInstructorPanelIds = async (req) => {
-  if (req.user.role !== 'admin') return [];
-
-  const sections = await Section.find({
-    subject: { $in: req.user.assignedSubjects || [] },
-  }).select('assignedPanels');
-
-  return [
-    ...new Set(
-      sections.flatMap((section) =>
-        (section.assignedPanels || []).map((panelId) => panelId.toString())
-      )
-    ),
-  ];
-};
-
-const canManageUser = async (req, user) => {
+const canManageUser = (req, user) => {
   if (req.user.role === 'superadmin') return true;
   if (user?.role !== 'panel') return false;
-  if (user.createdBy && user.createdBy.toString() === req.user._id.toString()) return true;
-
-  const visiblePanelIds = await getInstructorPanelIds(req);
-  return visiblePanelIds.includes(user._id.toString());
+  return Boolean(user.createdBy) && user.createdBy.toString() === req.user._id.toString();
 };
 
 const normalizeEvalsysEmail = (value = '') => {
@@ -103,7 +86,14 @@ exports.createUser = async (req, res) => {
     return res.status(409).json({ message: 'Email already in use' });
 
   const Model = ['superadmin', 'admin'].includes(role) ? Admin : Panel;
-  const payload = { name, email: normalizedEmail, password, role, assignedSubjects };
+  const payload = {
+    name,
+    email: normalizedEmail,
+    password,
+    role,
+    assignedSubjects,
+    mustChangePassword: role !== 'superadmin',
+  };
   if (role === 'admin') payload.subjectLimit = Math.max(1, parseInt(subjectLimit, 10) || 1);
   if (role === 'panel') {
     if (req.user.role === 'superadmin') {
@@ -161,7 +151,14 @@ exports.bulkCreateUsers = async (req, res) => {
         continue;
       }
       const Model = ['superadmin', 'admin'].includes(normalizedRole) ? Admin : Panel;
-      const payload = { name, email: normalizedEmail, password, role: normalizedRole, assignedSubjects };
+      const payload = {
+        name,
+        email: normalizedEmail,
+        password,
+        role: normalizedRole,
+        assignedSubjects,
+        mustChangePassword: normalizedRole !== 'superadmin',
+      };
       if (normalizedRole === 'admin') payload.subjectLimit = Math.max(1, parseInt(subjectLimit, 10) || 1);
       if (normalizedRole === 'panel') payload.createdBy = req.user._id;
       await Model.create(payload);
@@ -182,13 +179,7 @@ exports.getUsers = async (req, res) => {
 
   let panelFilter = {};
   if (req.user.role !== 'superadmin') {
-    const assignedPanelIds = await getInstructorPanelIds(req);
-    panelFilter = {
-      $or: [
-        { createdBy: req.user._id },
-        { _id: { $in: assignedPanelIds } },
-      ],
-    };
+    panelFilter = { createdBy: req.user._id };
   }
 
   const panels = await Panel.find(panelFilter)
@@ -202,7 +193,7 @@ exports.getUsers = async (req, res) => {
 exports.toggleActive = async (req, res) => {
   let user = await Admin.findById(req.params.id) || await Panel.findById(req.params.id);
   if (!user) return res.status(404).json({ message: 'User not found' });
-  if (!(await canManageUser(req, user))) return res.status(403).json({ message: 'You can only manage panel accounts available to your subjects' });
+  if (!canManageUser(req, user)) return res.status(403).json({ message: 'You can only manage panel accounts created by you' });
   user.isActive = !user.isActive;
   await user.save();
   res.json({ id: user._id, isActive: user.isActive });
@@ -215,11 +206,16 @@ exports.resetPassword = async (req, res) => {
 
   let user = await Admin.findById(req.params.id) || await Panel.findById(req.params.id);
   if (!user) return res.status(404).json({ message: 'User not found' });
-  if (!(await canManageUser(req, user))) return res.status(403).json({ message: 'You can only manage panel accounts available to your subjects' });
+  if (!canManageUser(req, user)) return res.status(403).json({ message: 'You can only manage panel accounts created by you' });
 
   user.password = newPassword;
+  user.mustChangePassword = user.role !== 'superadmin';
   await user.save();
-  res.json({ message: 'Password reset successfully' });
+  res.json({
+    message: user.role === 'superadmin'
+      ? 'Password reset successfully'
+      : 'Password reset successfully. The user must change it after signing in.',
+  });
 };
 
 exports.updateSubjectLimit = async (req, res) => {
@@ -299,8 +295,19 @@ exports.updateGradingLock = async (req, res) => {
 exports.deleteUser = async (req, res) => {
   const user = await Admin.findById(req.params.id) || await Panel.findById(req.params.id);
   if (!user) return res.status(404).json({ message: 'User not found' });
-  if (!(await canManageUser(req, user))) return res.status(403).json({ message: 'You can only manage panel accounts available to your subjects' });
+  if (!canManageUser(req, user)) return res.status(403).json({ message: 'You can only manage panel accounts created by you' });
 
+  if (user.role === 'panel') {
+    await Evaluation.deleteMany({ panel: user._id });
+    await Section.updateMany(
+      { assignedPanels: user._id },
+      { $pull: { assignedPanels: user._id } }
+    );
+    await Group.updateMany(
+      { assignedPanels: user._id },
+      { $pull: { assignedPanels: user._id } }
+    );
+  }
   await user.deleteOne();
-  res.json({ message: 'User deleted' });
+  res.json({ message: user.role === 'panel' ? 'Panel account and its assignments deleted' : 'User deleted' });
 };

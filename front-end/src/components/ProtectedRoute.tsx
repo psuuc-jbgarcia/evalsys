@@ -1,5 +1,5 @@
 import { Navigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import Layout from './Layout';
 import { type ReactNode } from 'react';
 import { TableSkeleton } from './LoadingSkeleton';
@@ -7,9 +7,11 @@ import { TableSkeleton } from './LoadingSkeleton';
 interface Props {
   children: ReactNode;
   role?: 'admin' | 'panel';
+  instructorOnly?: boolean;
+  superadminOnly?: boolean;
 }
 
-export default function ProtectedRoute({ children, role }: Props) {
+export default function ProtectedRoute({ children, role, instructorOnly, superadminOnly }: Props) {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -51,10 +53,13 @@ export default function ProtectedRoute({ children, role }: Props) {
   }
 
   if (!user) return <Navigate to="/login" replace />;
+  if (user.mustChangePassword) return <Navigate to="/change-password" replace />;
   if (role === 'admin' && !['admin', 'superadmin'].includes(user.role)) {
     return <Navigate to="/dashboard" replace />;
   }
   if (role === 'panel' && user.role !== 'panel') return <Navigate to="/dashboard" replace />;
+  if (instructorOnly && user.role !== 'admin') return <Navigate to="/dashboard" replace />;
+  if (superadminOnly && user.role !== 'superadmin') return <Navigate to="/dashboard" replace />;
 
   return <Layout>{children}</Layout>;
 }

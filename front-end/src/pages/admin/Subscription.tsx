@@ -219,15 +219,17 @@ export default function Subscription() {
     const label = scope === 'subject'
       ? `${currentSubject?.code || 'current subject'}`
       : 'the entire platform';
-    const ok = confirm(`This will permanently reset evaluation event data for ${label}. Export a backup first.\n\nType RESET in the next confirmation is not required, but this action cannot be undone.\n\nContinue?`);
+    const ok = confirm(scope === 'subject'
+      ? `This will remove active blocks and groups for ${label}. Submitted results will be preserved under Legacy Data - Old Results.\n\nContinue?`
+      : `This will permanently reset evaluation event data for ${label}. Export a backup first.\n\nThis action cannot be undone.\n\nContinue?`);
     if (!ok) return;
 
     setDataAction(`reset-${scope}`);
     try {
-      await api.post('/evaluations/master-reset', { confirmText: 'RESET' }, {
+      const res = await api.post('/evaluations/master-reset', { confirmText: 'RESET' }, {
         headers: { 'x-subject-id': scope === 'subject' ? currentSubjectId : '' },
       });
-      notify(scope === 'subject' ? 'Current subject data reset complete.' : 'Global reset complete.', { type: 'success' });
+      notify(res.data.message || (scope === 'subject' ? 'Current subject data reset complete.' : 'Global reset complete.'), { type: 'success' });
     } catch (err: unknown) {
       notify(getErrorMessage(err, 'Reset failed'), { type: 'error' });
     } finally {

@@ -1,0 +1,219 @@
+const Admin = require('../models/Admin');
+const Evaluation = require('../models/Evaluation');
+const Group = require('../models/Group');
+const Panel = require('../models/Panel');
+const RegistrationLink = require('../models/RegistrationLink');
+const Section = require('../models/Section');
+
+const archiveEvaluations = async (filter, fallback = {}) => {
+  const evaluations = await Evaluation.find({
+    ...filter,
+    isLegacyArchived: { $ne: true },
+  })
+    .populate('panel', 'name email')
+    .populate({
+      path: 'group',
+      select: 'name members section createdBy',
+      populate: [
+        {
+          path: 'section',
+          select: 'name block subject',
+          populate: { path: 'subject', select: 'code title' },
+        },
+        { path: 'createdBy', select: 'name email' },
+      ],
+    });
+
+  for (const evaluation of evaluations) {
+    const group = evaluation.group;
+    const section = group?.section;
+    const subject = section?.subject;
+    evaluation.isLegacyArchived = true;
+    evaluation.legacyArchivedAt = new Date();
+    evaluation.legacySnapshot = {
+      groupName: group?.name || fallback.groupName || 'Deleted old group',
+      block: section?.block || section?.name || fallback.block || 'Deleted old block',
+      subject: [subject?.code, subject?.title].filter(Boolean).join(' - ') || fallback.subject || 'Unknown subject',
+      panelName: evaluation.panel?.name || fallback.panelName || 'Deleted old panel',
+      panelEmail: evaluation.panel?.email || fallback.panelEmail || '',
+      instructorName: group?.createdBy?.name || fallback.instructorName || '',
+      instructorEmail: group?.createdBy?.email || fallback.instructorEmail || '',
+      members: group?.members || fallback.members || [],
+    };
+    await evaluation.save();
+  }
+
+  return evaluations.length;
+};
+
+const getLegacyFilter = async () => {
+  const firstSuperadmin = await Admin.findOne({ role: 'superadmin' })
+    .select('createdAt')
+    .sort({ createdAt: 1 });
+
+  const conditions = [
+    { createdBy: { $exists: false } },
+    { createdBy: null },
+  ];
+  if (firstSuperadmin?.createdAt) {
+    conditions.push({ createdAt: { $lt: firstSuperadmin.createdAt } });
+  }
+
+  return {
+    filter: { $or: conditions },
+    legacyBefore: firstSuperadmin?.createdAt || null,
+  };
+};
+
+exports.getLegacyData = async (_req, res) => {
+  const { filter: legacyFilter, legacyBefore } = await getLegacyFilter();
+  const sections = await Section.find(legacyFilter)
+    .populate('subject', 'code title')
+    .populate('createdBy', 'name email')
+    .sort({ createdAt: -1 });
+
+  const groups = await Group.find(legacyFilter)
+    .populate({
+      path: 'section',
+      select: 'name block subject',
+      populate: { path: 'subject', select: 'code title' },
+    })
+    .populate('createdBy', 'name email')
+    .sort({ createdAt: -1 });
+
+  // A legacy panel has no instructor owner, or references an instructor that no longer exists.
+  const panels = (await Panel.find()
+    .populate('createdBy', 'name email')
+    .sort({ createdAt: -1 }))
+    .filter((panel) => !panel.createdBy);
+
+  const legacySectionIds = sections.map((section) => section._id);
+  const groupsInLegacySections = await Group.find({
+    section: { $in: legacySectionIds },
+  }).select('_id');
+  const legacyGroupIds = [
+    ...new Set([
+      ...groups.map((group) => group._id.toString()),
+      ...groupsInLegacySections.map((group) => group._id.toString()),
+    ]),
+  ];
+  const legacyPanelIds = panels.map((panel) => panel._id);
+  let autoArchivedResults = await archiveEvaluations({
+    $or: [
+      { group: { $in: legacyGroupIds } },
+      { panel: { $in: legacyPanelIds } },
+    ],
+  });
+  const remainingEvaluations = await Evaluation.find({
+    isLegacyArchived: { $ne: true },
+  }).select('_id group panel').populate('group', '_id').populate('panel', '_id');
+  const orphanedEvaluationIds = remainingEvaluations
+    .filter((evaluation) => !evaluation.group || !evaluation.panel)
+    .map((evaluation) => evaluation._id);
+  autoArchivedResults += await archiveEvaluations({
+    _id: { $in: orphanedEvaluationIds },
+  });
+
+  const results = await Evaluation.find({ isLegacyArchived: true })
+    .select('total comments scores isSubmitted legacySnapshot legacyArchivedAt updatedAt')
+    .sort({ legacyArchivedAt: -1 });
+
+  res.json({
+    sections,
+    groups,
+    panels,
+    results,
+    autoArchivedResults,
+    legacyBefore,
+  });
+};
+
+exports.deleteLegacyGroup = async (req, res) => {
+  const { filter: legacyFilter } = await getLegacyFilter();
+  const group = await Group.findOne({ _id: req.params.id, ...legacyFilter });
+  if (!group) return res.status(404).json({ message: 'Old group not found' });
+
+  const preservedResults = await archiveEvaluations({ group: group._id }, {
+    groupName: group.name,
+    members: group.members,
+  });
+  await group.deleteOne();
+  res.json({
+    message: 'Old group deleted. Its results were preserved under Old Results.',
+    preservedResults,
+  });
+};
+
+exports.deleteLegacySection = async (req, res) => {
+  const { filter: legacyFilter } = await getLegacyFilter();
+  const section = await Section.findOne({ _id: req.params.id, ...legacyFilter });
+  if (!section) return res.status(404).json({ message: 'Old block not found' });
+
+  const groups = await Group.find({ section: section._id }).select('_id');
+  const groupIds = groups.map((group) => group._id);
+
+  const preservedResults = await archiveEvaluations(
+    { group: { $in: groupIds } },
+    { block: section.block || section.name }
+  );
+  await Group.deleteMany({ section: section._id });
+  await RegistrationLink.updateMany(
+    { sections: section._id },
+    { $pull: { sections: section._id } }
+  );
+  await section.deleteOne();
+
+  res.json({
+    message: 'Old block and groups deleted. Their results were preserved under Old Results.',
+    deletedGroups: groupIds.length,
+    preservedResults,
+  });
+};
+
+exports.deleteLegacyPanel = async (req, res) => {
+  const panel = await Panel.findById(req.params.id).select('name email createdBy');
+  if (!panel) return res.status(404).json({ message: 'Old panel account not found' });
+
+  const ownerExists = panel.createdBy
+    ? await Admin.exists({ _id: panel.createdBy, role: 'admin' })
+    : false;
+  if (ownerExists) {
+    return res.status(400).json({ message: 'This panel still belongs to an instructor and is not old data' });
+  }
+
+  const preservedResults = await archiveEvaluations(
+    { panel: panel._id },
+    { panelName: panel.name, panelEmail: panel.email }
+  );
+  await Section.updateMany(
+    { assignedPanels: panel._id },
+    { $pull: { assignedPanels: panel._id } }
+  );
+  await Group.updateMany(
+    { assignedPanels: panel._id },
+    { $pull: { assignedPanels: panel._id } }
+  );
+  await panel.deleteOne();
+
+  res.json({
+    message: 'Old panel account and assignments deleted. Its results were preserved under Old Results.',
+    preservedResults,
+  });
+};
+
+exports.deleteLegacyResult = async (req, res) => {
+  const result = await Evaluation.findOneAndDelete({
+    _id: req.params.id,
+    isLegacyArchived: true,
+  });
+  if (!result) return res.status(404).json({ message: 'Old result not found' });
+  res.json({ message: 'Old result permanently deleted' });
+};
+
+exports.deleteAllLegacyResults = async (_req, res) => {
+  const deleted = await Evaluation.deleteMany({ isLegacyArchived: true });
+  res.json({
+    message: `${deleted.deletedCount} old result${deleted.deletedCount === 1 ? '' : 's'} permanently deleted`,
+    deletedResults: deleted.deletedCount,
+  });
+};

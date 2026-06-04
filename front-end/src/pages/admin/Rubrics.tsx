@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import api from '../../services/api';
 import { CardSkeleton } from '../../components/LoadingSkeleton';
 import { notify } from '../../utils/notify';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/useAuth';
 
 interface Level {
   label: string;

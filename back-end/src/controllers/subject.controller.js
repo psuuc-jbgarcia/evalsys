@@ -45,9 +45,14 @@ const ensureInstructorSubjectLimits = async (adminIds = [], subjectId = null) =>
 };
 
 exports.getSubjects = async (req, res) => {
-  const filter = isSuperadmin(req.user)
-    ? {}
-    : { _id: { $in: req.user.assignedSubjects || [] } };
+  let filter = { _id: { $in: req.user.assignedSubjects || [] } };
+  if (isSuperadmin(req.user)) {
+    const instructorId = req.headers['x-instructor-id'] || req.query.instructor;
+    if (!instructorId) return res.json([]);
+    const instructor = await Admin.findOne({ _id: instructorId, role: 'admin', isActive: true }).select('assignedSubjects');
+    if (!instructor) return res.json([]);
+    filter = { _id: { $in: instructor.assignedSubjects || [] } };
+  }
   const subjects = await Subject.find(filter).sort({ createdAt: -1 });
   res.json(subjects);
 };

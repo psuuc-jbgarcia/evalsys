@@ -4,6 +4,7 @@ const sectionSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
   block: { type: String, required: true, trim: true },
   subject: { type: mongoose.Schema.Types.ObjectId, ref: 'Subject', index: true },
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', index: true },
   assignedPanels: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Panel' }],
 }, { timestamps: true });
 

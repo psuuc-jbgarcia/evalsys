@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 import ScoreInput from '../../components/ScoreInput';
 import { CardSkeleton } from '../../components/LoadingSkeleton';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/useAuth';
 import { formatMemberList, type Member } from '../../utils/members';
 
 interface Level { label: string; minScore: number; maxScore: number; description: string; }

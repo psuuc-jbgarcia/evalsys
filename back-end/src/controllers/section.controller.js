@@ -1,8 +1,14 @@
 const Section = require('../models/Section');
 const Admin = require('../models/Admin');
 const Panel = require('../models/Panel');
+const Group = require('../models/Group');
+const Evaluation = require('../models/Evaluation');
+const RegistrationLink = require('../models/RegistrationLink');
 
 const getSubjectId = (req) => req.headers['x-subject-id'] || req.query.subject || req.body.subject;
+const getOwnerId = (req) => req.user?.role === 'superadmin'
+  ? req.instructorContext?._id
+  : req.user?._id;
 const canAccessSubject = (req, subjectId) => (
   !subjectId ||
   req.user?.role === 'superadmin' ||
@@ -19,19 +25,21 @@ const validatePanelAssignments = async (req, panelIds = [], subject) => {
   }
 
   for (const panel of panels) {
-    if (req.user.role === 'admin' && panel.createdBy && panel.createdBy.toString() !== req.user._id.toString()) {
+    const ownerId = getOwnerId(req);
+    if (!panel.createdBy) {
+      return `${panel.name} is old data without an instructor owner`;
+    }
+    if (!ownerId || panel.createdBy.toString() !== ownerId.toString()) {
       return `${panel.name} belongs to another instructor`;
     }
 
-    if (panel.createdBy) {
-      const owner = await Admin.findOne({
-        _id: panel.createdBy,
-        role: 'admin',
-        isActive: true,
-        assignedSubjects: subject,
-      }).select('_id');
-      if (!owner) return `${panel.name}'s instructor is not assigned to this subject`;
-    }
+    const owner = await Admin.findOne({
+      _id: panel.createdBy,
+      role: 'admin',
+      isActive: true,
+      assignedSubjects: subject,
+    }).select('_id');
+    if (!owner) return `${panel.name}'s instructor is not assigned to this subject`;
   }
 
   return null;
@@ -45,7 +53,13 @@ exports.createSection = async (req, res) => {
   if (!canAccessSubject(req, subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
   const assignmentError = await validatePanelAssignments(req, assignedPanels, subject);
   if (assignmentError) return res.status(400).json({ message: assignmentError });
-  const section = await Section.create({ name, block, subject, assignedPanels: assignedPanels || [] });
+  const section = await Section.create({
+    name,
+    block,
+    subject,
+    createdBy: getOwnerId(req),
+    assignedPanels: assignedPanels || [],
+  });
   res.status(201).json(section);
 };
 
@@ -61,8 +75,10 @@ exports.getSections = async (req, res) => {
       const instructor = await Admin.findOne({ _id: req.user.createdBy, role: 'admin', isActive: true }).select('assignedSubjects');
       if (!instructor) return res.json([]);
       filter.subject = { $in: instructor.assignedSubjects || [] };
+      filter.createdBy = req.user.createdBy;
     }
   } else if (req.user) {
+    filter.createdBy = getOwnerId(req);
     if (subject) {
       if (!canAccessSubject(req, subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
       filter.subject = subject;
@@ -81,12 +97,23 @@ exports.getSections = async (req, res) => {
 exports.updateSection = async (req, res) => {
   const existing = await Section.findById(req.params.id);
   if (!existing) return res.status(404).json({ message: 'Section not found' });
+  if (!existing.createdBy || existing.createdBy.toString() !== getOwnerId(req)?.toString()) {
+    return res.status(403).json({ message: 'This block does not belong to the current instructor' });
+  }
+  const selectedSubject = getSubjectId(req);
+  if (selectedSubject && existing.subject?.toString() !== selectedSubject.toString()) {
+    return res.status(403).json({ message: 'This block does not belong to the current subject' });
+  }
   if (!canAccessSubject(req, existing.subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
   if (req.body.assignedPanels) {
     const assignmentError = await validatePanelAssignments(req, req.body.assignedPanels, existing.subject);
     if (assignmentError) return res.status(400).json({ message: assignmentError });
   }
-  const section = await Section.findByIdAndUpdate(req.params.id, req.body, { new: true })
+  const updates = {};
+  if (req.body.name !== undefined) updates.name = req.body.name;
+  if (req.body.block !== undefined) updates.block = req.body.block;
+  if (req.body.assignedPanels !== undefined) updates.assignedPanels = req.body.assignedPanels;
+  const section = await Section.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true })
     .populate('assignedPanels', 'name email');
   res.json(section);
 };
@@ -94,9 +121,28 @@ exports.updateSection = async (req, res) => {
 exports.deleteSection = async (req, res) => {
   const section = await Section.findById(req.params.id);
   if (!section) return res.status(404).json({ message: 'Section not found' });
+  if (!section.createdBy || section.createdBy.toString() !== getOwnerId(req)?.toString()) {
+    return res.status(403).json({ message: 'This block does not belong to the current instructor' });
+  }
+  const selectedSubject = getSubjectId(req);
+  if (selectedSubject && section.subject?.toString() !== selectedSubject.toString()) {
+    return res.status(403).json({ message: 'This block does not belong to the current subject' });
+  }
   if (!canAccessSubject(req, section.subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
+  const groups = await Group.find({ section: section._id }).select('_id');
+  const groupIds = groups.map((group) => group._id);
+  const deletedEvaluations = await Evaluation.deleteMany({ group: { $in: groupIds } });
+  await Group.deleteMany({ section: section._id });
+  await RegistrationLink.updateMany(
+    { sections: section._id },
+    { $pull: { sections: section._id } }
+  );
   await section.deleteOne();
-  res.json({ message: 'Section deleted' });
+  res.json({
+    message: 'Block, its groups, and evaluations deleted',
+    deletedGroups: groupIds.length,
+    deletedEvaluations: deletedEvaluations.deletedCount,
+  });
 };
 
 exports.assignBlocksToPanel = async (req, res) => {
@@ -105,6 +151,7 @@ exports.assignBlocksToPanel = async (req, res) => {
     return res.status(400).json({ message: 'panelId and sectionIds array required' });
   }
   const subject = getSubjectId(req);
+  const ownerId = getOwnerId(req);
   if (!subject) return res.status(400).json({ message: 'Subject required' });
   if (!canAccessSubject(req, subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
 
@@ -113,32 +160,44 @@ exports.assignBlocksToPanel = async (req, res) => {
     return res.status(404).json({ message: 'Panel account not found or inactive' });
   }
 
-  if (req.user.role === 'admin' && panel.createdBy && panel.createdBy.toString() !== req.user._id.toString()) {
+  if (!panel.createdBy) {
+    return res.status(400).json({ message: 'This panel is old data without an instructor owner' });
+  }
+  if (!ownerId || panel.createdBy.toString() !== ownerId.toString()) {
     return res.status(403).json({ message: 'This panel belongs to another instructor' });
   }
 
-  if (panel.createdBy) {
-    const owner = await Admin.findOne({
-      _id: panel.createdBy,
-      role: 'admin',
-      isActive: true,
-      assignedSubjects: subject,
-    }).select('_id');
-    if (!owner) {
-      return res.status(400).json({ message: 'This panel owner is not assigned to the selected subject' });
+  const owner = await Admin.findOne({
+    _id: panel.createdBy,
+    role: 'admin',
+    isActive: true,
+    assignedSubjects: subject,
+  }).select('_id');
+  if (!owner) {
+    return res.status(400).json({ message: 'This panel owner is not assigned to the selected subject' });
+  }
+
+  if (sectionIds.length > 0) {
+    const validSectionCount = await Section.countDocuments({
+      _id: { $in: sectionIds },
+      subject,
+      createdBy: ownerId,
+    });
+    if (validSectionCount !== sectionIds.length) {
+      return res.status(400).json({ message: 'One or more selected blocks belong to another instructor' });
     }
   }
 
   // First, remove this panel from all sections in the selected subject
   await Section.updateMany(
-    { assignedPanels: panelId, subject },
+    { assignedPanels: panelId, subject, createdBy: ownerId },
     { $pull: { assignedPanels: panelId } }
   );
 
   // Then, add this panel to the selected sections
   if (sectionIds.length > 0) {
     await Section.updateMany(
-      { _id: { $in: sectionIds }, subject },
+      { _id: { $in: sectionIds }, subject, createdBy: ownerId },
       { $addToSet: { assignedPanels: panelId } }
     );
   }

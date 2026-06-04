@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../../services/api';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/useAuth';
 import { notify } from '../../utils/notify';
 
 interface Subject {
@@ -58,6 +58,9 @@ export default function Subjects() {
   const [assignSubject, setAssignSubject] = useState<Subject | null>(null);
   const [assignAdminIds, setAssignAdminIds] = useState<string[]>([]);
   const [assigning, setAssigning] = useState(false);
+  const [resetSubject, setResetSubject] = useState<Subject | null>(null);
+  const [resetConfirmCode, setResetConfirmCode] = useState('');
+  const [resetting, setResetting] = useState(false);
 
   const fetchSubjects = () =>
     api.get('/subjects').then((r) => setSubjects(r.data));
@@ -194,6 +197,24 @@ export default function Subjects() {
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
 
+  const handleArchiveReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetSubject || resetConfirmCode !== resetSubject.code) return;
+    setResetting(true);
+    try {
+      const res = await api.post('/evaluations/master-reset', { confirmText: 'RESET' }, {
+        headers: { 'x-subject-id': resetSubject._id },
+      });
+      notify(res.data.message, { type: 'success' });
+      setResetSubject(null);
+      setResetConfirmCode('');
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, 'Failed to archive and reset subject'), { type: 'error' });
+    } finally {
+      setResetting(false);
+    }
+  };
+
   return (
     <div>
       <div className="mb-6 flex items-start justify-between gap-4">
@@ -269,12 +290,12 @@ export default function Subjects() {
                         >
                           Edit
                         </button>
-                        {isSuperadmin && (
+                        {!isSuperadmin && (
                           <button
-                            onClick={() => openAssign(s)}
-                            className="px-3 py-1.5 rounded-lg text-[11px] font-bold border border-primary/30 text-primary bg-primary/5 hover:bg-primary/15 transition-all"
+                            onClick={() => { setResetSubject(s); setResetConfirmCode(''); }}
+                            className="px-3 py-1.5 rounded-lg text-[11px] font-bold border border-danger/30 text-danger bg-danger/5 hover:bg-danger/15 transition-all"
                           >
-                            Assign Instructors
+                            Archive & Reset
                           </button>
                         )}
                         {isSuperadmin && (
@@ -283,6 +304,14 @@ export default function Subjects() {
                             className="px-3 py-1.5 rounded-lg text-[11px] font-bold border border-danger/30 text-danger bg-danger/5 hover:bg-danger/15 transition-all"
                           >
                             Delete
+                          </button>
+                        )}
+                        {isSuperadmin && (
+                          <button
+                            onClick={() => openAssign(s)}
+                            className="px-3 py-1.5 rounded-lg text-[11px] font-bold border border-primary/30 text-primary bg-primary/5 hover:bg-primary/15 transition-all"
+                          >
+                            Assign Instructors
                           </button>
                         )}
                       </div>
@@ -296,6 +325,53 @@ export default function Subjects() {
       )}
 
       {/* ── Create Modal ── */}
+      {resetSubject && !isSuperadmin && (
+        <div className="fixed inset-0 bg-dark/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-surface w-full max-w-md rounded-lg shadow-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-danger/20 flex justify-between items-center bg-danger/5">
+              <div>
+                <h3 className="font-bold text-danger">Archive & Reset Subject</h3>
+                <p className="text-text/50 text-xs mt-0.5">{resetSubject.code} - {resetSubject.title}</p>
+              </div>
+              <button onClick={() => setResetSubject(null)} className="text-text/40 hover:text-text text-xl">x</button>
+            </div>
+            <form onSubmit={handleArchiveReset} className="p-6 space-y-4">
+              <div className="bg-warning/5 border border-warning/30 rounded-lg p-4 space-y-2">
+                <p className="text-sm font-bold text-text">This starts a fresh evaluation cycle.</p>
+                <p className="text-xs text-text/65 leading-relaxed">
+                  Current blocks and groups will be removed. Submitted results will be preserved for Super Admin under Legacy Data - Old Results.
+                </p>
+                <p className="text-xs font-bold text-danger">Groups without submitted results cannot be restored.</p>
+              </div>
+              <div>
+                <label className="evl-label">
+                  Type <span className="font-black text-danger font-mono">{resetSubject.code}</span> to confirm
+                </label>
+                <input
+                  className="evl-input"
+                  value={resetConfirmCode}
+                  onChange={(e) => setResetConfirmCode(e.target.value.toUpperCase())}
+                  autoComplete="off"
+                  required
+                />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setResetSubject(null)} className="evl-btn-secondary flex-1">
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={resetting || resetConfirmCode !== resetSubject.code}
+                  className="evl-btn-danger flex-1 disabled:opacity-40"
+                >
+                  {resetting ? 'Archiving...' : 'Archive & Reset'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {showCreate && (
         <div className="fixed inset-0 bg-dark/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-surface w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">

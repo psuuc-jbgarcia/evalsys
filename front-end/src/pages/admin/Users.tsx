@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import api from '../../services/api';
 import { TableSkeleton } from '../../components/LoadingSkeleton';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/useAuth';
 import { notify } from '../../utils/notify';
 
 interface Subject { _id: string; code: string; title: string; }
 interface User { _id: string; name: string; email: string; role: string; isActive: boolean; assignedSubjects?: Subject[]; }
+interface ResetTarget { _id: string; name: string; }
 
 const roleText = (role: string) => {
   if (role === 'superadmin') return 'Super Admin';
@@ -57,6 +58,11 @@ export default function Users() {
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'panel', createdBy: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [resetTarget, setResetTarget] = useState<ResetTarget | null>(null);
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetConfirm, setResetConfirm] = useState('');
+  const [resetError, setResetError] = useState('');
+  const [resetting, setResetting] = useState(false);
   const pageTitle = isSuperadmin ? 'Accounts' : 'Panel Accounts';
   const pageSubtitle = isSuperadmin
     ? 'Create, review, and manage platform accounts by role.'
@@ -121,6 +127,33 @@ export default function Users() {
     if (!confirm('Delete this user?')) return;
     await api.delete(`/users/${id}`);
     load();
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetTarget) return;
+    setResetError('');
+    if (!isStrongPassword(resetPassword)) {
+      setResetError(passwordRuleText);
+      return;
+    }
+    if (resetPassword !== resetConfirm) {
+      setResetError('Passwords do not match.');
+      return;
+    }
+    setResetting(true);
+    try {
+      const res = await api.patch(`/users/${resetTarget._id}/reset-password`, { newPassword: resetPassword });
+      notify(res.data.message, { type: 'success' });
+      setResetTarget(null);
+      setResetPassword('');
+      setResetConfirm('');
+      load();
+    } catch (err: unknown) {
+      setResetError(getErrorMessage(err, 'Failed to reset password'));
+    } finally {
+      setResetting(false);
+    }
   };
 
   const downloadTemplate = () => {
@@ -334,11 +367,11 @@ export default function Users() {
                           className="evl-btn-ghost text-primary border-primary/30 hover:bg-primary/5 hover:border-primary/50">
                           {u.isActive ? 'Block' : 'Unblock'}
                         </button>
-                        <button onClick={async () => {
-                          const pass = prompt('Enter new password for ' + u.name);
-                          if (!pass) return;
-                          await api.patch(`/users/${u._id}/reset-password`, { newPassword: pass });
-                          notify('Password updated!', { type: 'success' });
+                        <button onClick={() => {
+                          setResetTarget({ _id: u._id, name: u.name });
+                          setResetPassword('');
+                          setResetConfirm('');
+                          setResetError('');
                         }}
                           className="evl-btn-ghost text-primary border-primary/30 hover:bg-primary/5 hover:border-primary/50">
                           Reset
@@ -354,6 +387,47 @@ export default function Users() {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {resetTarget && (
+        <div className="fixed inset-0 z-[100] bg-dark/60 flex items-center justify-center p-4">
+          <form onSubmit={handleResetPassword} className="w-full max-w-md bg-surface border border-muted/40 rounded-lg shadow-xl p-6">
+            <h3 className="font-extrabold text-text text-lg">Reset Password</h3>
+            <p className="text-text/60 text-sm mt-1">
+              Set a temporary password for <strong>{resetTarget.name}</strong>. They must change it after signing in.
+            </p>
+            {resetError && <div className="evl-alert-error mt-4">{resetError}</div>}
+            <div className="mt-5">
+              <label className="evl-label">Temporary Password</label>
+              <input
+                type="password"
+                value={resetPassword}
+                onChange={(e) => setResetPassword(e.target.value)}
+                className="evl-input"
+                required
+              />
+              <p className="text-[11px] text-text/55 font-semibold mt-1.5">{passwordRuleText}</p>
+            </div>
+            <div className="mt-4">
+              <label className="evl-label">Confirm Temporary Password</label>
+              <input
+                type="password"
+                value={resetConfirm}
+                onChange={(e) => setResetConfirm(e.target.value)}
+                className="evl-input"
+                required
+              />
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button type="button" onClick={() => setResetTarget(null)} disabled={resetting} className="evl-btn-secondary">
+                Cancel
+              </button>
+              <button type="submit" disabled={resetting} className="evl-btn-primary">
+                {resetting ? 'Resetting...' : 'Reset Password'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>

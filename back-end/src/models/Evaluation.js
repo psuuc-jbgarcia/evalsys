@@ -13,6 +13,18 @@ const evaluationSchema = new mongoose.Schema({
   total: { type: Number }, // auto-computed
   comments: { type: String, default: '' },
   isSubmitted: { type: Boolean, default: false },
+  isLegacyArchived: { type: Boolean, default: false, index: true },
+  legacyArchivedAt: { type: Date },
+  legacySnapshot: {
+    groupName: { type: String },
+    block: { type: String },
+    subject: { type: String },
+    panelName: { type: String },
+    panelEmail: { type: String },
+    instructorName: { type: String },
+    instructorEmail: { type: String },
+    members: [{ type: mongoose.Schema.Types.Mixed }],
+  },
 }, { timestamps: true });
 
 // Auto-compute total before saving

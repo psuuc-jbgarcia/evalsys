@@ -4,6 +4,9 @@ const Section = require('../models/Section');
 const Group = require('../models/Group');
 
 const getSubjectId = (req) => req.headers['x-subject-id'] || req.query.subject || req.body.subject;
+const getOwnerId = (req) => req.user?.role === 'superadmin'
+  ? req.instructorContext?._id
+  : req.user?._id;
 const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const canAccessSubject = (req, subjectId) => (
   !subjectId ||
@@ -25,7 +28,7 @@ const findUsableLink = async (token) => {
 
 exports.getRegistrationLinks = async (req, res) => {
   const subject = getSubjectId(req);
-  const filter = {};
+  const filter = { createdBy: getOwnerId(req) };
   if (subject) {
     if (!canAccessSubject(req, subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
     filter.subject = subject;
@@ -43,7 +46,7 @@ exports.getRegistrationLinks = async (req, res) => {
 };
 
 exports.createRegistrationLink = async (req, res) => {
-  const subject = req.body.subject || getSubjectId(req);
+  const subject = getSubjectId(req);
   const { sections = [], expiresAt } = req.body;
   if (!subject) return res.status(400).json({ message: 'Subject required' });
   if (!expiresAt) return res.status(400).json({ message: 'Expiration date required' });
@@ -59,7 +62,11 @@ exports.createRegistrationLink = async (req, res) => {
 
   const uniqueSections = [...new Set(sections.filter(Boolean).map((id) => id.toString()))];
   if (uniqueSections.length) {
-    const validCount = await Section.countDocuments({ _id: { $in: uniqueSections }, subject });
+    const validCount = await Section.countDocuments({
+      _id: { $in: uniqueSections },
+      subject,
+      createdBy: getOwnerId(req),
+    });
     if (validCount !== uniqueSections.length) {
       return res.status(400).json({ message: 'All selected blocks must belong to the selected subject' });
     }
@@ -69,7 +76,7 @@ exports.createRegistrationLink = async (req, res) => {
     subject,
     sections: uniqueSections,
     expiresAt: expiresDate,
-    createdBy: req.user._id,
+    createdBy: getOwnerId(req),
   });
 
   const populated = await RegistrationLink.findById(link._id)
@@ -83,6 +90,9 @@ exports.createRegistrationLink = async (req, res) => {
 exports.updateRegistrationLink = async (req, res) => {
   const link = await RegistrationLink.findById(req.params.id);
   if (!link) return res.status(404).json({ message: 'Registration link not found' });
+  if (link.createdBy.toString() !== getOwnerId(req)?.toString()) {
+    return res.status(403).json({ message: 'This registration link belongs to another instructor' });
+  }
   if (!canAccessSubject(req, link.subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
 
   if (typeof req.body.isActive === 'boolean') link.isActive = req.body.isActive;
@@ -101,6 +111,20 @@ exports.updateRegistrationLink = async (req, res) => {
   res.json(populated);
 };
 
+exports.deleteRegistrationLink = async (req, res) => {
+  const link = await RegistrationLink.findById(req.params.id);
+  if (!link) return res.status(404).json({ message: 'Registration link not found' });
+  if (link.createdBy.toString() !== getOwnerId(req)?.toString()) {
+    return res.status(403).json({ message: 'This registration link belongs to another instructor' });
+  }
+  if (!canAccessSubject(req, link.subject)) {
+    return res.status(403).json({ message: 'You are not assigned to this subject' });
+  }
+
+  await link.deleteOne();
+  res.json({ message: 'Registration link removed. Existing registered groups were not deleted.' });
+};
+
 exports.getPublicRegistrationLink = async (req, res) => {
   const { link, error } = await findUsableLink(req.params.token);
   if (error) return res.status(403).json({ message: error });
@@ -108,7 +132,7 @@ exports.getPublicRegistrationLink = async (req, res) => {
   const allowedSectionIds = (link.sections || []).map((section) => section._id.toString());
   const sectionFilter = allowedSectionIds.length
     ? { _id: { $in: allowedSectionIds } }
-    : { subject: link.subject._id };
+    : { subject: link.subject._id, createdBy: link.createdBy._id };
 
   const sections = await Section.find(sectionFilter)
     .select('name block subject')
@@ -136,6 +160,9 @@ exports.registerGroupWithLink = async (req, res) => {
   if (sectionDoc.subject.toString() !== link.subject._id.toString()) {
     return res.status(400).json({ message: 'Selected block does not belong to this registration subject' });
   }
+  if (!sectionDoc.createdBy || sectionDoc.createdBy.toString() !== link.createdBy._id.toString()) {
+    return res.status(400).json({ message: 'Selected block does not belong to this registration instructor' });
+  }
 
   const allowedSectionIds = (link.sections || []).map((s) => s._id.toString());
   if (allowedSectionIds.length && !allowedSectionIds.includes(sectionDoc._id.toString())) {
@@ -153,6 +180,7 @@ exports.registerGroupWithLink = async (req, res) => {
   const group = await Group.create({
     name,
     section,
+    createdBy: link.createdBy._id,
     members: members || [],
   });
 

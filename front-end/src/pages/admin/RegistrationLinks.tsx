@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import api from '../../services/api';
 import { TableSkeleton } from '../../components/LoadingSkeleton';
+import { notify } from '../../utils/notify';
 
 interface Subject { _id: string; code: string; title: string; }
 interface Section { _id: string; block: string; subject?: string | Subject; }
@@ -37,6 +38,8 @@ export default function RegistrationLinks() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [copiedToken, setCopiedToken] = useState('');
+  const [linkToRemove, setLinkToRemove] = useState<RegistrationLink | null>(null);
+  const [removing, setRemoving] = useState(false);
 
   const visibleSections = useMemo(
     () => sections.filter((section) => getSectionSubjectId(section) === selectedSubject),
@@ -119,6 +122,21 @@ export default function RegistrationLinks() {
       loadLinks();
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to update registration link');
+    }
+  };
+
+  const handleRemove = async () => {
+    if (!linkToRemove) return;
+    setRemoving(true);
+    try {
+      const res = await api.delete(`/registration-links/${linkToRemove._id}`);
+      notify(res.data.message, { type: 'success', title: 'Link Removed' });
+      setLinkToRemove(null);
+      loadLinks();
+    } catch (err: any) {
+      notify(err.response?.data?.message || 'Failed to remove registration link', { type: 'error' });
+    } finally {
+      setRemoving(false);
     }
   };
 
@@ -250,6 +268,13 @@ export default function RegistrationLinks() {
                         >
                           {link.isActive ? 'Stop Accepting' : 'Reopen'}
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => setLinkToRemove(link)}
+                          className="evl-btn-ghost text-danger border-danger/30 hover:text-danger hover:bg-danger/5 hover:border-danger/50"
+                        >
+                          Remove Link
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -264,6 +289,35 @@ export default function RegistrationLinks() {
           </div>
         )}
       </div>
+
+      {linkToRemove && (
+        <div className="fixed inset-0 z-[100] bg-dark/60 flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-surface border border-muted/40 rounded-lg shadow-xl p-6">
+            <h3 className="font-extrabold text-text text-lg">Remove registration link?</h3>
+            <p className="text-text/60 text-sm mt-2">
+              This link will stop working permanently. Existing registered groups and grades will remain.
+            </p>
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                type="button"
+                onClick={() => setLinkToRemove(null)}
+                disabled={removing}
+                className="evl-btn-secondary !py-2 !text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleRemove}
+                disabled={removing}
+                className="evl-btn-danger !py-2 !text-xs"
+              >
+                {removing ? 'Removing...' : 'Remove Link'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

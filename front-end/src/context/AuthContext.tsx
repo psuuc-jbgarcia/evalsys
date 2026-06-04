@@ -1,54 +1,33 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import api from '../services/api';
 import { notify } from '../utils/notify';
+import { AuthContext, type User } from './auth-context';
 
-interface User {
-  id: string;
-  _id?: string;
-  name: string;
-  email: string;
-  role: 'superadmin' | 'admin' | 'panel';
-  csvExportLocked?: boolean;
-  gradingLocked?: boolean;
-  gradingLockedSubjects?: string[];
-}
-
-interface AuthContextType {
-  user: User | null;
-  loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
-}
-
-const AuthContext = createContext<AuthContextType | null>(null);
-
-const normalizeUser = (user: any): User => ({
+const normalizeUser = (user: User): User => ({
   ...user,
   id: user.id || user._id,
-});
+} as User);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => Boolean(localStorage.getItem('token')));
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    if (token) {
-      api.get('/auth/me')
-        .then((res) => setUser(normalizeUser(res.data)))
-        .catch((err) => {
-          // Only clear token if it's actually invalid (401/403)
-          // If it's 429 (Rate Limit), keep the token and maybe show an alert
-          if (err.response?.status !== 429) {
-            localStorage.removeItem('token');
-          } else {
-            notify('Too many requests. Please wait a moment before refreshing again.', { type: 'error' });
-          }
-        })
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
+    if (!token) return;
+
+    api.get('/auth/me')
+      .then((res) => setUser(normalizeUser(res.data)))
+      .catch((err) => {
+        // Only clear token if it's actually invalid (401/403)
+        // If it's 429 (Rate Limit), keep the token and maybe show an alert
+        if (err.response?.status !== 429) {
+          localStorage.removeItem('token');
+        } else {
+          notify('Too many requests. Please wait a moment before refreshing again.', { type: 'error' });
+        }
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   const login = async (email: string, password: string) => {
@@ -57,20 +36,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(normalizeUser(res.data.user));
   };
 
+  const changePassword = async (currentPassword: string, newPassword: string) => {
+    await api.patch('/auth/change-password', { currentPassword, newPassword });
+    setUser((current) => current ? { ...current, mustChangePassword: false } : current);
+  };
+
   const logout = () => {
     localStorage.removeItem('token');
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, changePassword, logout }}>
       {children}
     </AuthContext.Provider>
   );
-};
-
-export const useAuth = () => {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
-  return ctx;
 };

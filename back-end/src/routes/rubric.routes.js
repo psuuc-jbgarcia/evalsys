@@ -7,16 +7,16 @@ const {
   setActiveRubric,
   deleteRubric,
 } = require('../controllers/rubric.controller');
-const { protect, adminOnly } = require('../middleware/auth.middleware');
+const { protect, instructorOnly, instructorOrPanelOnly } = require('../middleware/auth.middleware');
 
 // Panel can read the active rubric
-router.get('/active', protect, getActiveRubric);
+router.get('/active', protect, instructorOrPanelOnly, getActiveRubric);
 
-// Admin only
-router.get('/', protect, getAllRubrics);
-router.post('/', protect, adminOnly, createRubric);
-router.put('/:id', protect, adminOnly, updateRubric);
-router.patch('/:id/activate', protect, adminOnly, setActiveRubric);
-router.delete('/:id', protect, adminOnly, deleteRubric);
+// Instructor only. Super Admin does not manage grading rubrics.
+router.get('/', protect, instructorOnly, getAllRubrics);
+router.post('/', protect, instructorOnly, createRubric);
+router.put('/:id', protect, instructorOnly, updateRubric);
+router.patch('/:id/activate', protect, instructorOnly, setActiveRubric);
+router.delete('/:id', protect, instructorOnly, deleteRubric);
 
 module.exports = router;

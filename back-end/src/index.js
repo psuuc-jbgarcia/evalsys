@@ -21,8 +21,6 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-connectDB();
-
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
@@ -38,8 +36,18 @@ app.use('/api/settings', require('./routes/settings.routes'));
 app.use('/api/subjects', require('./routes/subject.routes'));
 app.use('/api/registration-links', require('./routes/registrationLink.routes'));
 app.use('/api/usage', require('./routes/usage.routes'));
+app.use('/api/legacy-data', require('./routes/legacyData.routes'));
 
 app.get('/api/health', (_, res) => res.json({ status: 'ok' }));
 
 const PORT = process.env.PORT || 5001;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+const start = async () => {
+  await connectDB();
+  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+};
+
+start().catch((err) => {
+  console.error('Server startup failed:', err);
+  process.exit(1);
+});

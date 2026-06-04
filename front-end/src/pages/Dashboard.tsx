@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import api from '../services/api';
 import { CardSkeleton } from '../components/LoadingSkeleton';
 import { formatMemberList, memberSearchText, type Member } from '../utils/members';
@@ -112,7 +112,9 @@ function AdminDashboard({ name, role, userId }: { name: string; role: 'admin' | 
         <div className="min-w-0">
           <h2 className="evl-page-title">Welcome back, {name}</h2>
           <p className="evl-page-subtitle">
-            Manage subjects, blocks, groups, panels, rubrics, and results from here.
+            {role === 'superadmin'
+              ? 'Manage the selected instructor subjects, blocks, groups, panels, and results.'
+              : 'Manage subjects, blocks, groups, panels, rubrics, and results from here.'}
           </p>
         </div>
 
@@ -156,7 +158,7 @@ function AdminDashboard({ name, role, userId }: { name: string; role: 'admin' | 
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-        {adminCards.map((card) => (
+        {adminCards.filter((card) => role !== 'superadmin' || card.to !== '/rubrics').map((card) => (
           <Link
             key={card.to}
             to={card.to}

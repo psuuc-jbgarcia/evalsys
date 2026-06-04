@@ -6,6 +6,16 @@ const Section = require('../models/Section');
 const signToken = (id, role) =>
   jwt.sign({ id, role }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
+const isStrongPassword = (password = '') => (
+  typeof password === 'string' &&
+  password.length >= 8 &&
+  /[a-z]/.test(password) &&
+  /[A-Z]/.test(password) &&
+  /\d/.test(password) &&
+  /[^A-Za-z0-9]/.test(password)
+);
+const passwordRuleMessage = 'Password must be at least 8 characters and include uppercase, lowercase, number, and symbol';
+
 const normalizeEvalsysEmail = (value = '') => {
   const email = value.trim().toLowerCase();
   if (!email) return '';
@@ -41,31 +51,26 @@ const uniqueIds = (ids = []) => [
 ];
 
 const getPanelLockedSubjects = async (panel) => {
+  if (!panel.createdBy) return [];
+
   const assignedSections = await Section.find({
     assignedPanels: panel._id,
     subject: { $exists: true, $ne: null },
+    createdBy: panel.createdBy,
   }).select('subject');
   const assignedSubjectIds = uniqueIds(assignedSections.map((section) => section.subject));
 
-  if (!assignedSubjectIds.length && !panel.createdBy) return [];
+  if (!assignedSubjectIds.length) return [];
 
-  const instructorFilter = panel.createdBy
-    ? {
-        $or: [
-          { _id: panel.createdBy },
-          { assignedSubjects: { $in: assignedSubjectIds } },
-        ],
-      }
-    : { assignedSubjects: { $in: assignedSubjectIds } };
-
-  const instructors = await Admin.find({
-    ...instructorFilter,
+  const instructor = await Admin.findOne({
+    _id: panel.createdBy,
+    role: 'admin',
+    isActive: true,
     gradingLockedSubjects: { $in: assignedSubjectIds },
   }).select('gradingLockedSubjects');
 
-  return uniqueIds(
-    instructors.flatMap((instructor) => instructor.gradingLockedSubjects || [])
-  ).filter((subjectId) => assignedSubjectIds.includes(subjectId));
+  return uniqueIds(instructor?.gradingLockedSubjects || [])
+    .filter((subjectId) => assignedSubjectIds.includes(subjectId));
 };
 
 const getUserFeatureLocks = async (user) => {
@@ -125,6 +130,7 @@ exports.login = async (req, res) => {
       name: user.name,
       email: user.email,
       role: user.role,
+      mustChangePassword: Boolean(user.mustChangePassword),
       assignedSubjects: user.assignedSubjects || [],
       ...locks,
     },
@@ -135,4 +141,29 @@ exports.getMe = async (req, res) => {
   const user = req.user.toObject ? req.user.toObject() : req.user;
   const locks = await getUserFeatureLocks(req.user);
   res.json({ ...user, ...locks });
+};
+
+exports.changePassword = async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ message: 'Current password and new password are required' });
+  }
+  if (!isStrongPassword(newPassword)) {
+    return res.status(400).json({ message: passwordRuleMessage });
+  }
+  const Model = ['admin', 'superadmin'].includes(req.user.role) ? Admin : Panel;
+  const user = await Model.findById(req.user._id);
+  if (!user) return res.status(404).json({ message: 'Account not found' });
+
+  if (!(await user.matchPassword(currentPassword))) {
+    return res.status(400).json({ message: 'Current password is incorrect' });
+  }
+  if (await user.matchPassword(newPassword)) {
+    return res.status(400).json({ message: 'New password must be different from the current password' });
+  }
+
+  user.password = newPassword;
+  user.mustChangePassword = false;
+  await user.save();
+  res.json({ message: 'Password changed successfully', mustChangePassword: false });
 };

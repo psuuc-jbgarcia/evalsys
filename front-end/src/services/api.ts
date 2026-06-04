@@ -8,7 +8,13 @@ api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   const subjectId = localStorage.getItem('evalsys_current_subject_id');
-  if (subjectId) config.headers['x-subject-id'] = subjectId;
+  if (subjectId && config.headers['x-subject-id'] === undefined) {
+    config.headers['x-subject-id'] = subjectId;
+  }
+  const instructorId = localStorage.getItem('evalsys_current_instructor_id');
+  if (instructorId && config.headers['x-instructor-id'] === undefined) {
+    config.headers['x-instructor-id'] = instructorId;
+  }
   return config;
 });
 

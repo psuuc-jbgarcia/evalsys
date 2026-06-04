@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../../services/api';
 import { notify } from '../../utils/notify';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/useAuth';
 
 interface OwnerRef { _id: string; name: string; email: string; }
 interface PanelUser {
@@ -13,7 +13,7 @@ interface PanelUser {
   createdBy?: string | OwnerRef | null;
 }
 interface Section { _id: string; name: string; block: string; assignedPanels: PanelUser[] }
-interface InstructorUser { _id: string; name: string; email: string; role: string; isActive?: boolean; }
+const currentInstructorKey = 'evalsys_current_instructor_id';
 
 const getPanelOwnerLabel = (panel: PanelUser) => {
   if (!panel.createdBy) return 'No created by';
@@ -24,9 +24,8 @@ const getPanelOwnerLabel = (panel: PanelUser) => {
 export default function AssignPanels() {
   const { user } = useAuth();
   const isSuperadmin = user?.role === 'superadmin';
+  const currentInstructorId = localStorage.getItem(currentInstructorKey) || '';
   const [panels, setPanels] = useState<PanelUser[]>([]);
-  const [instructors, setInstructors] = useState<InstructorUser[]>([]);
-  const [ownerFilter, setOwnerFilter] = useState('all');
   const [sections, setSections] = useState<Section[]>([]);
   const [selectedPanel, setSelectedPanel] = useState<PanelUser | null>(null);
   const [checkedBlocks, setCheckedBlocks] = useState<string[]>([]);
@@ -36,7 +35,6 @@ export default function AssignPanels() {
   const loadData = async () => {
     const pRes = await api.get('/users');
     setPanels(pRes.data.filter((u: any) => u.role === 'panel' && u.isActive));
-    setInstructors(pRes.data.filter((u: any) => u.role === 'admin' && u.isActive));
     
     const sRes = await api.get('/sections');
     setSections(sRes.data);
@@ -87,8 +85,8 @@ export default function AssignPanels() {
   };
 
   const filteredPanels = panels.filter((panel) => {
-    if (!isSuperadmin || ownerFilter === 'all') return true;
-    return panelOwnerId(panel) === ownerFilter;
+    if (!isSuperadmin) return true;
+    return panelOwnerId(panel) === currentInstructorId;
   });
 
   return (
@@ -105,27 +103,9 @@ export default function AssignPanels() {
             <div className="p-4 border-b border-muted/40">
               <h3 className="font-bold text-text text-sm">Select Panel Judge</h3>
               {isSuperadmin && (
-                <div className="mt-3">
-                  <label className="evl-label !text-[10px] !mb-1">Filter by Instructor</label>
-                  <select
-                    value={ownerFilter}
-                    onChange={(e) => {
-                      setOwnerFilter(e.target.value);
-                      setSelectedPanel(null);
-                      setCheckedBlocks([]);
-                      setSuccessMsg('');
-                    }}
-                    className="evl-select !py-2 !text-xs"
-                  >
-                    <option value="all">All instructors</option>
-                    {instructors.map((instructor) => (
-                      <option key={instructor._id} value={instructor._id}>
-                        {instructor.name}
-                      </option>
-                    ))}
-                    <option value="old">No created by</option>
-                  </select>
-                </div>
+                <p className="text-[11px] text-text/45 mt-1">
+                  Showing panels owned by the current sidebar instructor.
+                </p>
               )}
             </div>
             <div className="flex flex-col p-2 max-h-[600px] overflow-y-auto">

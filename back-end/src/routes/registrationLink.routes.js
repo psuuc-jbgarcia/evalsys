@@ -3,18 +3,20 @@ const {
   getRegistrationLinks,
   createRegistrationLink,
   updateRegistrationLink,
+  deleteRegistrationLink,
   getPublicRegistrationLink,
   registerGroupWithLink,
 } = require('../controllers/registrationLink.controller');
-const { protect, adminOnly } = require('../middleware/auth.middleware');
+const { protect, adminOnly, superadminInstructorContext } = require('../middleware/auth.middleware');
 
 router.get('/public/:token', getPublicRegistrationLink);
 router.post('/public/:token/register', registerGroupWithLink);
 
-router.use(protect, adminOnly);
+router.use(protect, adminOnly, superadminInstructorContext);
 
 router.get('/', getRegistrationLinks);
 router.post('/', createRegistrationLink);
 router.patch('/:id', updateRegistrationLink);
+router.delete('/:id', deleteRegistrationLink);
 
 module.exports = router;

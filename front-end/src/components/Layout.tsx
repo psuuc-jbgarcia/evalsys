@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import api from '../services/api';
 
 const adminLinks = [
@@ -20,7 +20,7 @@ const panelLinks = [
   { to: '/grade', label: 'Grade Groups', icon: '✎' },
 ];
 
-type NavIconName = 'dashboard' | 'sections' | 'groups' | 'users' | 'assign' | 'rubrics' | 'results' | 'link' | 'grade' | 'subjects' | 'subscription';
+type NavIconName = 'dashboard' | 'sections' | 'groups' | 'users' | 'assign' | 'rubrics' | 'results' | 'link' | 'grade' | 'subjects' | 'subscription' | 'legacy';
 
 const getNavIconName = (to: string): NavIconName => {
   if (to === '/subjects') return 'subjects';
@@ -33,6 +33,7 @@ const getNavIconName = (to: string): NavIconName => {
   if (to === '/registration-links') return 'link';
   if (to === '/grade') return 'grade';
   if (to === '/subscription') return 'subscription';
+  if (to === '/legacy-data') return 'legacy';
   return 'dashboard';
 };
 
@@ -78,6 +79,9 @@ const NavIcon = ({ name }: { name: NavIconName }) => {
   if (name === 'subscription') {
     return <svg {...common}><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z" /><path d="M12 8v4l3 3" /></svg>;
   }
+  if (name === 'legacy') {
+    return <svg {...common}><path d="M4 7h16" /><path d="M6 7V4h12v3" /><path d="M6 7v13h12V7" /><path d="M9 11h6" /></svg>;
+  }
   return <svg {...common}><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" /></svg>;
 };
 
@@ -99,6 +103,7 @@ const groupNameCacheKey = 'grading_group_names';
 const groupStatusCacheKey = (panelId: string) => `grading_group_status_${panelId}`;
 const selectedRubricCacheKey = (panelId: string) => `grading_selected_rubric_${panelId}`;
 const currentSubjectKey = 'evalsys_current_subject_id';
+const currentInstructorKey = 'evalsys_current_instructor_id';
 const roleLabel = (role?: string) => {
   if (role === 'admin') return 'Instructor';
   if (role === 'superadmin') return 'Super Admin';
@@ -110,6 +115,14 @@ interface Subject {
   _id: string;
   code: string;
   title: string;
+}
+
+interface Instructor {
+  _id: string;
+  name: string;
+  email: string;
+  role: string;
+  isActive?: boolean;
 }
 
 const hasDraftContent = (draft?: GradingDraft | null) => {
@@ -158,10 +171,16 @@ export default function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const links = user?.role === 'admin' || user?.role === 'superadmin' ? adminLinks : panelLinks;
+  const links = user?.role === 'admin'
+    ? adminLinks
+    : user?.role === 'superadmin'
+      ? adminLinks.filter((link) => link.to !== '/rubrics')
+      : panelLinks;
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [instructors, setInstructors] = useState<Instructor[]>([]);
+  const [currentInstructorId, setCurrentInstructorId] = useState(() => localStorage.getItem(currentInstructorKey) || '');
   const [currentSubjectId, setCurrentSubjectId] = useState(() => localStorage.getItem(currentSubjectKey) || '');
   const [subjectMenuOpen, setSubjectMenuOpen] = useState(false);
 
@@ -171,7 +190,34 @@ export default function Layout({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
+    if (user?.role !== 'superadmin') return;
+    api.get('/users')
+      .then((res) => {
+        const activeInstructors = (res.data as Instructor[]).filter(
+          (account) => account.role === 'admin' && account.isActive
+        );
+        setInstructors(activeInstructors);
+        const saved = localStorage.getItem(currentInstructorKey);
+        const savedExists = activeInstructors.some((instructor) => instructor._id === saved);
+        if (!savedExists) {
+          const nextId = activeInstructors[0]?._id || '';
+          if (nextId) localStorage.setItem(currentInstructorKey, nextId);
+          else localStorage.removeItem(currentInstructorKey);
+          localStorage.removeItem(currentSubjectKey);
+          setCurrentInstructorId(nextId);
+          setCurrentSubjectId('');
+        }
+      })
+      .catch(() => undefined);
+  }, [user?.role]);
+
+  useEffect(() => {
     if (user?.role !== 'admin' && user?.role !== 'superadmin') return;
+    if (user?.role === 'superadmin' && !currentInstructorId) {
+      setSubjects([]);
+      setCurrentSubjectId('');
+      return;
+    }
     api.get('/subjects')
       .then((res) => {
         setSubjects(res.data);
@@ -180,10 +226,22 @@ export default function Layout({ children }: { children: ReactNode }) {
         if (!savedExists && res.data.length > 0) {
           localStorage.setItem(currentSubjectKey, res.data[0]._id);
           setCurrentSubjectId(res.data[0]._id);
+          window.location.reload();
+        } else if (!res.data.length) {
+          localStorage.removeItem(currentSubjectKey);
+          setCurrentSubjectId('');
         }
       })
       .catch(() => undefined);
-  }, [user?.role]);
+  }, [user?.role, currentInstructorId]);
+
+  const handleInstructorChange = (instructorId: string) => {
+    if (!instructorId || instructorId === currentInstructorId) return;
+    localStorage.setItem(currentInstructorKey, instructorId);
+    localStorage.removeItem(currentSubjectKey);
+    setCurrentInstructorId(instructorId);
+    setCurrentSubjectId('');
+  };
 
   const handleSubjectChange = (subjectId: string) => {
     if (!subjectId || subjectId === currentSubjectId) {
@@ -278,6 +336,25 @@ export default function Layout({ children }: { children: ReactNode }) {
         <nav className="flex flex-col gap-0.5 flex-1 px-3 py-4 overflow-y-auto">
           {(user?.role === 'admin' || user?.role === 'superadmin') && (!collapsed || mobileOpen) && (
             <div className="mb-4 px-1">
+              {user?.role === 'superadmin' && (
+                <div className="mb-3">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-white/30 block mb-1.5">
+                    Current Instructor
+                  </label>
+                  <select
+                    value={currentInstructorId}
+                    onChange={(event) => handleInstructorChange(event.target.value)}
+                    className="w-full min-h-10 rounded-lg bg-white/10 border border-white/10 text-white text-xs font-bold px-3 py-2 outline-none hover:bg-white/15 focus:ring-2 focus:ring-primary/40 transition-colors"
+                  >
+                    {!instructors.length && <option value="">No instructors</option>}
+                    {instructors.map((instructor) => (
+                      <option key={instructor._id} value={instructor._id} className="text-text bg-surface">
+                        {instructor.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <label className="text-[9px] font-black uppercase tracking-widest text-white/30 block mb-1.5">
                 Current Subject
               </label>
@@ -373,6 +450,20 @@ export default function Layout({ children }: { children: ReactNode }) {
                   <NavIcon name="subscription" />
                 </span>
                 {(!collapsed || mobileOpen) && <span>Manage Subscription</span>}
+              </Link>
+              <Link
+                to="/legacy-data"
+                onClick={() => setMobileOpen(false)}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150 ${
+                  location.pathname === '/legacy-data'
+                    ? 'bg-primary text-white'
+                    : 'text-white/50 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <span className="w-5 h-5 flex items-center justify-center shrink-0">
+                  <NavIcon name="legacy" />
+                </span>
+                {(!collapsed || mobileOpen) && <span>Legacy Data</span>}
               </Link>
             </>
           )}

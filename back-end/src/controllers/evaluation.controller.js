@@ -3,8 +3,12 @@ const Group = require('../models/Group');
 const Section = require('../models/Section');
 const Rubric = require('../models/Rubric');
 const Admin = require('../models/Admin');
+const RegistrationLink = require('../models/RegistrationLink');
 
 const getSubjectId = (req) => req.headers['x-subject-id'] || req.query.subject || req.body.subject;
+const getOwnerId = (req) => req.user?.role === 'superadmin'
+  ? req.instructorContext?._id
+  : req.user?._id;
 const canAccessSubject = (req, subjectId) => (
   !subjectId ||
   req.user?.role === 'superadmin' ||
@@ -53,12 +57,64 @@ const mergeCriteria = (...criteriaLists) => {
   return Array.from(criteriaByKey.values());
 };
 
+const archiveSubjectEvaluations = async (groupIds, instructor) => {
+  const evaluations = await Evaluation.find({
+    group: { $in: groupIds },
+    isLegacyArchived: { $ne: true },
+  })
+    .populate('panel', 'name email')
+    .populate({
+      path: 'group',
+      select: 'name members section',
+      populate: {
+        path: 'section',
+        select: 'name block subject',
+        populate: { path: 'subject', select: 'code title' },
+      },
+    });
+
+  const archivedAt = new Date();
+  for (const evaluation of evaluations) {
+    const group = evaluation.group;
+    const section = group?.section;
+    const subject = section?.subject;
+    evaluation.isLegacyArchived = true;
+    evaluation.legacyArchivedAt = archivedAt;
+    evaluation.legacySnapshot = {
+      groupName: group?.name || 'Deleted group',
+      block: section?.block || section?.name || 'Deleted block',
+      subject: [subject?.code, subject?.title].filter(Boolean).join(' - ') || 'Unknown subject',
+      panelName: evaluation.panel?.name || 'Unknown panel',
+      panelEmail: evaluation.panel?.email || '',
+      instructorName: instructor?.name || 'Unknown instructor',
+      instructorEmail: instructor?.email || '',
+      members: group?.members || [],
+    };
+    await evaluation.save();
+  }
+
+  return evaluations.length;
+};
+
 // Admin: Clear (delete) a single evaluation record
 exports.clearEvaluation = async (req, res) => {
   const { evaluationId } = req.params;
   try {
-    const evaluation = await Evaluation.findByIdAndDelete(evaluationId);
+    const evaluation = await Evaluation.findById(evaluationId);
     if (!evaluation) return res.status(404).json({ message: 'Evaluation not found' });
+    const group = await Group.findById(evaluation.group).populate('section', 'subject');
+    if (
+      !group ||
+      !group.createdBy ||
+      group.createdBy.toString() !== getOwnerId(req)?.toString()
+    ) {
+      return res.status(403).json({ message: 'This evaluation belongs to another instructor' });
+    }
+    const selectedSubject = getSubjectId(req);
+    if (selectedSubject && group.section?.subject?.toString() !== selectedSubject.toString()) {
+      return res.status(403).json({ message: 'This evaluation does not belong to the current subject' });
+    }
+    await evaluation.deleteOne();
     res.json({ message: 'Evaluation cleared successfully' });
   } catch (err) {
     res.status(500).json({ message: 'Failed to clear evaluation', error: err.message });
@@ -77,6 +133,17 @@ exports.submitEvaluation = async (req, res) => {
   const section = await Section.findById(group.section._id || group.section);
   if (req.user.role === 'panel') {
     const subjectId = section?.subject?.toString();
+    if (
+      req.user.createdBy &&
+      (
+        !section?.createdBy ||
+        section.createdBy.toString() !== req.user.createdBy.toString() ||
+        !group.createdBy ||
+        group.createdBy.toString() !== req.user.createdBy.toString()
+      )
+    ) {
+      return res.status(403).json({ message: 'This group belongs to another instructor' });
+    }
     if (req.user.createdBy) {
       const ownerCanGradeSubject = Boolean(subjectId) && await Admin.exists({
         _id: req.user.createdBy,
@@ -88,16 +155,10 @@ exports.submitEvaluation = async (req, res) => {
         return res.status(403).json({ message: 'This group belongs to another instructor subject' });
       }
     }
-    const instructorFilter = req.user.createdBy
-      ? {
-          $or: [
-            { _id: req.user.createdBy },
-            { assignedSubjects: subjectId },
-          ],
-        }
-      : { assignedSubjects: subjectId };
-    const subjectLocked = Boolean(subjectId) && await Admin.exists({
-      ...instructorFilter,
+    const subjectLocked = Boolean(subjectId) && Boolean(req.user.createdBy) && await Admin.exists({
+      _id: req.user.createdBy,
+      role: 'admin',
+      isActive: true,
       gradingLockedSubjects: subjectId,
     });
     if (subjectLocked) {
@@ -140,7 +201,7 @@ exports.submitEvaluation = async (req, res) => {
   const total = Object.values(scores).reduce((sum, val) => sum + Number(val || 0), 0);
 
   const evaluation = await Evaluation.findOneAndUpdate(
-    { group: groupId, panel: req.user._id },
+    { group: groupId, panel: req.user._id, isLegacyArchived: { $ne: true } },
     {
       scores,
       total,
@@ -160,15 +221,27 @@ exports.getMyEvaluation = async (req, res) => {
   const evaluation = await Evaluation.findOne({
     group: req.params.groupId,
     panel: req.user._id,
+    isLegacyArchived: { $ne: true },
   }).populate('rubric');
   res.json(serializeEvaluation(evaluation));
 };
 
 // Admin: get all evaluations for a group + computed final result
 exports.getGroupResult = async (req, res) => {
+  const group = await Group.findById(req.params.groupId).populate('section', 'subject');
+  if (!group) return res.status(404).json({ message: 'Group not found' });
+  if (!group.createdBy || group.createdBy.toString() !== getOwnerId(req)?.toString()) {
+    return res.status(403).json({ message: 'This group belongs to another instructor' });
+  }
+  const selectedSubject = getSubjectId(req);
+  if (selectedSubject && group.section?.subject?.toString() !== selectedSubject.toString()) {
+    return res.status(403).json({ message: 'This group does not belong to the current subject' });
+  }
+
   const evaluations = await Evaluation.find({
     group: req.params.groupId,
     isSubmitted: true,
+    isLegacyArchived: { $ne: true },
   }).populate('panel', 'name email').populate('rubric');
 
   if (!evaluations.length)
@@ -221,8 +294,15 @@ exports.getGroupResult = async (req, res) => {
 
 // Admin: get results for all groups in a section
 exports.getSectionResults = async (req, res) => {
-  const section = await Section.findById(req.params.sectionId).select('subject');
+  const section = await Section.findById(req.params.sectionId).select('subject createdBy');
   if (!section) return res.status(404).json({ message: 'Section not found' });
+  if (!section.createdBy || section.createdBy.toString() !== getOwnerId(req)?.toString()) {
+    return res.status(403).json({ message: 'This block does not belong to the current instructor' });
+  }
+  const selectedSubject = getSubjectId(req);
+  if (selectedSubject && section.subject?.toString() !== selectedSubject.toString()) {
+    return res.status(403).json({ message: 'This block does not belong to the current subject' });
+  }
   if (!canAccessSubject(req, section.subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
 
   const activeRubricFilter = { subject: section.subject, isActive: true };
@@ -232,12 +312,13 @@ exports.getSectionResults = async (req, res) => {
   }
   const activeRubric = await Rubric.findOne(activeRubricFilter);
   const activeCriteria = serializeCriteria(activeRubric?.criteria || []);
-  const groups = await Group.find({ section: req.params.sectionId });
+  const groups = await Group.find({ section: req.params.sectionId, createdBy: getOwnerId(req) });
   const results = await Promise.all(
     groups.map(async (group) => {
       const evaluations = await Evaluation.find({
         group: group._id,
         isSubmitted: true,
+        isLegacyArchived: { $ne: true },
       }).populate('panel', 'name email').populate('rubric');
 
       // if (!evaluations.length) return { group, averaged: null, finalTotal: null };
@@ -319,20 +400,24 @@ exports.exportAllResults = async (req, res) => {
   const subject = getSubjectId(req);
   if (subject && !canAccessSubject(req, subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
   const sectionFilter = subject
-    ? { subject }
+    ? { subject, createdBy: getOwnerId(req) }
     : req.user.role === 'admin'
-      ? { subject: { $in: req.user.assignedSubjects || [] } }
+      ? { subject: { $in: req.user.assignedSubjects || [] }, createdBy: req.user._id }
       : {};
   const sections = await Section.find(sectionFilter);
   const allResults = [];
 
   for (const section of sections) {
-    const groups = await Group.find({ section: section._id })
+    const groups = await Group.find({ section: section._id, createdBy: getOwnerId(req) })
       .populate({ path: 'section', populate: { path: 'assignedPanels', select: 'name email' } })
       .populate('assignedPanels', 'name email');
 
     for (const group of groups) {
-      const evaluations = await Evaluation.find({ group: group._id, isSubmitted: true }).populate('panel', 'name');
+      const evaluations = await Evaluation.find({
+        group: group._id,
+        isSubmitted: true,
+        isLegacyArchived: { $ne: true },
+      }).populate('panel', 'name');
       
       if (evaluations.length === 0) continue;
 
@@ -389,13 +474,26 @@ exports.masterReset = async (req, res) => {
     const subject = getSubjectId(req);
     if (subject) {
       if (!canAccessSubject(req, subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
-      const sections = await Section.find({ subject }).select('_id');
+      const ownerId = getOwnerId(req);
+      if (!ownerId) return res.status(400).json({ message: 'Instructor owner is required for subject reset' });
+      const sections = await Section.find({ subject, createdBy: ownerId }).select('_id');
       const sectionIds = sections.map((section) => section._id);
-      const groups = await Group.find({ section: { $in: sectionIds } }).select('_id');
+      const groups = await Group.find({ section: { $in: sectionIds }, createdBy: ownerId }).select('_id');
       const groupIds = groups.map((group) => group._id);
-      await Evaluation.deleteMany({ $or: [{ subject }, { group: { $in: groupIds } }] });
-      await Group.deleteMany({ section: { $in: sectionIds } });
-      await Section.deleteMany({ _id: { $in: sectionIds } });
+      const instructor = await Admin.findById(ownerId).select('name email');
+      const archivedResults = await archiveSubjectEvaluations(groupIds, instructor);
+      await Group.deleteMany({ _id: { $in: groupIds } });
+      await Section.deleteMany({ _id: { $in: sectionIds }, createdBy: ownerId });
+      await RegistrationLink.updateMany(
+        { createdBy: ownerId, subject },
+        { $pull: { sections: { $in: sectionIds } } }
+      );
+      return res.json({
+        message: 'Subject data reset. Submitted results were preserved for Super Admin backup.',
+        deletedBlocks: sectionIds.length,
+        deletedGroups: groupIds.length,
+        archivedResults,
+      });
     } else {
       if (req.user.role !== 'superadmin') return res.status(403).json({ message: 'Global reset requires super admin access' });
       await Evaluation.deleteMany({});

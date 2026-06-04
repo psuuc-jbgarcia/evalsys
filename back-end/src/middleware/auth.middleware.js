@@ -23,6 +23,16 @@ const protect = async (req, res, next) => {
       return res.status(401).json({ message: 'Account inactive or not found' });
 
     req.user = user;
+    const passwordChangeAllowed = [
+      '/api/auth/me',
+      '/api/auth/change-password',
+    ].includes(req.originalUrl.split('?')[0]);
+    if (user.mustChangePassword && !passwordChangeAllowed) {
+      return res.status(403).json({
+        message: 'You must change your temporary password before continuing',
+        mustChangePassword: true,
+      });
+    }
     next();
   } catch {
     res.status(401).json({ message: 'Invalid token' });
@@ -32,6 +42,39 @@ const protect = async (req, res, next) => {
 const adminOnly = (req, res, next) => {
   if (!['admin', 'superadmin'].includes(req.user?.role))
     return res.status(403).json({ message: 'Admin access required' });
+  next();
+};
+
+const instructorOnly = (req, res, next) => {
+  if (req.user?.role !== 'admin')
+    return res.status(403).json({ message: 'Instructor access required' });
+  next();
+};
+
+const instructorOrPanelOnly = (req, res, next) => {
+  if (!['admin', 'panel'].includes(req.user?.role))
+    return res.status(403).json({ message: 'Instructor or panel access required' });
+  next();
+};
+
+const superadminInstructorContext = async (req, res, next) => {
+  if (req.user?.role !== 'superadmin') return next();
+
+  const instructorId = req.headers['x-instructor-id'];
+  if (!instructorId) {
+    return res.status(400).json({ message: 'Select an instructor before managing operational data' });
+  }
+
+  const instructor = await Admin.findOne({ _id: instructorId, role: 'admin', isActive: true }).select('assignedSubjects');
+  if (!instructor) return res.status(400).json({ message: 'Selected instructor is invalid or inactive' });
+
+  const subjectId = req.headers['x-subject-id'] || req.query.subject || req.body?.subject;
+  if (!subjectId) return res.status(400).json({ message: 'Select a subject before managing operational data' });
+
+  const assigned = (instructor.assignedSubjects || []).some((id) => id.toString() === subjectId.toString());
+  if (!assigned) return res.status(403).json({ message: 'Selected subject does not belong to the selected instructor' });
+
+  req.instructorContext = instructor;
   next();
 };
 
@@ -47,4 +90,12 @@ const panelOnly = (req, res, next) => {
   next();
 };
 
-module.exports = { protect, adminOnly, panelOnly, superadminOnly };
+module.exports = {
+  protect,
+  adminOnly,
+  instructorOnly,
+  instructorOrPanelOnly,
+  panelOnly,
+  superadminOnly,
+  superadminInstructorContext,
+};

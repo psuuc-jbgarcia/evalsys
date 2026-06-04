@@ -2,8 +2,12 @@ const Group = require('../models/Group');
 const Section = require('../models/Section');
 const Admin = require('../models/Admin');
 const Panel = require('../models/Panel');
+const Evaluation = require('../models/Evaluation');
 
 const getSubjectId = (req) => req.headers['x-subject-id'] || req.query.subject || req.body.subject;
+const getOwnerId = (req) => req.user?.role === 'superadmin'
+  ? req.instructorContext?._id
+  : req.user?._id;
 const canAccessSubject = (req, subjectId) => (
   !subjectId ||
   req.user?.role === 'superadmin' ||
@@ -44,19 +48,21 @@ const validatePanelAssignments = async (req, panelIds = [], subject) => {
   }
 
   for (const panel of panels) {
-    if (req.user.role === 'admin' && panel.createdBy && panel.createdBy.toString() !== req.user._id.toString()) {
+    const ownerId = getOwnerId(req);
+    if (!panel.createdBy) {
+      return `${panel.name} is old data without an instructor owner`;
+    }
+    if (!ownerId || panel.createdBy.toString() !== ownerId.toString()) {
       return `${panel.name} belongs to another instructor`;
     }
 
-    if (panel.createdBy) {
-      const owner = await Admin.findOne({
-        _id: panel.createdBy,
-        role: 'admin',
-        isActive: true,
-        assignedSubjects: subject,
-      }).select('_id');
-      if (!owner) return `${panel.name}'s instructor is not assigned to this subject`;
-    }
+    const owner = await Admin.findOne({
+      _id: panel.createdBy,
+      role: 'admin',
+      isActive: true,
+      assignedSubjects: subject,
+    }).select('_id');
+    if (!owner) return `${panel.name}'s instructor is not assigned to this subject`;
   }
 
   return null;
@@ -67,8 +73,16 @@ exports.createGroup = async (req, res) => {
   if (!name || !section) return res.status(400).json({ message: 'Name and section required' });
   const sectionDoc = await Section.findById(section);
   if (!sectionDoc) return res.status(404).json({ message: 'Section not found' });
+  const selectedSubject = getSubjectId(req);
+  if (selectedSubject && sectionDoc.subject?.toString() !== selectedSubject.toString()) {
+    return res.status(400).json({ message: 'Selected block does not belong to the current subject' });
+  }
   if (req.user && !canAccessSubject(req, sectionDoc.subject)) {
     return res.status(403).json({ message: 'You are not assigned to this subject' });
+  }
+  const ownerId = getOwnerId(req);
+  if (!sectionDoc.createdBy || sectionDoc.createdBy.toString() !== ownerId?.toString()) {
+    return res.status(403).json({ message: 'Selected block does not belong to the current instructor' });
   }
   const assignmentError = await validatePanelAssignments(req, assignedPanels, sectionDoc.subject);
   if (assignmentError) return res.status(400).json({ message: assignmentError });
@@ -82,6 +96,7 @@ exports.createGroup = async (req, res) => {
   const group = await Group.create({
     name,
     section,
+    createdBy: ownerId,
     members: members || [],
     assignedPanels: assignedPanels || [],
   });
@@ -93,6 +108,7 @@ exports.bulkCreateGroups = async (req, res) => {
   const { groups } = req.body;
   if (!Array.isArray(groups)) return res.status(400).json({ message: 'Groups array required' });
   const subject = getSubjectId(req);
+  const ownerId = getOwnerId(req);
   if (!subject) return res.status(400).json({ message: 'Subject required' });
   if (!canAccessSubject(req, subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
 
@@ -100,7 +116,7 @@ exports.bulkCreateGroups = async (req, res) => {
 
   // Cache sections for performance
   const sectionMap = {};
-  const allSections = await Section.find({ subject });
+  const allSections = await Section.find({ subject, createdBy: ownerId });
   allSections.forEach(s => {
     sectionMap[s.block.toLowerCase()] = s._id;
   });
@@ -130,6 +146,7 @@ exports.bulkCreateGroups = async (req, res) => {
       await Group.create({
         name,
         section: sectionId,
+        createdBy: ownerId,
         members: normalizeMembers(members)
       });
       results.created++;
@@ -157,6 +174,7 @@ exports.getGroups = async (req, res) => {
       if (!instructor) return res.json([]);
       allowedSubjectIds = (instructor.assignedSubjects || []).map((id) => id.toString());
       sectionFilter.subject = { $in: instructor.assignedSubjects || [] };
+      sectionFilter.createdBy = req.user.createdBy;
     }
 
     const assignedSections = await Section.find(sectionFilter).select('_id subject');
@@ -164,7 +182,7 @@ exports.getGroups = async (req, res) => {
 
 
     // Bypass Mongoose $in array casting edge cases by filtering in memory
-    const allGroups = await Group.find()
+    const allGroups = await Group.find(req.user.createdBy ? { createdBy: req.user.createdBy } : {})
       .populate({
         path: 'section',
         select: 'name block subject',
@@ -178,7 +196,8 @@ exports.getGroups = async (req, res) => {
 
     const evaluations = await require('../models/Evaluation').find({
       panel: req.user._id,
-      isSubmitted: true
+      isSubmitted: true,
+      isLegacyArchived: { $ne: true },
     }).select('group');
     const gradedGroupIds = evaluations.map(ev => ev.group.toString());
 
@@ -203,11 +222,17 @@ exports.getGroups = async (req, res) => {
 
   if (subject) {
     if (!canAccessSubject(req, subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
-    const subjectSections = await Section.find({ subject }).select('_id');
+    const ownerId = getOwnerId(req);
+    const subjectSections = await Section.find({ subject, createdBy: ownerId }).select('_id');
     filter.section = req.query.section || { $in: subjectSections.map((s) => s._id) };
+    filter.createdBy = ownerId;
   } else if (req.user.role === 'admin') {
-    const subjectSections = await Section.find({ subject: { $in: req.user.assignedSubjects || [] } }).select('_id');
+    const subjectSections = await Section.find({
+      subject: { $in: req.user.assignedSubjects || [] },
+      createdBy: req.user._id,
+    }).select('_id');
     filter.section = req.query.section || { $in: subjectSections.map((s) => s._id) };
+    filter.createdBy = req.user._id;
   }
 
   const groups = await Group.find(filter)
@@ -230,6 +255,17 @@ exports.getGroup = async (req, res) => {
     })
     .populate('assignedPanels', 'name email');
   if (!group) return res.status(404).json({ message: 'Group not found' });
+  const selectedSubject = getSubjectId(req);
+  const groupSubjectId = group.section?.subject?._id || group.section?.subject;
+  if (req.user.role !== 'panel' && selectedSubject && groupSubjectId?.toString() !== selectedSubject.toString()) {
+    return res.status(403).json({ message: 'This group does not belong to the current subject' });
+  }
+  if (
+    req.user.role !== 'panel' &&
+    (!group.createdBy || group.createdBy.toString() !== getOwnerId(req)?.toString())
+  ) {
+    return res.status(403).json({ message: 'This group does not belong to the current instructor' });
+  }
   if (req.user.role !== 'panel' && !canAccessSubject(req, group.section?.subject)) {
     return res.status(403).json({ message: 'You are not assigned to this subject' });
   }
@@ -263,11 +299,21 @@ exports.updateGroup = async (req, res) => {
   const { name, section } = req.body;
   const current = await Group.findById(req.params.id);
   if (!current) return res.status(404).json({ message: 'Group not found' });
+  if (!current.createdBy || current.createdBy.toString() !== getOwnerId(req)?.toString()) {
+    return res.status(403).json({ message: 'This group does not belong to the current instructor' });
+  }
   
   if (name || section) {
     const currentSection = await Section.findById(section || current.section);
+    const selectedSubject = getSubjectId(req);
+    if (selectedSubject && currentSection?.subject?.toString() !== selectedSubject.toString()) {
+      return res.status(400).json({ message: 'Selected block does not belong to the current subject' });
+    }
     if (!canAccessSubject(req, currentSection?.subject)) {
       return res.status(403).json({ message: 'You are not assigned to this subject' });
+    }
+    if (!currentSection?.createdBy || currentSection.createdBy.toString() !== getOwnerId(req)?.toString()) {
+      return res.status(403).json({ message: 'Selected block does not belong to the current instructor' });
     }
     const checkName = name || current.name;
     const checkSection = section || current.section;
@@ -289,7 +335,12 @@ exports.updateGroup = async (req, res) => {
     if (assignmentError) return res.status(400).json({ message: assignmentError });
   }
 
-  const group = await Group.findByIdAndUpdate(req.params.id, req.body, { new: true });
+  const updates = {};
+  if (req.body.name !== undefined) updates.name = req.body.name;
+  if (req.body.section !== undefined) updates.section = req.body.section;
+  if (req.body.members !== undefined) updates.members = req.body.members;
+  if (req.body.assignedPanels !== undefined) updates.assignedPanels = req.body.assignedPanels;
+  const group = await Group.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });
   if (!group) return res.status(404).json({ message: 'Group not found' });
   res.json(group);
 };
@@ -297,7 +348,18 @@ exports.updateGroup = async (req, res) => {
 exports.deleteGroup = async (req, res) => {
   const group = await Group.findById(req.params.id).populate('section', 'subject');
   if (!group) return res.status(404).json({ message: 'Group not found' });
+  if (!group.createdBy || group.createdBy.toString() !== getOwnerId(req)?.toString()) {
+    return res.status(403).json({ message: 'This group does not belong to the current instructor' });
+  }
+  const selectedSubject = getSubjectId(req);
+  if (selectedSubject && group.section?.subject?.toString() !== selectedSubject.toString()) {
+    return res.status(403).json({ message: 'This group does not belong to the current subject' });
+  }
   if (!canAccessSubject(req, group.section?.subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
+  const deletedEvaluations = await Evaluation.deleteMany({ group: group._id });
   await group.deleteOne();
-  res.json({ message: 'Group deleted' });
+  res.json({
+    message: 'Group and its evaluations deleted',
+    deletedEvaluations: deletedEvaluations.deletedCount,
+  });
 };

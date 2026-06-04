@@ -6,11 +6,11 @@ const {
   deleteSection,
   assignBlocksToPanel
 } = require('../controllers/section.controller');
-const { protect, adminOnly } = require('../middleware/auth.middleware');
+const { protect, adminOnly, superadminInstructorContext } = require('../middleware/auth.middleware');
 
 router.get('/public', getSections); // Allow public to see blocks for registration
 
-router.use(protect);
+router.use(protect, superadminInstructorContext);
 
 router.get('/', getSections);
 router.post('/assign-blocks', adminOnly, assignBlocksToPanel);
