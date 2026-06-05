@@ -31,6 +31,12 @@ const formatMemberList = (members = [], separator = '; ') => members
   .filter(Boolean)
   .join(separator);
 
+const getPanelName = (evaluation) => (
+  evaluation.panel?.name ||
+  evaluation.legacySnapshot?.panelName ||
+  'Deleted panel'
+);
+
 const serializeEvaluation = (evaluation) => {
   if (!evaluation) return null;
   const obj = evaluation.toObject ? evaluation.toObject() : evaluation;
@@ -257,7 +263,7 @@ exports.getGroupResult = async (req, res) => {
       divisor = groupDoc.assignedPanels.length;
     }
   }
-  if (divisor === 0) divisor = 1;
+  divisor = Math.max(divisor, evaluations.length, 1);
 
   // Dynamically collect all categories used in these evaluations
   const averaged = {};
@@ -285,7 +291,7 @@ exports.getGroupResult = async (req, res) => {
   ) / 100;
 
   const comments = evaluations.map(ev => ({
-    panel: ev.panel?.name || 'Unknown',
+    panel: getPanelName(ev),
     text: ev.comments || ''
   })).filter(c => c.text);
 
@@ -339,7 +345,7 @@ exports.getSectionResults = async (req, res) => {
           divisor = groupDoc.assignedPanels.length;
         }
       }
-      if (divisor === 0) divisor = 1;
+      divisor = Math.max(divisor, evaluations.length, 1);
 
       // Determine who has NOT evaluated yet
       const evaluatedPanelIds = evaluations.map(ev => ev.panel?._id?.toString() || '');
@@ -375,16 +381,16 @@ exports.getSectionResults = async (req, res) => {
         ? Math.round(Object.values(averaged).reduce((a, b) => a + b, 0) * 100) / 100
         : null;
 
-      const evaluatedBy = evaluations.map(ev => ev.panel?.name || 'Unknown');
+      const evaluatedBy = evaluations.map(getPanelName);
       const comments = evaluations.map(ev => ({
-        panel: ev.panel?.name || 'Unknown',
+        panel: getPanelName(ev),
         text: ev.comments || ''
       })).filter(c => c.text);
 
       const evaluationRecords = evaluations.map(ev => ({
         _id: ev._id,
         panelId: ev.panel?._id,
-        panelName: ev.panel?.name || 'Unknown',
+        panelName: getPanelName(ev),
       }));
       const evaluationCriteria = evaluations.flatMap(ev => serializeCriteria(ev.rubric?.criteria || []));
       const rubricCriteria = mergeCriteria(evaluationCriteria, activeCriteria);
@@ -428,7 +434,7 @@ exports.exportAllResults = async (req, res) => {
         assignedPanelDocs = group.assignedPanels;
       }
 
-      const divisor = assignedPanelDocs.length || evaluations.length || 1;
+      const divisor = Math.max(assignedPanelDocs.length, evaluations.length, 1);
       const evaluatedPanelIds = evaluations.map(ev => ev.panel?._id?.toString() || '');
       const missingPanels = assignedPanelDocs
         .filter(panel => panel && !evaluatedPanelIds.includes(panel._id.toString()))
@@ -452,7 +458,7 @@ exports.exportAllResults = async (req, res) => {
         GroupName: group.name,
         Members: formatMemberList(group.members),
         AverageScore: isIncomplete ? 'Pending Complete Evaluation' : avgScore,
-        EvaluatedBy: evaluations.map(ev => ev.panel?.name).join(', '),
+        EvaluatedBy: evaluations.map(getPanelName).join(', '),
         MissingPanels: missingPanels.join(', '),
         Status: isIncomplete ? 'Incomplete' : 'Complete',
         Comments: evaluations.map(ev => ev.comments).filter(Boolean).join(' | ')
@@ -489,7 +495,9 @@ exports.masterReset = async (req, res) => {
         { $pull: { sections: { $in: sectionIds } } }
       );
       return res.json({
-        message: 'Subject data reset. Submitted results were preserved for Super Admin backup.',
+        message: req.user.role === 'superadmin'
+          ? 'Subject data reset. Submitted results were moved to Archive.'
+          : 'Subject reset complete.',
         deletedBlocks: sectionIds.length,
         deletedGroups: groupIds.length,
         archivedResults,

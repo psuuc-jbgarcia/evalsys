@@ -35,12 +35,110 @@ const getRubricOwnerId = async (req, subject) => {
 
 const canManageRubric = (req, rubric) => (
   req.user?.role === 'superadmin' ||
-  (rubric.createdBy && rubric.createdBy.toString() === req.user?._id.toString())
+  (rubric.createdBy && rubric.createdBy.toString() === req.user?._id.toString()) ||
+  (req.user?.role === 'admin' && !rubric.createdBy && canAccessSubject(req, rubric.subject))
 );
+
+const ensureRubricOwner = async (req, rubric) => {
+  if (req.user?.role !== 'admin' || rubric.createdBy) return rubric;
+  rubric.createdBy = req.user._id;
+  await rubric.save();
+  return rubric;
+};
+
+const claimUnownedSubjectRubrics = async (subject, ownerId) => {
+  if (!subject || !ownerId) return;
+  await Rubric.updateMany(
+    {
+      subject,
+      $or: [{ createdBy: { $exists: false } }, { createdBy: null }],
+    },
+    { createdBy: ownerId }
+  );
+};
+
+const validateRubricPayload = ({ title, criteria }) => {
+  if (!String(title || '').trim()) return 'Rubric title is required';
+  if (!Array.isArray(criteria) || criteria.length === 0) return 'Add at least one evaluation criteria';
+
+  const criteriaKeys = new Set();
+  const criteriaLabels = new Set();
+
+  for (let ci = 0; ci < criteria.length; ci++) {
+    const c = criteria[ci];
+    const criteriaLabel = String(c?.label || '').trim();
+    const criteriaKey = String(c?.key || '').trim();
+    const maxScore = Number(c?.maxScore);
+    const criteriaName = criteriaLabel || `Criteria ${ci + 1}`;
+
+    if (!criteriaLabel) return `Criteria ${ci + 1}: name is required`;
+    if (!criteriaKey) return `${criteriaName}: system key is required`;
+    if (!Number.isFinite(maxScore) || maxScore <= 0) return `${criteriaName}: max score must be greater than 0`;
+
+    const normalizedKey = criteriaKey.toLowerCase();
+    const normalizedLabel = criteriaLabel.toLowerCase();
+    if (criteriaKeys.has(normalizedKey)) return `${criteriaName}: criteria key is duplicated`;
+    if (criteriaLabels.has(normalizedLabel)) return `${criteriaName}: criteria name is duplicated`;
+    criteriaKeys.add(normalizedKey);
+    criteriaLabels.add(normalizedLabel);
+
+    if (!Array.isArray(c.levels) || c.levels.length === 0) {
+      return `${criteriaName}: add at least one score level`;
+    }
+
+    const levelLabels = new Set();
+    const ranges = [];
+    for (let li = 0; li < c.levels.length; li++) {
+      const level = c.levels[li];
+      const levelLabel = String(level?.label || '').trim();
+      const minScore = Number(level?.minScore);
+      const levelMaxScore = Number(level?.maxScore);
+      const levelName = levelLabel || `Level ${li + 1}`;
+
+      if (!levelLabel) return `${criteriaName}: level ${li + 1} name is required`;
+      const normalizedLevel = levelLabel.toLowerCase();
+      if (levelLabels.has(normalizedLevel)) return `${criteriaName}: level "${levelLabel}" is duplicated`;
+      levelLabels.add(normalizedLevel);
+
+      if (!Number.isFinite(minScore) || !Number.isFinite(levelMaxScore)) {
+        return `${criteriaName} - ${levelName}: range must be valid numbers`;
+      }
+      if (minScore < 0 || levelMaxScore < 0) {
+        return `${criteriaName} - ${levelName}: range cannot be negative`;
+      }
+      if (minScore > levelMaxScore) {
+        return `${criteriaName} - ${levelName}: minimum score cannot be higher than maximum score`;
+      }
+      if (levelMaxScore > maxScore) {
+        return `${criteriaName} - ${levelName}: range cannot exceed criteria max score (${maxScore})`;
+      }
+
+      ranges.push({ min: minScore, max: levelMaxScore, label: levelLabel });
+    }
+
+    const sortedRanges = ranges.slice().sort((a, b) => a.min - b.min || a.max - b.max);
+    for (let i = 1; i < sortedRanges.length; i++) {
+      const previous = sortedRanges[i - 1];
+      const current = sortedRanges[i];
+      if (current.min <= previous.max) {
+        return `${criteriaName}: "${current.label}" overlaps with "${previous.label}"`;
+      }
+    }
+  }
+
+  return null;
+};
 
 const normalizeActiveRubrics = async (subject, ownerId) => {
   const activeRubrics = await Rubric.find({ subject, ...getOwnerFilter(ownerId), isActive: true }).sort({ createdAt: -1 });
-  if (activeRubrics.length <= 1) return activeRubrics[0] || null;
+  if (activeRubrics.length === 1) return activeRubrics[0];
+  if (!activeRubrics.length) {
+    const replacement = await Rubric.findOne({ subject, ...getOwnerFilter(ownerId) }).sort({ createdAt: -1 });
+    if (!replacement) return null;
+    replacement.isActive = true;
+    await replacement.save();
+    return replacement;
+  }
 
   const [current, ...duplicates] = activeRubrics;
   await Rubric.updateMany(
@@ -52,7 +150,7 @@ const normalizeActiveRubrics = async (subject, ownerId) => {
 };
 
 const DEFAULT_RUBRIC = {
-  title: 'Capstone Defense Rubric',
+  title: 'Project Defense Rubric',
   criteria: [
     {
       key: 'systemFunctionality',
@@ -117,6 +215,7 @@ exports.getActiveRubric = async (req, res) => {
   const subject = getSubjectId(req);
   if (!subject) return res.json(null);
   const ownerId = await getRubricOwnerId(req, subject);
+  if (ownerId) await claimUnownedSubjectRubrics(subject, ownerId);
   if (ownerId) await normalizeActiveRubrics(subject, ownerId);
   let rubric = ownerId
     ? await Rubric.findOne({ subject, createdBy: ownerId, isActive: true }).populate('createdBy', 'name email')
@@ -146,7 +245,10 @@ exports.getAllRubrics = async (req, res) => {
   } else if (req.user.role === 'superadmin' && req.query.createdBy) {
     filter.createdBy = req.query.createdBy;
   }
-  if (subject && req.user.role === 'admin') await normalizeActiveRubrics(subject, req.user._id);
+  if (subject && req.user.role === 'admin') {
+    await claimUnownedSubjectRubrics(subject, req.user._id);
+    await normalizeActiveRubrics(subject, req.user._id);
+  }
   const rubrics = await Rubric.find(filter).populate('createdBy', 'name email').sort({ createdAt: -1 });
   res.json(rubrics);
 };
@@ -154,20 +256,10 @@ exports.getAllRubrics = async (req, res) => {
 exports.createRubric = async (req, res) => {
   const { title, criteria } = req.body;
   const subject = getSubjectId(req);
-  if (!title || !criteria?.length)
-    return res.status(400).json({ message: 'Title and criteria required' });
+  const validationError = validateRubricPayload({ title, criteria });
+  if (validationError) return res.status(400).json({ message: validationError });
   if (!subject) return res.status(400).json({ message: 'Subject required' });
   if (!canAccessSubject(req, subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
-
-  // Validate criteria
-  for (const c of criteria) {
-    if (!c.key || !c.label || c.maxScore == null || !c.levels?.length)
-      return res.status(400).json({ message: `Invalid criteria: ${c.label || c.key}` });
-    for (const l of c.levels) {
-      if (l.minScore < 0 || l.maxScore > c.maxScore)
-        return res.status(400).json({ message: `Level scores out of range in ${c.label}` });
-    }
-  }
 
   const hasRubric = await Rubric.exists({ subject, createdBy: req.user._id });
   const rubric = await Rubric.create({ title, criteria, subject, createdBy: req.user._id, isActive: !hasRubric });
@@ -179,6 +271,14 @@ exports.updateRubric = async (req, res) => {
   if (!existing) return res.status(404).json({ message: 'Rubric not found' });
   if (!canAccessSubject(req, existing.subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
   if (!canManageRubric(req, existing)) return res.status(403).json({ message: 'You can only edit rubrics you created' });
+  await ensureRubricOwner(req, existing);
+  if (req.body.title !== undefined || req.body.criteria !== undefined) {
+    const validationError = validateRubricPayload({
+      title: req.body.title ?? existing.title,
+      criteria: req.body.criteria ?? existing.criteria,
+    });
+    if (validationError) return res.status(400).json({ message: validationError });
+  }
   const rubric = await Rubric.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true }).populate('createdBy', 'name email');
   res.json(rubric);
 };
@@ -188,6 +288,7 @@ exports.setActiveRubric = async (req, res) => {
   if (!existing) return res.status(404).json({ message: 'Rubric not found' });
   if (!canAccessSubject(req, existing.subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
   if (!canManageRubric(req, existing)) return res.status(403).json({ message: 'You can only activate rubrics you created' });
+  await ensureRubricOwner(req, existing);
   await Rubric.updateMany({ subject: existing.subject, ...getOwnerFilter(existing.createdBy) }, { isActive: false });
   const rubric = await Rubric.findByIdAndUpdate(req.params.id, { isActive: true }, { new: true }).populate('createdBy', 'name email');
   if (!rubric) return res.status(404).json({ message: 'Rubric not found' });
@@ -199,6 +300,7 @@ exports.deleteRubric = async (req, res) => {
   if (!rubric) return res.status(404).json({ message: 'Rubric not found' });
   if (!canAccessSubject(req, rubric.subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
   if (!canManageRubric(req, rubric)) return res.status(403).json({ message: 'You can only delete rubrics you created' });
+  await ensureRubricOwner(req, rubric);
 
   const wasActive = rubric.isActive;
   const subject = rubric.subject;

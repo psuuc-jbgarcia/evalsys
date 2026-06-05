@@ -55,6 +55,68 @@ const getOwnerLabel = (rubric: Rubric) => {
   return rubric.createdBy.name || rubric.createdBy.email || 'Unknown instructor';
 };
 
+const validateRubricForm = (title: string, criteria: Criteria[]) => {
+  if (!title.trim()) return 'Rubric title is required.';
+  if (!criteria.length) return 'Add at least one evaluation criteria.';
+
+  const criteriaKeys = new Set<string>();
+  const criteriaLabels = new Set<string>();
+
+  for (let ci = 0; ci < criteria.length; ci++) {
+    const c = criteria[ci];
+    const criteriaName = c.label.trim() || `Criteria ${ci + 1}`;
+    const maxScore = Number(c.maxScore);
+
+    if (!c.label.trim()) return `Criteria ${ci + 1}: name is required.`;
+    if (!c.key.trim()) return `${criteriaName}: system key is required.`;
+    if (!Number.isFinite(maxScore) || maxScore <= 0) return `${criteriaName}: max score must be greater than 0.`;
+
+    const normalizedKey = c.key.trim().toLowerCase();
+    const normalizedLabel = c.label.trim().toLowerCase();
+    if (criteriaKeys.has(normalizedKey)) return `${criteriaName}: criteria key is duplicated.`;
+    if (criteriaLabels.has(normalizedLabel)) return `${criteriaName}: criteria name is duplicated.`;
+    criteriaKeys.add(normalizedKey);
+    criteriaLabels.add(normalizedLabel);
+
+    if (!c.levels.length) return `${criteriaName}: add at least one score level.`;
+
+    const levelLabels = new Set<string>();
+    const ranges: Array<{ min: number; max: number; label: string }> = [];
+
+    for (let li = 0; li < c.levels.length; li++) {
+      const level = c.levels[li];
+      const levelName = level.label.trim() || `Level ${li + 1}`;
+      const minScore = Number(level.minScore);
+      const levelMaxScore = Number(level.maxScore);
+
+      if (!level.label.trim()) return `${criteriaName}: level ${li + 1} name is required.`;
+      const normalizedLevel = level.label.trim().toLowerCase();
+      if (levelLabels.has(normalizedLevel)) return `${criteriaName}: level "${level.label}" is duplicated.`;
+      levelLabels.add(normalizedLevel);
+
+      if (!Number.isFinite(minScore) || !Number.isFinite(levelMaxScore)) {
+        return `${criteriaName} - ${levelName}: range must be valid numbers.`;
+      }
+      if (minScore < 0 || levelMaxScore < 0) return `${criteriaName} - ${levelName}: range cannot be negative.`;
+      if (minScore > levelMaxScore) return `${criteriaName} - ${levelName}: minimum score cannot be higher than maximum score.`;
+      if (levelMaxScore > maxScore) return `${criteriaName} - ${levelName}: range cannot exceed criteria max score (${maxScore}).`;
+
+      ranges.push({ min: minScore, max: levelMaxScore, label: level.label.trim() });
+    }
+
+    const sortedRanges = ranges.slice().sort((a, b) => a.min - b.min || a.max - b.max);
+    for (let i = 1; i < sortedRanges.length; i++) {
+      const previous = sortedRanges[i - 1];
+      const current = sortedRanges[i];
+      if (current.min <= previous.max) {
+        return `${criteriaName}: "${current.label}" overlaps with "${previous.label}".`;
+      }
+    }
+  }
+
+  return '';
+};
+
 export default function Rubrics() {
   const { user } = useAuth();
   const isSuperadmin = user?.role === 'superadmin';
@@ -137,6 +199,11 @@ export default function Rubrics() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    const validationError = validateRubricForm(title, criteria);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
     try {
       if (editingId) {
         await api.put(`/rubrics/${editingId}`, { title, criteria });
@@ -185,6 +252,12 @@ export default function Rubrics() {
     return 'bg-danger/5 border-danger/20';
   };
 
+  const canControlRubric = (rubric: Rubric) => (
+    isSuperadmin ||
+    getOwnerId(rubric.createdBy) === userId ||
+    !rubric.createdBy
+  );
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -209,7 +282,7 @@ export default function Rubrics() {
           <div className="mb-5">
             <label className="evl-label">Rubric Title</label>
             <input value={title} onChange={(e) => setTitle(e.target.value)} required
-              className="evl-input max-w-xl" placeholder="e.g. Capstone Defense Rubric" />
+              className="evl-input max-w-xl" placeholder="e.g. Project Defense Rubric" />
           </div>
 
           <div className="space-y-6">
@@ -247,7 +320,7 @@ export default function Rubrics() {
                     <div className="md:col-span-3">
                       <label className="evl-label !mb-1.5">Max Score</label>
                       <div className="relative">
-                        <input type="number" value={c.maxScore} onChange={(e) => updateCriteria(ci, 'maxScore', Number(e.target.value))} required min={1}
+                        <input type="number" value={c.maxScore} onChange={(e) => updateCriteria(ci, 'maxScore', Number(e.target.value))} required min={1} step="0.01"
                           className="evl-input pr-10" />
                         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-text/30 uppercase">pts</span>
                       </div>
@@ -272,10 +345,10 @@ export default function Rubrics() {
                             <div className="lg:col-span-2">
                               <label className="text-[9px] font-bold text-text/40 uppercase block mb-1">Range</label>
                               <div className="flex items-center gap-2">
-                                <input type="number" value={l.minScore} onChange={(e) => updateLevel(ci, li, 'minScore', Number(e.target.value))} min={0}
+                                <input type="number" value={l.minScore} onChange={(e) => updateLevel(ci, li, 'minScore', Number(e.target.value))} min={0} max={c.maxScore || undefined} step="0.01"
                                   className="evl-input !py-1.5 !text-xs text-center" placeholder="Min" />
                                 <span className="text-text/30 text-xs">—</span>
-                                <input type="number" value={l.maxScore} onChange={(e) => updateLevel(ci, li, 'maxScore', Number(e.target.value))} min={0}
+                                <input type="number" value={l.maxScore} onChange={(e) => updateLevel(ci, li, 'maxScore', Number(e.target.value))} min={0} max={c.maxScore || undefined} step="0.01"
                                   className="evl-input !py-1.5 !text-xs text-center" placeholder="Max" />
                               </div>
                             </div>
@@ -349,7 +422,7 @@ export default function Rubrics() {
                       className="evl-btn-ghost">
                       {expandedRubric === r._id ? 'Hide' : 'View'}
                     </button>
-                    {(isSuperadmin || getOwnerId(r.createdBy) === userId) && (
+                    {canControlRubric(r) && (
                       <>
                         <button onClick={() => startEdit(r)}
                           className="evl-btn-ghost text-primary border-primary/30 hover:bg-primary/5 hover:border-primary/50">
@@ -360,9 +433,9 @@ export default function Rubrics() {
                         </button>
                       </>
                     )}
-                    {!r.isActive && (isSuperadmin || getOwnerId(r.createdBy) === userId) && (
+                    {!r.isActive && canControlRubric(r) && (
                       <button onClick={() => handleActivate(r._id)} className="evl-btn-ghost text-success border-success/30 hover:bg-success/5 hover:border-success/50">
-                        Use for Grading
+                        Use This Rubric
                       </button>
                     )}
                   </div>

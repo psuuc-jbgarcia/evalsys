@@ -82,6 +82,10 @@ const getMemberNameParts = (member: Member) => {
   };
 };
 
+const getResultMaxTotal = (result: GroupResult, fallbackMax: number) => (
+  result.rubricCriteria?.reduce((sum, criteria) => sum + criteria.maxScore, 0) ?? fallbackMax
+);
+
 export default function Results() {
   const { user } = useAuth();
   const isSuperadmin = user?.role === 'superadmin';
@@ -267,7 +271,9 @@ export default function Results() {
                 {csvLocked && !isSuperadmin ? 'Export Locked' : 'Download Member Grades CSV'}
               </button>
             </div>
-          </div>          <div className="overflow-x-auto">
+          </div>
+
+          <div className="overflow-x-auto">
             <table className="evl-table">
               <thead>
                 <tr>
@@ -286,7 +292,7 @@ export default function Results() {
               <tbody>
                 {results.map((result) => {
                   const { group, averaged, finalTotal, evaluatedBy, missingPanels, isIncomplete, comments, evaluationRecords } = result;
-                  const resultMaxTotal = result.rubricCriteria?.reduce((sum, criteria) => sum + criteria.maxScore, 0) ?? maxTotal;
+                  const resultMaxTotal = getResultMaxTotal(result, maxTotal);
                   return (
                     <tr key={group._id}>
                       <td className="whitespace-nowrap">

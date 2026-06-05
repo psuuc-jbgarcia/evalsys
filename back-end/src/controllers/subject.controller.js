@@ -16,6 +16,54 @@ const isAssignedToSubject = (user, subjectId) => (
   (user?.assignedSubjects || []).some((id) => id.toString() === subjectId.toString())
 );
 
+const archiveSubjectEvaluations = async (groupIds, subject) => {
+  const evaluations = await Evaluation.find({
+    $or: [{ group: { $in: groupIds } }, { subject: subject._id }],
+    isLegacyArchived: { $ne: true },
+  })
+    .populate('panel', 'name email')
+    .populate({
+      path: 'group',
+      select: 'name members section createdBy',
+      populate: [
+        {
+          path: 'section',
+          select: 'name block subject createdBy',
+          populate: [
+            { path: 'subject', select: 'code title' },
+            { path: 'createdBy', select: 'name email' },
+          ],
+        },
+        { path: 'createdBy', select: 'name email' },
+      ],
+    });
+
+  const archivedAt = new Date();
+  for (const evaluation of evaluations) {
+    const group = evaluation.group;
+    const section = group?.section;
+    const snapshotSubject = section?.subject || subject;
+    const instructor = group?.createdBy || section?.createdBy;
+    evaluation.isLegacyArchived = true;
+    evaluation.legacyArchivedAt = archivedAt;
+    evaluation.legacySnapshot = {
+      groupName: group?.name || evaluation.legacySnapshot?.groupName || 'Deleted group',
+      block: section?.block || section?.name || evaluation.legacySnapshot?.block || 'Deleted block',
+      subject: [snapshotSubject?.code, snapshotSubject?.title].filter(Boolean).join(' - ') ||
+        evaluation.legacySnapshot?.subject ||
+        `${subject.code} - ${subject.title}`,
+      panelName: evaluation.panel?.name || evaluation.legacySnapshot?.panelName || 'Deleted panel',
+      panelEmail: evaluation.panel?.email || evaluation.legacySnapshot?.panelEmail || '',
+      instructorName: instructor?.name || evaluation.legacySnapshot?.instructorName || '',
+      instructorEmail: instructor?.email || evaluation.legacySnapshot?.instructorEmail || '',
+      members: group?.members || evaluation.legacySnapshot?.members || [],
+    };
+    await evaluation.save();
+  }
+
+  return evaluations.length;
+};
+
 const ensureInstructorSubjectLimits = async (adminIds = [], subjectId = null) => {
   if (!adminIds.length) return null;
 
@@ -138,8 +186,8 @@ exports.deleteSubject = async (req, res) => {
     const groups = await Group.find({ section: { $in: sectionIds } }).select('_id');
     const groupIds = groups.map((g) => g._id);
 
-    // 3. Delete evaluations for those groups (also catch any directly subject-tagged)
-    await Evaluation.deleteMany({ $or: [{ group: { $in: groupIds } }, { subject: subject._id }] });
+    // 3. Keep submitted scores as archived results before removing active setup
+    const archivedResults = await archiveSubjectEvaluations(groupIds, subject);
 
     // 4. Delete groups
     await Group.deleteMany({ section: { $in: sectionIds } });
@@ -163,11 +211,11 @@ exports.deleteSubject = async (req, res) => {
     await Subject.findByIdAndDelete(subject._id);
 
     res.json({
-      message: `Subject "${subject.code} - ${subject.title}" and all related data deleted successfully.`,
+      message: `Subject "${subject.code} - ${subject.title}" deleted. Submitted results were moved to Archive.`,
       deleted: {
         sections: sectionIds.length,
         groups: groupIds.length,
-        evaluations: groupIds.length > 0 ? '(all for above groups)' : 0,
+        archivedResults,
         rubrics: '(all for subject)',
         registrationLinks: '(all for subject)',
       },

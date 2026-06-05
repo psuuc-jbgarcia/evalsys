@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import api from '../services/api';
 import { notify } from '../utils/notify';
+import PasswordField from '../components/PasswordField';
 
 export default function Login() {
   const { login } = useAuth();
@@ -33,8 +34,8 @@ export default function Login() {
     setError('');
     setLoading(true);
     try {
-      await login(email, password);
-      navigate('/dashboard');
+      const loggedInUser = await login(email, password);
+      navigate(loggedInUser.mustChangePassword ? '/change-password' : '/dashboard', { replace: true });
     } catch (err: any) {
       setError(err.response?.data?.message || 'Invalid credentials');
     } finally {
@@ -80,22 +81,18 @@ export default function Login() {
                 placeholder="you@example.com"
               />
             </div>
-            <div>
-              <label className="evl-label" htmlFor="login-password">Password</label>
-              <input
-                id="login-password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="evl-input"
-                placeholder="••••••••"
-              />
-            </div>
+            <PasswordField
+              id="login-password"
+              label="Password"
+              value={password}
+              onChange={setPassword}
+              placeholder="Password"
+              autoComplete="current-password"
+            />
             <div className="flex justify-end mt-2">
               <button 
                 type="button" 
-                onClick={() => notify('Please contact the System Administrator to reset your password.')}
+                onClick={() => notify('Please contact the System Administrator or your instructor to give you a temporary password.')}
                 className="text-xs text-primary font-bold hover:underline"
               >
                 Forgot password?
@@ -125,3 +122,4 @@ export default function Login() {
     </div>
   );
 }
+

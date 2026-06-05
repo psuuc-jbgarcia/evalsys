@@ -83,7 +83,7 @@ const normalizeLegacyData = (value: Partial<LegacyDataResponse>): LegacyDataResp
 const csvEscape = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
 
 export default function LegacyData() {
-  const [activeTab, setActiveTab] = useState<'sections' | 'groups' | 'panels' | 'results'>('sections');
+  const [activeTab, setActiveTab] = useState<'sections' | 'groups' | 'panels' | 'results'>('results');
   const [data, setData] = useState<LegacyDataResponse>({ sections: [], groups: [], panels: [], results: [] });
   const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
@@ -95,7 +95,7 @@ export default function LegacyData() {
       const res = await api.get('/legacy-data');
       setData(normalizeLegacyData(res.data));
     } catch (err: unknown) {
-      notify(getErrorMessage(err, 'Failed to load old data'), { type: 'error' });
+      notify(getErrorMessage(err, 'Failed to load archive'), { type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -104,7 +104,7 @@ export default function LegacyData() {
   useEffect(() => {
     api.get('/legacy-data')
       .then((res) => setData(normalizeLegacyData(res.data)))
-      .catch((err: unknown) => notify(getErrorMessage(err, 'Failed to load old data'), { type: 'error' }))
+      .catch((err: unknown) => notify(getErrorMessage(err, 'Failed to load archive'), { type: 'error' }))
       .finally(() => setLoading(false));
   }, []);
 
@@ -128,7 +128,7 @@ export default function LegacyData() {
       setDeleteTarget(null);
       await load();
     } catch (err: unknown) {
-      notify(getErrorMessage(err, 'Failed to delete old data'), { type: 'error' });
+      notify(getErrorMessage(err, 'Failed to delete archived data'), { type: 'error' });
     } finally {
       setDeleting(false);
     }
@@ -153,7 +153,7 @@ export default function LegacyData() {
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
     const link = document.createElement('a');
     link.href = url;
-    link.download = `evalsys_old_results_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `evalsys_archived_results_${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -161,9 +161,9 @@ export default function LegacyData() {
   return (
     <div>
       <div className="mb-6">
-        <h2 className="evl-page-title">Legacy Data</h2>
+        <h2 className="evl-page-title">Archive</h2>
         <p className="evl-page-subtitle">
-          Review unowned records, old panel accounts, and previous Admin-era data.
+          Review archived results and cleanup old records that no longer belong to active instructor setup.
         </p>
       </div>
 
@@ -202,21 +202,21 @@ export default function LegacyData() {
             activeTab === 'results' ? 'border-primary text-primary' : 'border-transparent text-text/50'
           }`}
         >
-          Old Results ({data.results.length})
+          Archived Results ({data.results.length})
         </button>
       </div>
 
       {activeTab === 'results' && data.results.length > 0 && (
         <div className="flex justify-end gap-2 mb-3">
           <button type="button" onClick={downloadOldResults} className="evl-btn-secondary">
-            Download Results CSV
+            Download Archived Results CSV
           </button>
           <button
             type="button"
-            onClick={() => setDeleteTarget({ type: 'all-results', id: '', name: 'all old results' })}
+            onClick={() => setDeleteTarget({ type: 'all-results', id: '', name: 'all archived results' })}
             className="evl-btn-danger"
           >
-            Delete All Results
+            Delete Archived Results
           </button>
         </div>
       )}
@@ -236,7 +236,7 @@ export default function LegacyData() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={activeTab === 'sections' ? 5 : activeTab === 'panels' ? 6 : 7} className="text-center py-12 text-text/40">Loading old data...</td></tr>
+              <tr><td colSpan={activeTab === 'sections' ? 5 : activeTab === 'panels' ? 6 : 7} className="text-center py-12 text-text/40">Loading archive...</td></tr>
             ) : activeTab === 'sections' ? data.sections.map((section) => (
               <tr key={section._id}>
                 <td className="font-bold text-text">{section.block || section.name}</td>
@@ -338,7 +338,7 @@ export default function LegacyData() {
               <tr><td colSpan={6} className="text-center py-12 text-text/40">No old panel accounts found.</td></tr>
             )}
             {!loading && activeTab === 'results' && !data.results.length && (
-              <tr><td colSpan={7} className="text-center py-12 text-text/40">No archived old results found.</td></tr>
+              <tr><td colSpan={7} className="text-center py-12 text-text/40">No archived results found.</td></tr>
             )}
           </tbody>
         </table>
@@ -349,7 +349,7 @@ export default function LegacyData() {
           <div className="w-full max-w-md bg-surface border border-muted/40 rounded-lg shadow-xl p-6">
             <h3 className="font-extrabold text-text text-lg">
               {deleteTarget.type === 'all-results'
-                ? 'Delete all old results?'
+                ? 'Delete archived results?'
                 : `Delete old ${
                   deleteTarget.type === 'section'
                     ? 'block'
@@ -362,9 +362,9 @@ export default function LegacyData() {
             </h3>
             <p className="text-text/60 text-sm mt-2">
               <strong>{deleteTarget.name}</strong> will be permanently deleted.
-              {deleteTarget.type === 'section' && ' Its groups will also be deleted, but their results will remain under Old Results.'}
-              {deleteTarget.type === 'group' && ' Its results will remain under Old Results.'}
-              {deleteTarget.type === 'panel' && ' Its assignments will also be removed, but its results will remain under Old Results.'}
+              {deleteTarget.type === 'section' && ' Its groups will also be deleted, but their results will remain in Archive.'}
+              {deleteTarget.type === 'group' && ' Its results will remain in Archive.'}
+              {deleteTarget.type === 'panel' && ' Its assignments will also be removed, but its results will remain in Archive.'}
               {deleteTarget.type === 'all-results' && ' This will not affect current instructor results.'}
             </p>
             <div className="flex justify-end gap-2 mt-6">

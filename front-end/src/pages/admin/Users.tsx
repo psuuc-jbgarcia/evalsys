@@ -3,6 +3,7 @@ import api from '../../services/api';
 import { TableSkeleton } from '../../components/LoadingSkeleton';
 import { useAuth } from '../../context/useAuth';
 import { notify } from '../../utils/notify';
+import PasswordField from '../../components/PasswordField';
 
 interface Subject { _id: string; code: string; title: string; }
 interface User { _id: string; name: string; email: string; role: string; isActive: boolean; assignedSubjects?: Subject[]; }
@@ -37,6 +38,14 @@ const isStrongPassword = (password: string) =>
 const passwordRuleText = 'Use 8+ chars with uppercase, lowercase, number, and symbol.';
 
 const generatePassword = () => {
+  const words = ['Blue', 'River', 'Maple', 'Bright', 'Silver', 'Cloud', 'North', 'Stone', 'Green', 'Cedar', 'Clear', 'Rapid'];
+  const pickWord = () => words[Math.floor(Math.random() * words.length)];
+  const number = Math.floor(10 + Math.random() * 90);
+  const symbol = ['!', '@', '#', '$', '?'][Math.floor(Math.random() * 5)];
+  return `${pickWord()}-${pickWord()}-${number}${symbol}`;
+};
+
+const generateRandomPassword = () => {
   const lower = 'abcdefghijkmnopqrstuvwxyz';
   const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
   const numbers = '23456789';
@@ -62,6 +71,7 @@ export default function Users() {
   const [resetPassword, setResetPassword] = useState('');
   const [resetConfirm, setResetConfirm] = useState('');
   const [resetError, setResetError] = useState('');
+  const [resetCopyMessage, setResetCopyMessage] = useState('');
   const [resetting, setResetting] = useState(false);
   const pageTitle = isSuperadmin ? 'Accounts' : 'Panel Accounts';
   const pageSubtitle = isSuperadmin
@@ -148,12 +158,40 @@ export default function Users() {
       setResetTarget(null);
       setResetPassword('');
       setResetConfirm('');
+      setResetCopyMessage('');
       load();
     } catch (err: unknown) {
       setResetError(getErrorMessage(err, 'Failed to reset password'));
     } finally {
       setResetting(false);
     }
+  };
+
+  const copyResetPassword = async () => {
+    if (!resetPassword) return;
+    try {
+      await navigator.clipboard.writeText(resetPassword);
+      setResetCopyMessage('Temporary password copied successfully.');
+    } catch {
+      setResetError('Copy failed. Please copy the password manually.');
+    }
+  };
+
+  const generateResetPassword = () => {
+    const password = generatePassword();
+    setResetPassword(password);
+    setResetConfirm(password);
+    setResetError('');
+    setResetCopyMessage('');
+  };
+
+  const openTemporaryPasswordModal = (target: ResetTarget) => {
+    const password = generatePassword();
+    setResetTarget(target);
+    setResetPassword(password);
+    setResetConfirm(password);
+    setResetError('');
+    setResetCopyMessage('');
   };
 
   const downloadTemplate = () => {
@@ -257,17 +295,17 @@ export default function Users() {
             <div>
               <label className="evl-label">Password</label>
               <div className="flex">
-                <input
-                  type="text"
+                <PasswordField
                   value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  required
-                  className="evl-input rounded-r-none font-mono"
+                  onChange={(value) => setForm({ ...form, password: value })}
+                  className="flex-1"
+                  inputClassName="rounded-r-none font-mono"
                   placeholder="Generate or type"
+                  autoComplete="new-password"
                 />
                 <button
                   type="button"
-                  onClick={() => setForm({ ...form, password: generatePassword() })}
+                  onClick={() => setForm({ ...form, password: generateRandomPassword() })}
                   className="px-3 rounded-r-lg border border-l-0 border-muted bg-bg text-xs font-bold text-primary hover:bg-primary/5 whitespace-nowrap"
                 >
                   Generate
@@ -367,14 +405,9 @@ export default function Users() {
                           className="evl-btn-ghost text-primary border-primary/30 hover:bg-primary/5 hover:border-primary/50">
                           {u.isActive ? 'Block' : 'Unblock'}
                         </button>
-                        <button onClick={() => {
-                          setResetTarget({ _id: u._id, name: u.name });
-                          setResetPassword('');
-                          setResetConfirm('');
-                          setResetError('');
-                        }}
+                        <button onClick={() => openTemporaryPasswordModal({ _id: u._id, name: u.name })}
                           className="evl-btn-ghost text-primary border-primary/30 hover:bg-primary/5 hover:border-primary/50">
-                          Reset
+                          Temp Pass
                         </button>
                         <button onClick={() => handleDelete(u._id)}
                           className="evl-btn-ghost text-danger border-danger/30 hover:text-danger hover:bg-danger/5 hover:border-danger/50">
@@ -393,30 +426,54 @@ export default function Users() {
       {resetTarget && (
         <div className="fixed inset-0 z-[100] bg-dark/60 flex items-center justify-center p-4">
           <form onSubmit={handleResetPassword} className="w-full max-w-md bg-surface border border-muted/40 rounded-lg shadow-xl p-6">
-            <h3 className="font-extrabold text-text text-lg">Reset Password</h3>
+            <h3 className="font-extrabold text-text text-lg">Set Temporary Password</h3>
             <p className="text-text/60 text-sm mt-1">
-              Set a temporary password for <strong>{resetTarget.name}</strong>. They must change it after signing in.
+              Give this password to <strong>{resetTarget.name}</strong>. They can use it to sign in, then EvalSys will require them to change it.
             </p>
             {resetError && <div className="evl-alert-error mt-4">{resetError}</div>}
+            {resetCopyMessage && (
+              <div className="mt-4 rounded-lg border border-success/25 bg-success/10 px-4 py-3 text-sm font-semibold text-success">
+                {resetCopyMessage}
+              </div>
+            )}
             <div className="mt-5">
               <label className="evl-label">Temporary Password</label>
-              <input
-                type="password"
-                value={resetPassword}
-                onChange={(e) => setResetPassword(e.target.value)}
-                className="evl-input"
-                required
-              />
-              <p className="text-[11px] text-text/55 font-semibold mt-1.5">{passwordRuleText}</p>
+              <div className="flex">
+                <PasswordField
+                  value={resetPassword}
+                  onChange={setResetPassword}
+                  className="flex-1"
+                  inputClassName="rounded-r-none font-mono"
+                  placeholder="Generate or type temporary password"
+                  autoComplete="new-password"
+                  defaultVisible
+                />
+                <button
+                  type="button"
+                  onClick={generateResetPassword}
+                  className="px-3 border border-l-0 border-muted bg-bg text-xs font-bold text-primary hover:bg-primary/5 whitespace-nowrap"
+                >
+                  Generate
+                </button>
+                <button
+                  type="button"
+                  onClick={copyResetPassword}
+                  disabled={!resetPassword}
+                  className="px-3 rounded-r-lg border border-l-0 border-muted bg-bg text-xs font-bold text-primary hover:bg-primary/5 whitespace-nowrap disabled:opacity-40"
+                >
+                  Copy
+                </button>
+              </div>
+              <p className="text-[11px] text-text/55 font-semibold mt-1.5">
+                This is the password they will use if they forgot their old password. They must change it after signing in.
+              </p>
             </div>
             <div className="mt-4">
               <label className="evl-label">Confirm Temporary Password</label>
-              <input
-                type="password"
+              <PasswordField
                 value={resetConfirm}
-                onChange={(e) => setResetConfirm(e.target.value)}
-                className="evl-input"
-                required
+                onChange={setResetConfirm}
+                autoComplete="new-password"
               />
             </div>
             <div className="flex justify-end gap-2 mt-6">
@@ -424,7 +481,7 @@ export default function Users() {
                 Cancel
               </button>
               <button type="submit" disabled={resetting} className="evl-btn-primary">
-                {resetting ? 'Resetting...' : 'Reset Password'}
+                {resetting ? 'Saving...' : 'Save Temporary Password'}
               </button>
             </div>
           </form>

@@ -139,7 +139,7 @@ exports.deleteLegacyGroup = async (req, res) => {
   });
   await group.deleteOne();
   res.json({
-    message: 'Old group deleted. Its results were preserved under Old Results.',
+    message: 'Old group deleted. Its results remain in Archive.',
     preservedResults,
   });
 };
@@ -164,7 +164,7 @@ exports.deleteLegacySection = async (req, res) => {
   await section.deleteOne();
 
   res.json({
-    message: 'Old block and groups deleted. Their results were preserved under Old Results.',
+    message: 'Old block and groups deleted. Their results remain in Archive.',
     deletedGroups: groupIds.length,
     preservedResults,
   });
@@ -196,7 +196,7 @@ exports.deleteLegacyPanel = async (req, res) => {
   await panel.deleteOne();
 
   res.json({
-    message: 'Old panel account and assignments deleted. Its results were preserved under Old Results.',
+    message: 'Old panel account and assignments deleted. Its results remain in Archive.',
     preservedResults,
   });
 };

@@ -220,7 +220,7 @@ export default function Subscription() {
       ? `${currentSubject?.code || 'current subject'}`
       : 'the entire platform';
     const ok = confirm(scope === 'subject'
-      ? `This will remove active blocks and groups for ${label}. Submitted results will be preserved under Legacy Data - Old Results.\n\nContinue?`
+      ? `This will remove active blocks and groups for ${label}. Submitted results will be moved to Archive.\n\nContinue?`
       : `This will permanently reset evaluation event data for ${label}. Export a backup first.\n\nThis action cannot be undone.\n\nContinue?`);
     if (!ok) return;
 

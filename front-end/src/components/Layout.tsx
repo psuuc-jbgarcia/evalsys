@@ -12,6 +12,7 @@ const adminLinks = [
   { to: '/assign-panels', label: 'Assign Panels', icon: '👥' },
   { to: '/rubrics', label: 'Rubrics', icon: '✎' },
   { to: '/results', label: 'Results', icon: '▦' },
+  { to: '/ai-insights', label: 'AI Insights', icon: 'AI' },
   { to: '/registration-links', label: 'Registration Links', icon: 'RL' },
 ];
 
@@ -20,7 +21,7 @@ const panelLinks = [
   { to: '/grade', label: 'Grade Groups', icon: '✎' },
 ];
 
-type NavIconName = 'dashboard' | 'sections' | 'groups' | 'users' | 'assign' | 'rubrics' | 'results' | 'link' | 'grade' | 'subjects' | 'subscription' | 'legacy';
+type NavIconName = 'dashboard' | 'sections' | 'groups' | 'users' | 'assign' | 'rubrics' | 'results' | 'ai' | 'link' | 'grade' | 'subjects' | 'subscription' | 'legacy';
 
 const getNavIconName = (to: string): NavIconName => {
   if (to === '/subjects') return 'subjects';
@@ -30,6 +31,7 @@ const getNavIconName = (to: string): NavIconName => {
   if (to === '/assign-panels') return 'assign';
   if (to === '/rubrics') return 'rubrics';
   if (to === '/results') return 'results';
+  if (to === '/ai-insights') return 'ai';
   if (to === '/registration-links') return 'link';
   if (to === '/grade') return 'grade';
   if (to === '/subscription') return 'subscription';
@@ -72,6 +74,9 @@ const NavIcon = ({ name }: { name: NavIconName }) => {
   }
   if (name === 'results') {
     return <svg {...common}><path d="M4 19V5" /><path d="M4 19h16" /><rect x="7" y="11" width="3" height="5" rx="1" /><rect x="12" y="8" width="3" height="8" rx="1" /><rect x="17" y="4" width="3" height="12" rx="1" /></svg>;
+  }
+  if (name === 'ai') {
+    return <svg {...common}><path d="M12 3v3" /><path d="M12 18v3" /><path d="M3 12h3" /><path d="M18 12h3" /><path d="m5.6 5.6 2.1 2.1" /><path d="m16.3 16.3 2.1 2.1" /><path d="m18.4 5.6-2.1 2.1" /><path d="m7.7 16.3-2.1 2.1" /><circle cx="12" cy="12" r="3" /></svg>;
   }
   if (name === 'link') {
     return <svg {...common}><path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1" /><path d="M14 11a5 5 0 0 0-7.1 0l-2 2A5 5 0 0 0 12 20.1l1.1-1.1" /></svg>;
@@ -174,7 +179,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   const links = user?.role === 'admin'
     ? adminLinks
     : user?.role === 'superadmin'
-      ? adminLinks.filter((link) => link.to !== '/rubrics')
+      ? adminLinks.filter((link) => link.to !== '/rubrics' && link.to !== '/ai-insights')
       : panelLinks;
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -241,6 +246,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     localStorage.removeItem(currentSubjectKey);
     setCurrentInstructorId(instructorId);
     setCurrentSubjectId('');
+    window.location.reload();
   };
 
   const handleSubjectChange = (subjectId: string) => {
@@ -463,7 +469,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                 <span className="w-5 h-5 flex items-center justify-center shrink-0">
                   <NavIcon name="legacy" />
                 </span>
-                {(!collapsed || mobileOpen) && <span>Legacy Data</span>}
+                {(!collapsed || mobileOpen) && <span>Archive</span>}
               </Link>
             </>
           )}

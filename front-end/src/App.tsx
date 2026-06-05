@@ -7,6 +7,7 @@ import Sections from './pages/admin/Sections';
 import Groups from './pages/admin/Groups';
 import Users from './pages/admin/Users';
 import Results from './pages/admin/Results';
+import AIInsights from './pages/admin/AIInsights';
 import Rubrics from './pages/admin/Rubrics';
 import AssignPanels from './pages/admin/AssignPanels';
 import RegistrationLinks from './pages/admin/RegistrationLinks';
@@ -42,6 +43,7 @@ export default function App() {
           <Route path="/assign-panels" element={<ProtectedRoute role="admin"><AssignPanels /></ProtectedRoute>} />
           <Route path="/registration-links" element={<ProtectedRoute role="admin"><RegistrationLinks /></ProtectedRoute>} />
           <Route path="/results" element={<ProtectedRoute role="admin"><Results /></ProtectedRoute>} />
+          <Route path="/ai-insights" element={<ProtectedRoute role="admin" instructorOnly><AIInsights /></ProtectedRoute>} />
           <Route path="/rubrics" element={<ProtectedRoute role="admin" instructorOnly><Rubrics /></ProtectedRoute>} />
 
           {/* Panel routes */}

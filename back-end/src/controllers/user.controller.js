@@ -50,6 +50,45 @@ const isStrongPassword = (password = '') => (
 
 const passwordRuleMessage = 'Password must be at least 8 characters and include uppercase, lowercase, number, and symbol';
 
+const snapshotPanelEvaluations = async (panel) => {
+  const evaluations = await Evaluation.find({
+    panel: panel._id,
+    isLegacyArchived: { $ne: true },
+  })
+    .populate({
+      path: 'group',
+      select: 'name members section',
+      populate: {
+        path: 'section',
+        select: 'name block subject',
+        populate: { path: 'subject', select: 'code title' },
+      },
+    })
+    .populate('subject', 'code title')
+    .populate('panel', 'name email');
+
+  for (const evaluation of evaluations) {
+    const group = evaluation.group;
+    const section = group?.section;
+    const subject = section?.subject || evaluation.subject;
+    const existingSnapshot = evaluation.legacySnapshot?.toObject
+      ? evaluation.legacySnapshot.toObject()
+      : evaluation.legacySnapshot || {};
+    evaluation.legacySnapshot = {
+      ...existingSnapshot,
+      groupName: existingSnapshot.groupName || group?.name || 'Deleted group',
+      block: existingSnapshot.block || section?.block || section?.name || 'Deleted block',
+      subject: existingSnapshot.subject || [subject?.code, subject?.title].filter(Boolean).join(' - '),
+      panelName: panel.name,
+      panelEmail: panel.email,
+      members: existingSnapshot.members || group?.members || [],
+    };
+    await evaluation.save();
+  }
+
+  return evaluations.length;
+};
+
 const normalizeLegacyAccountEmails = async (accounts = []) => {
   const normalized = [];
 
@@ -213,8 +252,8 @@ exports.resetPassword = async (req, res) => {
   await user.save();
   res.json({
     message: user.role === 'superadmin'
-      ? 'Password reset successfully'
-      : 'Password reset successfully. The user must change it after signing in.',
+      ? 'Temporary password saved successfully'
+      : 'Temporary password saved. The user can sign in with it and must change it after signing in.',
   });
 };
 
@@ -298,7 +337,7 @@ exports.deleteUser = async (req, res) => {
   if (!canManageUser(req, user)) return res.status(403).json({ message: 'You can only manage panel accounts created by you' });
 
   if (user.role === 'panel') {
-    await Evaluation.deleteMany({ panel: user._id });
+    const preservedEvaluations = await snapshotPanelEvaluations(user);
     await Section.updateMany(
       { assignedPanels: user._id },
       { $pull: { assignedPanels: user._id } }
@@ -307,7 +346,13 @@ exports.deleteUser = async (req, res) => {
       { assignedPanels: user._id },
       { $pull: { assignedPanels: user._id } }
     );
+    await user.deleteOne();
+    return res.json({
+      message: preservedEvaluations > 0
+        ? 'Panel account deleted. Existing submitted results were kept.'
+        : 'Panel account and its assignments deleted',
+    });
   }
   await user.deleteOne();
-  res.json({ message: user.role === 'panel' ? 'Panel account and its assignments deleted' : 'User deleted' });
+  res.json({ message: 'User deleted' });
 };

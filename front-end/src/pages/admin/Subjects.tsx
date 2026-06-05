@@ -197,7 +197,7 @@ export default function Subjects() {
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
 
-  const handleArchiveReset = async (e: React.FormEvent) => {
+  const handleSubjectReset = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resetSubject || resetConfirmCode !== resetSubject.code) return;
     setResetting(true);
@@ -209,7 +209,7 @@ export default function Subjects() {
       setResetSubject(null);
       setResetConfirmCode('');
     } catch (err: unknown) {
-      notify(getErrorMessage(err, 'Failed to archive and reset subject'), { type: 'error' });
+      notify(getErrorMessage(err, 'Failed to reset subject'), { type: 'error' });
     } finally {
       setResetting(false);
     }
@@ -295,7 +295,7 @@ export default function Subjects() {
                             onClick={() => { setResetSubject(s); setResetConfirmCode(''); }}
                             className="px-3 py-1.5 rounded-lg text-[11px] font-bold border border-danger/30 text-danger bg-danger/5 hover:bg-danger/15 transition-all"
                           >
-                            Archive & Reset
+                            Reset
                           </button>
                         )}
                         {isSuperadmin && (
@@ -330,16 +330,16 @@ export default function Subjects() {
           <div className="bg-surface w-full max-w-md rounded-lg shadow-2xl overflow-hidden">
             <div className="px-6 py-4 border-b border-danger/20 flex justify-between items-center bg-danger/5">
               <div>
-                <h3 className="font-bold text-danger">Archive & Reset Subject</h3>
+                <h3 className="font-bold text-danger">Reset Subject</h3>
                 <p className="text-text/50 text-xs mt-0.5">{resetSubject.code} - {resetSubject.title}</p>
               </div>
               <button onClick={() => setResetSubject(null)} className="text-text/40 hover:text-text text-xl">x</button>
             </div>
-            <form onSubmit={handleArchiveReset} className="p-6 space-y-4">
+            <form onSubmit={handleSubjectReset} className="p-6 space-y-4">
               <div className="bg-warning/5 border border-warning/30 rounded-lg p-4 space-y-2">
                 <p className="text-sm font-bold text-text">This starts a fresh evaluation cycle.</p>
                 <p className="text-xs text-text/65 leading-relaxed">
-                  Current blocks and groups will be removed. Submitted results will be preserved for Super Admin under Legacy Data - Old Results.
+                  Current blocks and groups will be removed so this subject can start again.
                 </p>
                 <p className="text-xs font-bold text-danger">Groups without submitted results cannot be restored.</p>
               </div>
@@ -364,7 +364,7 @@ export default function Subjects() {
                   disabled={resetting || resetConfirmCode !== resetSubject.code}
                   className="evl-btn-danger flex-1 disabled:opacity-40"
                 >
-                  {resetting ? 'Archiving...' : 'Archive & Reset'}
+                  {resetting ? 'Resetting...' : 'Reset Subject'}
                 </button>
               </div>
             </form>
@@ -560,11 +560,11 @@ export default function Subjects() {
                 <ul className="text-xs text-text/70 space-y-1 list-disc list-inside">
                   <li>All blocks (sections) under this subject</li>
                   <li>All student groups in those blocks</li>
-                  <li>All evaluations and scores for those groups</li>
+                  <li>Submitted evaluations will move to Archive</li>
                   <li>All rubrics created for this subject</li>
                   <li>All registration links for this subject</li>
                 </ul>
-                <p className="text-xs font-bold text-danger mt-2">This action cannot be undone.</p>
+                <p className="text-xs font-bold text-danger mt-2">Active subject setup cannot be restored after deletion.</p>
               </div>
               <div>
                 <label className="evl-label">

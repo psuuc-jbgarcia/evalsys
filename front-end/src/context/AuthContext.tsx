@@ -32,12 +32,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const login = async (email: string, password: string) => {
     const res = await api.post('/auth/login', { email, password });
+    const loggedInUser = normalizeUser(res.data.user);
     localStorage.setItem('token', res.data.token);
-    setUser(normalizeUser(res.data.user));
+    setUser(loggedInUser);
+    return loggedInUser;
   };
 
-  const changePassword = async (currentPassword: string, newPassword: string) => {
-    await api.patch('/auth/change-password', { currentPassword, newPassword });
+  const changePassword = async (newPassword: string) => {
+    await api.patch('/auth/change-password', { newPassword });
     setUser((current) => current ? { ...current, mustChangePassword: false } : current);
   };
 

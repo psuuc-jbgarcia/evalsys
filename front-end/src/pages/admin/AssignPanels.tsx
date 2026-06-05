@@ -14,6 +14,7 @@ interface PanelUser {
 }
 interface Section { _id: string; name: string; block: string; assignedPanels: PanelUser[] }
 const currentInstructorKey = 'evalsys_current_instructor_id';
+const currentSubjectKey = 'evalsys_current_subject_id';
 
 const getPanelOwnerLabel = (panel: PanelUser) => {
   if (!panel.createdBy) return 'No created by';
@@ -25,6 +26,7 @@ export default function AssignPanels() {
   const { user } = useAuth();
   const isSuperadmin = user?.role === 'superadmin';
   const currentInstructorId = localStorage.getItem(currentInstructorKey) || '';
+  const currentSubjectId = localStorage.getItem(currentSubjectKey) || '';
   const [panels, setPanels] = useState<PanelUser[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
   const [selectedPanel, setSelectedPanel] = useState<PanelUser | null>(null);
@@ -35,6 +37,13 @@ export default function AssignPanels() {
   const loadData = async () => {
     const pRes = await api.get('/users');
     setPanels(pRes.data.filter((u: any) => u.role === 'panel' && u.isActive));
+
+    if (isSuperadmin && !currentSubjectId) {
+      setSections([]);
+      setSelectedPanel(null);
+      setCheckedBlocks([]);
+      return;
+    }
     
     const sRes = await api.get('/sections');
     setSections(sRes.data);
@@ -193,7 +202,11 @@ export default function AssignPanels() {
                     </label>
                   ))}
                   {!sections.length && (
-                    <p className="col-span-2 text-text/50 text-sm text-center py-8">No blocks have been created yet.</p>
+                    <p className="col-span-2 text-text/50 text-sm text-center py-8">
+                      {isSuperadmin && !currentSubjectId
+                        ? 'Select or create a subject for this instructor before assigning blocks.'
+                        : 'No blocks have been created yet.'}
+                    </p>
                   )}
                 </div>
               </div>

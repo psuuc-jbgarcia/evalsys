@@ -144,9 +144,9 @@ exports.getMe = async (req, res) => {
 };
 
 exports.changePassword = async (req, res) => {
-  const { currentPassword, newPassword } = req.body;
-  if (!currentPassword || !newPassword) {
-    return res.status(400).json({ message: 'Current password and new password are required' });
+  const { newPassword } = req.body;
+  if (!newPassword) {
+    return res.status(400).json({ message: 'New password is required' });
   }
   if (!isStrongPassword(newPassword)) {
     return res.status(400).json({ message: passwordRuleMessage });
@@ -155,11 +155,8 @@ exports.changePassword = async (req, res) => {
   const user = await Model.findById(req.user._id);
   if (!user) return res.status(404).json({ message: 'Account not found' });
 
-  if (!(await user.matchPassword(currentPassword))) {
-    return res.status(400).json({ message: 'Current password is incorrect' });
-  }
   if (await user.matchPassword(newPassword)) {
-    return res.status(400).json({ message: 'New password must be different from the current password' });
+    return res.status(400).json({ message: 'New password must be different from the temporary password' });
   }
 
   user.password = newPassword;

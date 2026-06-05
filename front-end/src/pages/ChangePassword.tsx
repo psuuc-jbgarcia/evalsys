@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
+import PasswordField from '../components/PasswordField';
 
 const isStrongPassword = (password: string) =>
   password.length >= 8 &&
@@ -15,7 +16,6 @@ const getErrorMessage = (error: unknown) =>
 export default function ChangePassword() {
   const { user, loading, changePassword, logout } = useAuth();
   const navigate = useNavigate();
-  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
@@ -38,7 +38,7 @@ export default function ChangePassword() {
     }
     setSaving(true);
     try {
-      await changePassword(currentPassword, newPassword);
+      await changePassword(newPassword);
       navigate('/dashboard', { replace: true });
     } catch (err: unknown) {
       setError(getErrorMessage(err));
@@ -57,18 +57,10 @@ export default function ChangePassword() {
         <form onSubmit={submit} className="evl-card p-6 space-y-4">
           {error && <div className="evl-alert-error">{error}</div>}
           <div>
-            <label className="evl-label">Current Temporary Password</label>
-            <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="evl-input" required />
-          </div>
-          <div>
-            <label className="evl-label">New Password</label>
-            <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="evl-input" required />
+            <PasswordField label="New Password" value={newPassword} onChange={setNewPassword} />
             <p className="text-[11px] text-text/55 font-semibold mt-1.5">Use 8+ characters with uppercase, lowercase, number, and symbol.</p>
           </div>
-          <div>
-            <label className="evl-label">Confirm New Password</label>
-            <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="evl-input" required />
-          </div>
+          <PasswordField label="Confirm New Password" value={confirmPassword} onChange={setConfirmPassword} />
           <button type="submit" disabled={saving} className="evl-btn-primary w-full">
             {saving ? 'Changing Password...' : 'Change Password'}
           </button>
