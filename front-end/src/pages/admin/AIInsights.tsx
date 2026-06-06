@@ -146,6 +146,14 @@ export default function AIInsights() {
         </p>
       </div>
 
+      <div className="mb-6 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
+        <p className="text-xs font-black uppercase tracking-widest text-primary">FYI</p>
+        <p className="mt-1 text-sm font-semibold text-text/75 leading-relaxed">
+          This page does not use a real AI model yet. For now, it uses rule-based analysis from submitted scores and panel comments,
+          then it can be upgraded later to connect with an AI API.
+        </p>
+      </div>
+
       <div className="flex gap-2 flex-wrap mb-6">
         {loadingSections ? (
           Array(4).fill(0).map((_, i) => (
@@ -270,7 +278,7 @@ export default function AIInsights() {
           </div>
 
           <p className="text-xs text-text/65">
-            AI-assisted analytics are generated from submitted panel scores and comments. They support instructor review but do not replace panel grading.
+            Current insights are generated from submitted panel scores and comment keywords. They support instructor review but do not replace panel grading.
           </p>
         </div>
       ) : (

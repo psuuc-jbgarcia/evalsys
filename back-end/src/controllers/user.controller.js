@@ -254,6 +254,12 @@ exports.toggleActive = async (req, res) => {
   if (!canManageUser(req, user)) return res.status(403).json({ message: 'You can only manage panel accounts created by you' });
   user.isActive = !user.isActive;
   await user.save();
+  await recordAuditLog(req, {
+    action: 'account.status.update',
+    entity: { type: user.role, id: user._id, name: user.name },
+    instructor: user.role === 'panel' ? user.createdBy : user._id,
+    metadata: { isActive: user.isActive },
+  });
   res.json({ id: user._id, isActive: user.isActive });
 };
 

@@ -224,7 +224,7 @@ export default function Results() {
       </div>
 
       {/* Section selector */}
-      <div className="flex gap-2 flex-wrap mb-6">
+      <div className="flex gap-2 overflow-x-auto sm:flex-wrap mb-6 pb-1 -mx-1 px-1">
         {loadingSections ? (
           Array(4).fill(0).map((_, i) => (
             <div key={i} className="w-24 h-10 rounded-lg bg-surface border border-muted/40 animate-pulse" />
@@ -232,7 +232,7 @@ export default function Results() {
         ) : (
           sections.map((s) => (
             <button key={s._id} onClick={() => loadResults(s)}
-              className={`px-4 py-2.5 rounded-lg text-sm font-semibold border transition-all duration-150 ${
+              className={`px-4 py-2.5 rounded-lg text-sm font-semibold border whitespace-nowrap transition-all duration-150 ${
                 selected?._id === s._id
                   ? 'bg-primary text-white border-primary'
                   : 'border-muted text-text/70 bg-surface hover:text-text hover:border-text/20'
@@ -249,8 +249,8 @@ export default function Results() {
         <TableSkeleton rows={6} cols={8} />
       ) : selected && (
         <div className="overflow-hidden border-y border-muted/30 bg-surface">
-          <div className="px-2 sm:px-0 py-4 border-b border-muted/40 flex justify-end">
-            <div className="flex flex-wrap gap-2">
+          <div className="px-0 py-4 border-b border-muted/40 flex justify-end">
+            <div className="grid grid-cols-1 sm:flex sm:flex-wrap gap-2 w-full sm:w-auto">
               <button
                 onClick={downloadGroupSummaryCSV}
                 disabled={csvLocked && !isSuperadmin}
@@ -270,8 +270,24 @@ export default function Results() {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="evl-table">
+          <div className="lg:hidden divide-y divide-muted/40">
+            {results.map((result) => (
+              <MobileResultCard
+                key={result.group._id}
+                result={result}
+                criteriaColumns={criteriaColumns}
+                maxTotal={maxTotal}
+                onViewFeedback={setViewFeedback}
+                onClearScore={setClearModal}
+              />
+            ))}
+            {!results.length && (
+              <div className="text-center text-text/70 py-12">No results for this section yet.</div>
+            )}
+          </div>
+
+          <div className="hidden lg:block overflow-x-auto">
+            <table className="evl-table min-w-[980px]">
               <thead>
                 <tr>
                   <th>Group</th>
@@ -464,6 +480,94 @@ export default function Results() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function MobileResultCard({
+  result,
+  criteriaColumns,
+  maxTotal,
+  onViewFeedback,
+  onClearScore,
+}: {
+  result: GroupResult;
+  criteriaColumns: RubricCriteria[];
+  maxTotal: number;
+  onViewFeedback: (value: { group: string; items: { panel: string; text: string }[] }) => void;
+  onClearScore: (value: { group: GroupResult }) => void;
+}) {
+  const { group, averaged, finalTotal, evaluatedBy, missingPanels, isIncomplete, comments, evaluationRecords } = result;
+  const resultMaxTotal = getResultMaxTotal(result, maxTotal);
+
+  return (
+    <div className="px-0 py-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="font-black text-text text-base break-words">{group.name}</h3>
+          {evaluatedBy && evaluatedBy.length > 0 && (
+            <p className="text-[11px] text-success font-bold uppercase mt-1">
+              Eval by: {evaluatedBy.join(', ')}
+            </p>
+          )}
+        </div>
+        {isIncomplete || finalTotal === null ? (
+          <span className="evl-badge-danger shrink-0 !text-[10px]">Pending</span>
+        ) : (
+          <span className={`${scoreBadge(finalTotal, resultMaxTotal)} shrink-0`}>
+            {finalTotal}
+            {resultMaxTotal > 0 && <span className="ml-1 text-[10px] opacity-70">/{resultMaxTotal}</span>}
+          </span>
+        )}
+      </div>
+
+      <div className="mt-3 rounded-lg border border-muted/40 bg-bg/60 p-3">
+        <p className="text-[10px] font-black uppercase tracking-widest text-text/60 mb-1">Members</p>
+        <p className="text-sm text-text/80 leading-relaxed break-words">
+          {formatMemberList(group.members) || 'No members'}
+        </p>
+      </div>
+
+      {isIncomplete && missingPanels && missingPanels.length > 0 && (
+        <p className="mt-3 text-xs text-danger font-bold leading-relaxed">
+          Did not evaluate yet: {missingPanels.join(', ')}
+        </p>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
+        {criteriaColumns.map((criteria) => (
+          <div key={criteria.key} className="rounded-lg border border-muted/40 bg-white px-3 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-bold text-text/75 break-words">{criteria.label}</p>
+              <p className={`text-sm ${!isIncomplete && averaged ? scoreColor(averaged[criteria.key] || 0, criteria.maxScore) : 'text-text/70 font-bold'}`}>
+                {!isIncomplete && averaged ? (averaged[criteria.key] ?? 0) : '-'}
+                <span className="text-[10px] text-text/50 ml-1">/{criteria.maxScore}</span>
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
+        {comments && comments.length > 0 && (
+          <button
+            type="button"
+            onClick={() => onViewFeedback({ group: group.name, items: comments })}
+            className="evl-btn-secondary !py-2 !px-3 !text-xs"
+          >
+            View {comments.length} Comments
+          </button>
+        )}
+        {evaluationRecords && evaluationRecords.length > 0 && (
+          <button
+            type="button"
+            onClick={() => onClearScore({ group: result })}
+            className="evl-btn-danger !py-2 !px-3 !text-xs"
+          >
+            Clear Score
+          </button>
+        )}
+      </div>
     </div>
   );
 }

@@ -64,7 +64,8 @@ Not fully ready for final deployment yet. Build is clean, but a few issues shoul
 ### 7. No frontend `.env.example` exists
 
 - Issue: backend has `.env.example`, but frontend does not.
-- Recommendation: add `front-end/.env.example` with:
+- Status: **Fixed**
+- Current behavior: `front-end/.env.example` documents the frontend API URL:
 
 ```env
 VITE_API_URL=http://localhost:5000/api
@@ -73,8 +74,8 @@ VITE_API_URL=http://localhost:5000/api
 ### 8. Proposal files can become Supabase orphans
 
 - Issue: deleting or resetting groups does not delete proposal files from Supabase Storage.
-- Current mitigation: Super Admin Operations can detect orphan proposal files.
-- Recommendation: add a controlled cleanup button later, with confirmation and audit logging.
+- Status: **Fixed**
+- Current behavior: Super Admin Operations can detect orphan proposal files and remove them through a confirmation-protected cleanup action with audit logging.
 
 ## Good Checks
 

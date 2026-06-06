@@ -167,11 +167,11 @@ export default function LegacyData() {
         </p>
       </div>
 
-      <div className="flex items-center gap-2 border-b border-muted/40 mb-5">
+      <div className="flex items-center gap-2 border-b border-muted/40 mb-5 overflow-x-auto pb-1 -mx-1 px-1">
         <button
           type="button"
           onClick={() => setActiveTab('sections')}
-          className={`px-4 py-3 text-sm font-bold border-b-2 ${
+          className={`px-4 py-3 text-sm font-bold border-b-2 whitespace-nowrap ${
             activeTab === 'sections' ? 'border-primary text-primary' : 'border-transparent text-text/70'
           }`}
         >
@@ -180,7 +180,7 @@ export default function LegacyData() {
         <button
           type="button"
           onClick={() => setActiveTab('groups')}
-          className={`px-4 py-3 text-sm font-bold border-b-2 ${
+          className={`px-4 py-3 text-sm font-bold border-b-2 whitespace-nowrap ${
             activeTab === 'groups' ? 'border-primary text-primary' : 'border-transparent text-text/70'
           }`}
         >
@@ -189,7 +189,7 @@ export default function LegacyData() {
         <button
           type="button"
           onClick={() => setActiveTab('panels')}
-          className={`px-4 py-3 text-sm font-bold border-b-2 ${
+          className={`px-4 py-3 text-sm font-bold border-b-2 whitespace-nowrap ${
             activeTab === 'panels' ? 'border-primary text-primary' : 'border-transparent text-text/70'
           }`}
         >
@@ -198,7 +198,7 @@ export default function LegacyData() {
         <button
           type="button"
           onClick={() => setActiveTab('results')}
-          className={`px-4 py-3 text-sm font-bold border-b-2 ${
+          className={`px-4 py-3 text-sm font-bold border-b-2 whitespace-nowrap ${
             activeTab === 'results' ? 'border-primary text-primary' : 'border-transparent text-text/70'
           }`}
         >
@@ -207,7 +207,7 @@ export default function LegacyData() {
       </div>
 
       {activeTab === 'results' && data.results.length > 0 && (
-        <div className="flex justify-end gap-2 mb-3">
+        <div className="grid grid-cols-1 sm:flex sm:justify-end gap-2 mb-3">
           <button type="button" onClick={downloadOldResults} className="evl-btn-secondary">
             Download Archived Results CSV
           </button>

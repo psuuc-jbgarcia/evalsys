@@ -64,15 +64,17 @@ export default function SystemNotice() {
               {settings?.maintenanceMessage || 'EvalSys is temporarily unavailable while maintenance is in progress.'}
             </p>
             <p className="text-xs text-text/55 mt-4">
-              This screen updates automatically when maintenance mode is turned off.
+              This screen updates automatically when maintenance is done.
             </p>
-            <button
-              type="button"
-              onClick={logout}
-              className="evl-btn-secondary w-full mt-5"
-            >
-              Sign Out
-            </button>
+            {user && (
+              <button
+                type="button"
+                onClick={logout}
+                className="evl-btn-secondary w-full mt-5"
+              >
+                Sign Out
+              </button>
+            )}
           </div>
         </div>
       )}

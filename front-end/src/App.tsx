@@ -16,6 +16,7 @@ import Subscription from './pages/admin/Subscription';
 import LegacyData from './pages/admin/LegacyData';
 import Operations from './pages/admin/Operations';
 import SystemControl from './pages/admin/SystemControl';
+import SecurityMonitor from './pages/admin/SecurityMonitor';
 import Grade from './pages/panel/Grade';
 import RegisterGroup from './pages/RegisterGroup';
 import Landing from './pages/Landing';
@@ -48,6 +49,7 @@ export default function App() {
           <Route path="/subjects" element={<ProtectedRoute role="admin"><Subjects /></ProtectedRoute>} />
           <Route path="/subscription" element={<ProtectedRoute role="admin"><Subscription /></ProtectedRoute>} />
           <Route path="/operations" element={<ProtectedRoute role="admin" superadminOnly><Operations /></ProtectedRoute>} />
+          <Route path="/security" element={<ProtectedRoute role="admin" superadminOnly><SecurityMonitor /></ProtectedRoute>} />
           <Route path="/system-control" element={<ProtectedRoute role="admin" superadminOnly><SystemControl /></ProtectedRoute>} />
           <Route path="/legacy-data" element={<ProtectedRoute role="admin" superadminOnly><LegacyData /></ProtectedRoute>} />
           <Route path="/groups" element={<ProtectedRoute role="admin"><Groups /></ProtectedRoute>} />

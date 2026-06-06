@@ -7,7 +7,7 @@ const Evaluation = require('../models/Evaluation');
 const Rubric = require('../models/Rubric');
 const AuditLog = require('../models/AuditLog');
 const RegistrationLink = require('../models/RegistrationLink');
-const { listProposalFiles } = require('../services/proposalStorage.service');
+const { listProposalFiles, removeProposalFiles } = require('../services/proposalStorage.service');
 const { recordAuditLog } = require('../services/audit.service');
 
 const serialize = (doc) => {
@@ -78,6 +78,135 @@ exports.getActivity = async (_req, res) => {
   res.json({ latestLogins, latestSubmissions, failedLogins, recentActions });
 };
 
+exports.getSecurityMonitor = async (_req, res) => {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const securityActions = [
+    'login.failed',
+    'login.locked',
+    'security.maintenance.access_attempt',
+    'security.admin_route.denied',
+    'security.token.missing',
+    'security.token.invalid',
+  ];
+  const recentEventActions = [
+    'account.password.reset',
+    'account.password.changed',
+    'account.status.update',
+    'instructor.csv_export_lock.update',
+    'settings.system_control_updated',
+  ];
+
+  const [securityLogs, recentSecurityEvents, recentAccessEvents] = await Promise.all([
+    AuditLog.find({
+      action: { $in: securityActions },
+      createdAt: { $gte: since },
+    }).sort({ createdAt: -1 }).limit(300).lean(),
+    AuditLog.find({
+      action: { $in: recentEventActions },
+    }).sort({ createdAt: -1 }).limit(80).lean(),
+    AuditLog.find({
+      action: {
+        $in: [
+          'login.success',
+          'login.failed',
+          'login.locked',
+          'security.maintenance.access_attempt',
+          'security.admin_route.denied',
+          'security.token.missing',
+          'security.token.invalid',
+        ],
+      },
+    }).sort({ createdAt: -1 }).limit(80).lean(),
+  ]);
+
+  const failedLogins = securityLogs.filter((log) => ['login.failed', 'login.locked'].includes(log.action));
+  const byIp = new Map();
+  const byAccount = new Map();
+
+  failedLogins.forEach((log) => {
+    const ip = log.ip || 'Unknown IP';
+    const account = log.actor?.email || 'Unknown account';
+    if (!byIp.has(ip)) byIp.set(ip, []);
+    if (!byAccount.has(account)) byAccount.set(account, []);
+    byIp.get(ip).push(log);
+    byAccount.get(account).push(log);
+  });
+
+  const toSuspiciousRows = (entries, type, threshold) => Array.from(entries.entries())
+    .filter(([, logs]) => logs.length >= threshold)
+    .map(([key, logs]) => ({
+      type,
+      key,
+      count: logs.length,
+      latestAt: logs[0]?.createdAt,
+      ip: logs[0]?.ip,
+      account: logs[0]?.actor?.email,
+      reason: logs[0]?.metadata?.reason,
+      samples: logs.slice(0, 5),
+    }));
+
+  const suspicious = [
+    ...toSuspiciousRows(byIp, 'many_failed_attempts_same_ip', 5),
+    ...toSuspiciousRows(byAccount, 'many_failed_attempts_same_account', 3),
+    ...securityLogs
+      .filter((log) => log.action === 'security.maintenance.access_attempt')
+      .slice(0, 20)
+      .map((log) => ({
+        type: 'maintenance_login_or_action_attempt',
+        key: log.actor?.email || log.ip || 'Unknown user',
+        count: 1,
+        latestAt: log.createdAt,
+        ip: log.ip,
+        account: log.actor?.email,
+        reason: 'maintenance_mode',
+        samples: [log],
+      })),
+    ...securityLogs
+      .filter((log) => log.action === 'security.admin_route.denied')
+      .slice(0, 20)
+      .map((log) => ({
+        type: 'admin_route_denied',
+        key: log.actor?.email || log.ip || 'Unknown user',
+        count: 1,
+        latestAt: log.createdAt,
+        ip: log.ip,
+        account: log.actor?.email,
+        reason: log.metadata?.requiredRole || 'unauthorized',
+        samples: [log],
+      })),
+    ...securityLogs
+      .filter((log) => ['security.token.invalid', 'security.token.missing'].includes(log.action))
+      .slice(0, 20)
+      .map((log) => ({
+        type: 'invalid_or_expired_token',
+        key: log.ip || 'Unknown IP',
+        count: 1,
+        latestAt: log.createdAt,
+        ip: log.ip,
+        account: log.actor?.email,
+        reason: 'invalid_token',
+        samples: [log],
+      })),
+  ].sort((a, b) => new Date(b.latestAt || 0) - new Date(a.latestAt || 0));
+
+  res.json({
+    windowHours: 24,
+    totals: {
+      failedLogins: failedLogins.length,
+      lockedAccounts: securityLogs.filter((log) => log.action === 'login.locked').length,
+      maintenanceAttempts: securityLogs.filter((log) => log.action === 'security.maintenance.access_attempt').length,
+      deniedAdminRoutes: securityLogs.filter((log) => log.action === 'security.admin_route.denied').length,
+      invalidTokens: securityLogs.filter((log) => log.action === 'security.token.invalid').length,
+      missingTokens: securityLogs.filter((log) => log.action === 'security.token.missing').length,
+      suspicious: suspicious.length,
+    },
+    suspicious,
+    recentAccessEvents,
+    failedLoginDetails: failedLogins.slice(0, 80),
+    recentSecurityEvents,
+  });
+};
+
 exports.getInstructorSummary = async (_req, res) => {
   const instructors = await Admin.find({ role: 'admin' })
     .populate('assignedSubjects', 'code title')
@@ -128,6 +257,33 @@ exports.getProposalOrphans = async (_req, res) => {
     linkedFiles: linkedPaths.size,
     orphanFiles: orphans.length,
     orphans,
+  });
+};
+
+exports.cleanupProposalOrphans = async (req, res) => {
+  const [storageFiles, linkedGroups] = await Promise.all([
+    listProposalFiles(),
+    Group.find({ 'proposalFile.path': { $exists: true, $ne: '' } }).select('proposalFile.path').lean(),
+  ]);
+  const linkedPaths = new Set(linkedGroups.map((group) => group.proposalFile?.path).filter(Boolean));
+  const orphans = storageFiles.filter((file) => !linkedPaths.has(file.path));
+  const paths = orphans.map((file) => file.path);
+  const result = await removeProposalFiles(paths);
+
+  await recordAuditLog(req, {
+    action: 'proposal.orphans.cleanup',
+    entity: { type: 'storage', name: 'Supabase proposal files' },
+    metadata: {
+      removed: result.removed,
+      paths,
+    },
+  });
+
+  res.json({
+    message: result.removed
+      ? `Removed ${result.removed} orphan proposal file${result.removed === 1 ? '' : 's'}.`
+      : 'No orphan proposal files found.',
+    removed: result.removed,
   });
 };
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../../services/api';
 import { notify } from '../../utils/notify';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 
 interface AuditLog {
   _id: string;
@@ -49,11 +50,6 @@ interface ProposalCleanup {
 
 const backupTypes = ['users', 'subjects', 'groups', 'results', 'archive', 'rubrics', 'registrationLinks'];
 
-const formatAction = (action = '') => action
-  .split('.')
-  .map((part) => part.replace(/_/g, ' '))
-  .join(' / ');
-
 const formatDate = (value?: string) => value ? new Date(value).toLocaleString() : 'Unknown';
 
 const downloadJson = (filename: string, data: unknown) => {
@@ -68,22 +64,21 @@ const downloadJson = (filename: string, data: unknown) => {
 export default function Operations() {
   const [loading, setLoading] = useState(true);
   const [activity, setActivity] = useState<ActivityStatus | null>(null);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [summary, setSummary] = useState<InstructorSummary[]>([]);
   const [cleanup, setCleanup] = useState<ProposalCleanup | null>(null);
   const [backupAction, setBackupAction] = useState('');
+  const [cleanupAction, setCleanupAction] = useState(false);
+  const { confirm, ConfirmDialog } = useConfirmDialog();
 
   const load = async (showLoader = true) => {
     if (showLoader) setLoading(true);
     try {
-      const [activityRes, auditRes, summaryRes, cleanupRes] = await Promise.all([
+      const [activityRes, summaryRes, cleanupRes] = await Promise.all([
         api.get('/operations/activity'),
-        api.get('/operations/audit-logs', { params: { limit: 40 } }),
         api.get('/operations/instructor-summary'),
         api.get('/operations/proposal-orphans'),
       ]);
       setActivity(activityRes.data);
-      setAuditLogs(auditRes.data);
       setSummary(summaryRes.data);
       setCleanup(cleanupRes.data);
     } catch (err: any) {
@@ -112,6 +107,29 @@ export default function Operations() {
     }
   };
 
+  const handleCleanupOrphans = async () => {
+    const orphanCount = cleanup?.orphanFiles || 0;
+    if (!orphanCount) return;
+    const ok = await confirm({
+      title: 'Clean Orphan Proposal Files?',
+      message: `This will permanently remove ${orphanCount} Supabase proposal file${orphanCount === 1 ? '' : 's'} that are not linked to any group.\n\nLinked proposal files will not be touched.`,
+      confirmLabel: 'Clean Files',
+      danger: true,
+    });
+    if (!ok) return;
+
+    setCleanupAction(true);
+    try {
+      const res = await api.delete('/operations/proposal-orphans');
+      notify(res.data.message || 'Proposal cleanup complete', { type: 'success' });
+      await load(false);
+    } catch (err: any) {
+      notify(err.response?.data?.message || 'Failed to clean orphan proposal files', { type: 'error' });
+    } finally {
+      setCleanupAction(false);
+    }
+  };
+
   if (loading) {
     return (
       <div>
@@ -127,6 +145,7 @@ export default function Operations() {
 
   return (
     <div>
+      <ConfirmDialog />
       <div className="mb-8">
         <div>
           <h2 className="evl-page-title">Operations</h2>
@@ -134,36 +153,16 @@ export default function Operations() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)] gap-5 mb-6">
         <ActivityMonitor activity={activity} />
 
-        <div className="evl-card p-5">
-          <h3 className="font-bold text-text text-sm mb-4">Proposal Cleanup</h3>
-          <div className="grid grid-cols-3 gap-3">
-            <Metric label="Files" value={cleanup?.totalFiles ?? 0} />
-            <Metric label="Linked" value={cleanup?.linkedFiles ?? 0} />
-            <Metric label="Orphan" value={cleanup?.orphanFiles ?? 0} danger={Boolean(cleanup?.orphanFiles)} />
-          </div>
-          <p className="text-[11px] text-text/65 mt-4 leading-relaxed">
-            Orphan files are in Supabase Storage but not linked to any group record.
-          </p>
-        </div>
-
-        <div className="evl-card p-5">
-          <h3 className="font-bold text-text text-sm mb-4">Backup Center</h3>
-          <div className="flex flex-wrap gap-2">
-            {backupTypes.map((type) => (
-              <button
-                key={type}
-                type="button"
-                onClick={() => handleBackup(type)}
-                disabled={Boolean(backupAction)}
-                className="evl-btn-secondary !py-2 !px-3 !text-xs capitalize"
-              >
-                {backupAction === type ? 'Exporting...' : type}
-              </button>
-            ))}
-          </div>
+        <div className="space-y-5">
+          <ProposalCleanupPanel
+            cleanup={cleanup}
+            cleanupAction={cleanupAction}
+            onCleanup={handleCleanupOrphans}
+          />
+          <BackupCenterPanel backupAction={backupAction} onBackup={handleBackup} />
         </div>
       </div>
 
@@ -171,49 +170,46 @@ export default function Operations() {
         <div className="px-5 py-4 border-b border-muted/30">
           <h3 className="font-bold text-text text-sm">Per-Instructor Summary</h3>
         </div>
-        <table className="evl-table">
-          <thead>
-            <tr>
-              <th>Instructor</th>
-              <th>Subjects</th>
-              <th>Groups</th>
-              <th>Panels</th>
-              <th>Evaluations</th>
-              <th>CSV</th>
-              <th>Locked Subjects</th>
-              <th>Proposal MB</th>
-            </tr>
-          </thead>
-          <tbody>
-            {summary.map((row) => (
-              <tr key={row._id}>
-                <td>
-                  <p className="font-bold text-text text-sm">{row.name}</p>
-                  <p className="text-xs text-text/65">{row.email}</p>
-                </td>
-                <td className="font-bold text-text/80">{row.subjectsUsed}/{row.subjectLimit}</td>
-                <td>{row.groups}</td>
-                <td>{row.panels}</td>
-                <td>{row.evaluationsCompleted}</td>
-                <td>
-                  <span className={row.csvExportLocked ? 'evl-badge-danger' : 'evl-badge-success'}>
-                    {row.csvExportLocked ? 'Locked' : 'Allowed'}
-                  </span>
-                </td>
-                <td>{row.gradingLockedSubjects?.length || 0}</td>
-                <td>{row.proposalStorageMb}</td>
+        <div className="overflow-x-auto">
+          <table className="evl-table min-w-[860px]">
+            <thead>
+              <tr>
+                <th>Instructor</th>
+                <th>Subjects</th>
+                <th>Groups</th>
+                <th>Panels</th>
+                <th>Evaluations</th>
+                <th>CSV</th>
+                <th>Locked Subjects</th>
+                <th>Proposal MB</th>
               </tr>
-            ))}
-            {!summary.length && (
-              <tr><td colSpan={8} className="text-center text-text/70 py-10">No instructors found.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <LogPanel title="Recent Actions" logs={auditLogs} />
-        <LogPanel title="Failed Login Details" logs={activity?.failedLogins || []} showFailureMeta />
+            </thead>
+            <tbody>
+              {summary.map((row) => (
+                <tr key={row._id}>
+                  <td>
+                    <p className="font-bold text-text text-sm">{row.name}</p>
+                    <p className="text-xs text-text/65">{row.email}</p>
+                  </td>
+                  <td className="font-bold text-text/80">{row.subjectsUsed}/{row.subjectLimit}</td>
+                  <td>{row.groups}</td>
+                  <td>{row.panels}</td>
+                  <td>{row.evaluationsCompleted}</td>
+                  <td>
+                    <span className={row.csvExportLocked ? 'evl-badge-danger' : 'evl-badge-success'}>
+                      {row.csvExportLocked ? 'Locked' : 'Allowed'}
+                    </span>
+                  </td>
+                  <td>{row.gradingLockedSubjects?.length || 0}</td>
+                  <td>{row.proposalStorageMb}</td>
+                </tr>
+              ))}
+              {!summary.length && (
+                <tr><td colSpan={8} className="text-center text-text/70 py-10">No instructors found.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mt-6">
@@ -221,7 +217,7 @@ export default function Operations() {
           <div className="px-5 py-4 border-b border-muted/30">
             <h3 className="font-bold text-text text-sm">Latest Panel Submissions</h3>
           </div>
-          <div className="divide-y divide-muted/30">
+          <div className="divide-y divide-muted/30 max-h-[420px] overflow-y-auto">
             {(activity?.latestSubmissions || []).map((item) => (
               <div key={item._id} className="p-4">
                 <p className="text-sm font-bold text-text">{item.group?.name || 'Deleted group'}</p>
@@ -242,7 +238,8 @@ export default function Operations() {
           <div className="px-5 py-4 border-b border-muted/30">
             <h3 className="font-bold text-text text-sm">Orphan Proposal Files</h3>
           </div>
-          <table className="evl-table">
+          <div className="overflow-auto max-h-[420px]">
+          <table className="evl-table min-w-[720px]">
             <thead>
               <tr>
                 <th>Path</th>
@@ -260,6 +257,7 @@ export default function Operations() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       ) : null}
     </div>
@@ -272,7 +270,7 @@ function ActivityMonitor({ activity }: { activity: ActivityStatus | null }) {
   const latestFailed = activity?.failedLogins?.[0];
 
   return (
-    <div className="evl-card p-5 xl:col-span-1">
+    <div className="evl-card p-5">
       <div className="flex items-start justify-between gap-3 mb-4">
         <div>
           <h3 className="font-bold text-text text-sm">Activity Monitor</h3>
@@ -283,7 +281,7 @@ function ActivityMonitor({ activity }: { activity: ActivityStatus | null }) {
         </span>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
         <Metric label="Logins" value={activity?.latestLogins.length ?? 0} />
         <Metric label="Submits" value={activity?.latestSubmissions.length ?? 0} />
         <Metric label="Failed" value={activity?.failedLogins.length ?? 0} danger={Boolean(activity?.failedLogins.length)} />
@@ -306,6 +304,83 @@ function ActivityMonitor({ activity }: { activity: ActivityStatus | null }) {
           detail={latestFailed ? `${latestFailed.metadata?.reason || 'failed'} · ${formatDate(latestFailed.createdAt)}` : 'No failed login recorded.'}
           danger={Boolean(latestFailed)}
         />
+      </div>
+    </div>
+  );
+}
+
+function ProposalCleanupPanel({
+  cleanup,
+  cleanupAction,
+  onCleanup,
+}: {
+  cleanup: ProposalCleanup | null;
+  cleanupAction: boolean;
+  onCleanup: () => void;
+}) {
+  const orphanCount = cleanup?.orphanFiles ?? 0;
+
+  return (
+    <div className="evl-card p-5">
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div>
+          <h3 className="font-bold text-text text-sm">Proposal Cleanup</h3>
+          <p className="text-xs text-text/65 mt-0.5">Find uploaded files that are no longer linked to a group.</p>
+        </div>
+        <span className={orphanCount ? 'evl-badge-warning' : 'evl-badge-success'}>
+          {orphanCount ? `${orphanCount} orphan` : 'Clean'}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Metric label="Files" value={cleanup?.totalFiles ?? 0} />
+        <Metric label="Linked" value={cleanup?.linkedFiles ?? 0} />
+        <Metric label="Orphan" value={orphanCount} danger={Boolean(orphanCount)} />
+      </div>
+
+      <div className="mt-4 rounded-lg border border-muted/40 bg-bg/60 px-3 py-3">
+        <p className="text-xs text-text/75 leading-relaxed">
+          Linked proposal files are still used by groups and will stay untouched. Cleanup only removes files that have no group record.
+        </p>
+      </div>
+
+      <button
+        type="button"
+        onClick={onCleanup}
+        disabled={!orphanCount || cleanupAction}
+        className="evl-btn-danger !py-2.5 !px-3 !text-xs mt-4 w-full disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {cleanupAction ? 'Cleaning...' : orphanCount ? 'Clean Orphan Files' : 'No Orphan Files to Clean'}
+      </button>
+    </div>
+  );
+}
+
+function BackupCenterPanel({
+  backupAction,
+  onBackup,
+}: {
+  backupAction: string;
+  onBackup: (type: string) => void;
+}) {
+  return (
+    <div className="evl-card p-5">
+      <div className="mb-4">
+        <h3 className="font-bold text-text text-sm">Backup Center</h3>
+        <p className="text-xs text-text/65 mt-0.5">Download system data as JSON backups.</p>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 2xl:grid-cols-2 gap-2">
+        {backupTypes.map((type) => (
+          <button
+            key={type}
+            type="button"
+            onClick={() => onBackup(type)}
+            disabled={Boolean(backupAction)}
+            className="evl-btn-secondary !py-2.5 !px-3 !text-xs capitalize"
+          >
+            {backupAction === type ? 'Exporting...' : type}
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -340,35 +415,3 @@ function Metric({ label, value, danger = false }: { label: string; value: number
   );
 }
 
-function LogPanel({ title, logs, showFailureMeta = false }: { title: string; logs: AuditLog[]; showFailureMeta?: boolean }) {
-  return (
-    <div className="evl-card overflow-hidden">
-      <div className="px-5 py-4 border-b border-muted/30">
-        <h3 className="font-bold text-text text-sm">{title}</h3>
-      </div>
-      <div className="divide-y divide-muted/30">
-        {logs.map((log) => (
-          <div key={log._id} className="p-4">
-            <div className="flex items-start justify-between gap-3">
-              <p className="text-sm font-bold text-text capitalize">{formatAction(log.action)}</p>
-              <span className={log.status === 'failed' ? 'evl-badge-danger' : 'evl-badge-success'}>
-                {log.status}
-              </span>
-            </div>
-            <p className="text-xs text-text/70 mt-1">
-              {log.actor?.name || log.actor?.email || 'System'} · {formatDate(log.createdAt)}
-            </p>
-            {showFailureMeta && (
-              <p className="text-xs text-text/70 mt-1">
-                Reason: {log.metadata?.reason || 'unknown'}
-                {log.metadata?.failedLoginAttempts ? ` - Attempts: ${log.metadata.failedLoginAttempts}` : ''}
-                {log.metadata?.lockUntil ? ` - Locked until ${formatDate(log.metadata.lockUntil)}` : ''}
-              </p>
-            )}
-          </div>
-        ))}
-        {!logs.length && <p className="p-5 text-sm text-text/70">No activity logged yet.</p>}
-      </div>
-    </div>
-  );
-}

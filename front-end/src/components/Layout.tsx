@@ -22,7 +22,7 @@ const panelLinks = [
   { to: '/grade', label: 'Grade Groups', icon: '✎' },
 ];
 
-type NavIconName = 'dashboard' | 'sections' | 'groups' | 'users' | 'assign' | 'rubrics' | 'results' | 'ai' | 'link' | 'grade' | 'subjects' | 'subscription' | 'operations' | 'system' | 'legacy';
+type NavIconName = 'dashboard' | 'sections' | 'groups' | 'users' | 'assign' | 'rubrics' | 'results' | 'ai' | 'link' | 'grade' | 'subjects' | 'subscription' | 'operations' | 'security' | 'system' | 'legacy';
 
 const getNavIconName = (to: string): NavIconName => {
   if (to === '/subjects') return 'subjects';
@@ -37,6 +37,7 @@ const getNavIconName = (to: string): NavIconName => {
   if (to === '/grade') return 'grade';
   if (to === '/subscription') return 'subscription';
   if (to === '/operations') return 'operations';
+  if (to === '/security') return 'security';
   if (to === '/system-control') return 'system';
   if (to === '/legacy-data') return 'legacy';
   return 'dashboard';
@@ -92,6 +93,9 @@ const NavIcon = ({ name }: { name: NavIconName }) => {
   }
   if (name === 'operations') {
     return <svg {...common}><path d="M4 5h16" /><path d="M4 12h16" /><path d="M4 19h16" /><circle cx="8" cy="5" r="1.5" /><circle cx="14" cy="12" r="1.5" /><circle cx="10" cy="19" r="1.5" /></svg>;
+  }
+  if (name === 'security') {
+    return <svg {...common}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" /><path d="M9.5 12.5 11 14l3.5-4" /></svg>;
   }
   if (name === 'system') {
     return <svg {...common}><path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1A2 2 0 1 1 4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1A2 2 0 1 1 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1A2 2 0 1 1 19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" /></svg>;
@@ -485,6 +489,20 @@ export default function Layout({ children }: { children: ReactNode }) {
                   <NavIcon name="operations" />
                 </span>
                 {(!collapsed || mobileOpen) && <span>Operations</span>}
+              </Link>
+              <Link
+                to="/security"
+                onClick={() => setMobileOpen(false)}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-bold transition-all duration-150 ${
+                  location.pathname === '/security'
+                    ? 'bg-primary text-white shadow-sm shadow-primary/25'
+                    : 'text-white/70 hover:text-white hover:bg-white/[0.07]'
+                }`}
+              >
+                <span className="w-5 h-5 flex items-center justify-center shrink-0">
+                  <NavIcon name="security" />
+                </span>
+                {(!collapsed || mobileOpen) && <span>Security</span>}
               </Link>
               <Link
                 to="/system-control"

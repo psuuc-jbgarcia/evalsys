@@ -246,6 +246,12 @@ exports.changePassword = async (req, res) => {
   user.password = newPassword;
   user.mustChangePassword = false;
   await user.save();
+  await recordAuditLog(req, {
+    action: 'account.password.changed',
+    actor: { id: user._id, name: user.name, email: user.email, role: user.role },
+    entity: { type: user.role, id: user._id, name: user.name },
+    metadata: { temporaryPasswordFlow: true },
+  });
   res.json({ message: 'Password changed successfully', mustChangePassword: false });
 };
 
@@ -272,5 +278,11 @@ exports.updateOwnPassword = async (req, res) => {
   user.password = newPassword;
   user.mustChangePassword = false;
   await user.save();
+  await recordAuditLog(req, {
+    action: 'account.password.changed',
+    actor: { id: user._id, name: user.name, email: user.email, role: user.role },
+    entity: { type: user.role, id: user._id, name: user.name },
+    metadata: { temporaryPasswordFlow: false },
+  });
   res.json({ message: 'Password updated successfully' });
 };

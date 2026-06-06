@@ -185,11 +185,30 @@ const listProposalFiles = async () => {
   return files;
 };
 
+const removeProposalFiles = async (storagePaths = []) => {
+  const supabase = getClient();
+  const bucket = getBucketName();
+  if (!supabase) {
+    throw new Error('Supabase Storage is not configured');
+  }
+
+  const paths = storagePaths.filter(Boolean);
+  if (!paths.length) return { removed: 0 };
+
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .remove(paths);
+
+  if (error) throw error;
+  return { removed: data?.length || paths.length };
+};
+
 module.exports = {
   buildProposalPath,
   createProposalSignedUrl,
   getProposalStorageUsage,
   isProposalPathForGroup,
   listProposalFiles,
+  removeProposalFiles,
   uploadProposalFile,
 };

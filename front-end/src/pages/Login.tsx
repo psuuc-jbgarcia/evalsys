@@ -64,7 +64,7 @@ export default function Login() {
           {isWakingUp && !error && (
             <div className="bg-primary/10 text-primary text-[11px] font-bold py-2 px-3 rounded-lg mb-5 text-center flex items-center justify-center gap-2 animate-pulse">
               <span className="w-2 h-2 bg-primary rounded-full animate-bounce" />
-              Initializing system… (Server is waking up)
+              Please wait. First login may take 30 seconds or more.
             </div>
           )}
 

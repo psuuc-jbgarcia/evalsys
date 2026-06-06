@@ -173,3 +173,36 @@ body {
     @apply text-base text-text/65 mt-1.5;
   }
 }
+
+@media (max-width: 640px) {
+  .evl-page-title {
+    font-size: 1.625rem;
+    line-height: 1.2;
+  }
+
+  .evl-page-subtitle {
+    font-size: 0.9375rem;
+    line-height: 1.5;
+  }
+
+  .evl-card {
+    border-radius: 0.75rem;
+  }
+
+  .evl-btn-primary,
+  .evl-btn-secondary,
+  .evl-btn-danger {
+    min-height: 2.75rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .evl-table {
+    font-size: 0.875rem;
+  }
+
+  .evl-table th,
+  .evl-table td {
+    padding: 0.875rem 1rem;
+  }
+}
