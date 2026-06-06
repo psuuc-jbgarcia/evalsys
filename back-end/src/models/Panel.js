@@ -8,6 +8,9 @@ const panelSchema = new mongoose.Schema({
   role: { type: String, default: 'panel' },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', index: true },
   mustChangePassword: { type: Boolean, default: true },
+  failedLoginAttempts: { type: Number, default: 0 },
+  lockUntil: { type: Date },
+  lastLoginAt: { type: Date },
   isActive: { type: Boolean, default: true },
 }, { timestamps: true, collection: 'panel_acc' });
 

@@ -15,7 +15,7 @@ app.set('trust proxy', 1);
 // the same school/network IP while they are actively using the system.
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 50,
+  max: 20,
   message: { message: 'Too many login attempts, please try again after 15 minutes' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -37,6 +37,7 @@ app.use('/api/subjects', require('./routes/subject.routes'));
 app.use('/api/registration-links', require('./routes/registrationLink.routes'));
 app.use('/api/usage', require('./routes/usage.routes'));
 app.use('/api/legacy-data', require('./routes/legacyData.routes'));
+app.use('/api/operations', require('./routes/operations.routes'));
 
 app.get('/api/health', (_, res) => res.json({ status: 'ok' }));
 

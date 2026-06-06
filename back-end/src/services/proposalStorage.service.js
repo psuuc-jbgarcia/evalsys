@@ -139,10 +139,57 @@ const getProposalStorageUsage = async () => {
   };
 };
 
+const listProposalFiles = async () => {
+  const supabase = getClient();
+  const bucket = getBucketName();
+  if (!supabase) {
+    throw new Error('Supabase Storage is not configured');
+  }
+
+  const stack = [''];
+  const files = [];
+
+  while (stack.length) {
+    const prefix = stack.pop();
+    let offset = 0;
+
+    while (true) {
+      const { data, error } = await supabase.storage.from(bucket).list(prefix, {
+        limit: 1000,
+        offset,
+        sortBy: { column: 'name', order: 'asc' },
+      });
+
+      if (error) throw error;
+      if (!data?.length) break;
+
+      data.forEach((item) => {
+        const itemPath = prefix ? `${prefix}/${item.name}` : item.name;
+        if (item.id && item.metadata) {
+          files.push({
+            path: itemPath,
+            size: Number(item.metadata.size || 0),
+            updatedAt: item.updated_at || item.created_at,
+            mimeType: item.metadata.mimetype || item.metadata.mimeType,
+          });
+        } else {
+          stack.push(itemPath);
+        }
+      });
+
+      if (data.length < 1000) break;
+      offset += data.length;
+    }
+  }
+
+  return files;
+};
+
 module.exports = {
   buildProposalPath,
   createProposalSignedUrl,
   getProposalStorageUsage,
   isProposalPathForGroup,
+  listProposalFiles,
   uploadProposalFile,
 };

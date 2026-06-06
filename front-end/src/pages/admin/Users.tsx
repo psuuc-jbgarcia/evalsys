@@ -4,6 +4,7 @@ import { TableSkeleton } from '../../components/LoadingSkeleton';
 import { useAuth } from '../../context/useAuth';
 import { notify } from '../../utils/notify';
 import PasswordField from '../../components/PasswordField';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 
 interface Subject { _id: string; code: string; title: string; }
 interface User { _id: string; name: string; email: string; role: string; isActive: boolean; assignedSubjects?: Subject[]; }
@@ -73,6 +74,7 @@ export default function Users() {
   const [resetError, setResetError] = useState('');
   const [resetCopyMessage, setResetCopyMessage] = useState('');
   const [resetting, setResetting] = useState(false);
+  const { confirm, ConfirmDialog } = useConfirmDialog();
   const pageTitle = isSuperadmin ? 'Accounts' : 'Panel Accounts';
   const pageSubtitle = isSuperadmin
     ? 'Create, review, and manage platform accounts by role.'
@@ -134,7 +136,16 @@ export default function Users() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this user?')) return;
+    const target = users.find((item) => item._id === id);
+    const ok = await confirm({
+      title: 'Delete Account?',
+      message: target?.role === 'panel'
+        ? `Delete ${target.name}? Submitted results from this panel will be kept.`
+        : `Delete ${target?.name || 'this account'}?`,
+      confirmLabel: 'Delete Account',
+      danger: true,
+    });
+    if (!ok) return;
     await api.delete(`/users/${id}`);
     load();
   };
@@ -232,6 +243,7 @@ export default function Users() {
 
   return (
     <div>
+      <ConfirmDialog />
       <div className="flex justify-between items-center mb-6">
         <div>
           <h2 className="evl-page-title">{pageTitle}</h2>

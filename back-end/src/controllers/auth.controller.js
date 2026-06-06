@@ -2,9 +2,14 @@ const jwt = require('jsonwebtoken');
 const Admin = require('../models/Admin');
 const Panel = require('../models/Panel');
 const Section = require('../models/Section');
+const Settings = require('../models/Settings');
+const { recordAuditLog } = require('../services/audit.service');
 
 const signToken = (id, role) =>
   jwt.sign({ id, role }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+const MAX_FAILED_LOGIN_ATTEMPTS = 5;
+const LOGIN_LOCK_MINUTES = 15;
 
 const isStrongPassword = (password = '') => (
   typeof password === 'string' &&
@@ -92,6 +97,29 @@ const getUserFeatureLocks = async (user) => {
   };
 };
 
+const isAccountLocked = (user) => user?.lockUntil && user.lockUntil.getTime() > Date.now();
+const remainingLockMinutes = (user) => Math.ceil((user.lockUntil.getTime() - Date.now()) / 60000);
+
+const recordFailedLoginForUser = async (req, user, reason) => {
+  user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
+  const lockedNow = user.failedLoginAttempts >= MAX_FAILED_LOGIN_ATTEMPTS;
+  if (lockedNow) {
+    user.lockUntil = new Date(Date.now() + LOGIN_LOCK_MINUTES * 60 * 1000);
+  }
+  await user.save();
+  await recordAuditLog(req, {
+    action: lockedNow ? 'login.locked' : 'login.failed',
+    status: 'failed',
+    actor: { id: user._id, name: user.name, email: user.email, role: user.role },
+    metadata: {
+      reason,
+      failedLoginAttempts: user.failedLoginAttempts,
+      lockUntil: user.lockUntil,
+    },
+  });
+  return lockedNow;
+};
+
 exports.login = async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password)
@@ -115,13 +143,69 @@ exports.login = async (req, res) => {
     }
   }
 
-  if (!user || !(await user.matchPassword(password)))
-    return res.status(401).json({ message: 'Invalid credentials' });
+  if (user && isAccountLocked(user)) {
+    await recordAuditLog(req, {
+      action: 'login.failed',
+      status: 'failed',
+      actor: { id: user._id, name: user.name, email: user.email, role: user.role },
+      metadata: { reason: 'account_locked', lockUntil: user.lockUntil },
+    });
+    return res.status(423).json({ message: `Account temporarily locked. Try again in ${remainingLockMinutes(user)} minute(s).` });
+  }
 
-  if (!user.isActive)
+  if (!user) {
+    await recordAuditLog(req, {
+      action: 'login.failed',
+      status: 'failed',
+      actor: { email: normalizedEmail },
+      metadata: { reason: 'unknown_account' },
+    });
+    return res.status(401).json({ message: 'Invalid credentials' });
+  }
+
+  if (!(await user.matchPassword(password))) {
+    const lockedNow = await recordFailedLoginForUser(req, user, 'invalid_password');
+    return res.status(lockedNow ? 423 : 401).json({
+      message: lockedNow
+        ? `Too many failed attempts. Account locked for ${LOGIN_LOCK_MINUTES} minutes.`
+        : 'Invalid credentials',
+    });
+  }
+
+  if (!user.isActive) {
+    await recordAuditLog(req, {
+      action: 'login.failed',
+      status: 'failed',
+      actor: { id: user._id, name: user.name, email: user.email, role: user.role },
+      metadata: { reason: 'inactive_account' },
+    });
     return res.status(403).json({ message: 'Account is deactivated' });
+  }
+
+  const settings = await Settings.findOne().select('isMaintenanceMode maintenanceMessage');
+  if (settings?.isMaintenanceMode && user.role !== 'superadmin') {
+    await recordAuditLog(req, {
+      action: 'login.failed',
+      status: 'failed',
+      actor: { id: user._id, name: user.name, email: user.email, role: user.role },
+      metadata: { reason: 'maintenance_mode' },
+    });
+    return res.status(503).json({
+      message: settings.maintenanceMessage || 'EvalSys is temporarily unavailable while maintenance is in progress.',
+      maintenanceMode: true,
+    });
+  }
 
   const locks = await getUserFeatureLocks(user);
+  user.failedLoginAttempts = 0;
+  user.lockUntil = undefined;
+  user.lastLoginAt = new Date();
+  await user.save();
+
+  await recordAuditLog(req, {
+    action: 'login.success',
+    actor: { id: user._id, name: user.name, email: user.email, role: user.role },
+  });
 
   res.json({
     token: signToken(user._id, user.role),

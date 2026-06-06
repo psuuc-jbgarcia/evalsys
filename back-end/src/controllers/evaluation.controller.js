@@ -4,6 +4,7 @@ const Section = require('../models/Section');
 const Rubric = require('../models/Rubric');
 const Admin = require('../models/Admin');
 const RegistrationLink = require('../models/RegistrationLink');
+const { recordAuditLog } = require('../services/audit.service');
 
 const getSubjectId = (req) => req.headers['x-subject-id'] || req.query.subject || req.body.subject;
 const getOwnerId = (req) => req.user?.role === 'superadmin'
@@ -121,6 +122,12 @@ exports.clearEvaluation = async (req, res) => {
       return res.status(403).json({ message: 'This evaluation does not belong to the current subject' });
     }
     await evaluation.deleteOne();
+    await recordAuditLog(req, {
+      action: 'evaluation.clear',
+      entity: { type: 'evaluation', id: evaluation._id },
+      instructor: getOwnerId(req),
+      subject: group.section?.subject,
+    });
     res.json({ message: 'Evaluation cleared successfully' });
   } catch (err) {
     res.status(500).json({ message: 'Failed to clear evaluation', error: err.message });
@@ -218,6 +225,16 @@ exports.submitEvaluation = async (req, res) => {
     },
     { new: true, upsert: true, runValidators: true }
   );
+
+  await recordAuditLog(req, {
+    action: evaluation.createdAt?.getTime?.() === evaluation.updatedAt?.getTime?.()
+      ? 'evaluation.submit'
+      : 'evaluation.update',
+    entity: { type: 'group', id: group._id, name: group.name },
+    instructor: group.createdBy,
+    subject: section.subject,
+    metadata: { total: evaluation.total },
+  });
 
   res.json(serializeEvaluation(evaluation));
 };
@@ -466,6 +483,14 @@ exports.exportAllResults = async (req, res) => {
     }
   }
 
+  await recordAuditLog(req, {
+    action: 'results.export',
+    entity: { type: 'results', name: subject ? 'subject' : 'all' },
+    instructor: getOwnerId(req),
+    subject,
+    metadata: { rows: allResults.length },
+  });
+
   res.json(allResults);
 };
 
@@ -494,6 +519,16 @@ exports.masterReset = async (req, res) => {
         { createdBy: ownerId, subject },
         { $pull: { sections: { $in: sectionIds } } }
       );
+      await recordAuditLog(req, {
+        action: 'subject.reset',
+        instructor: ownerId,
+        subject,
+        metadata: {
+          deletedBlocks: sectionIds.length,
+          deletedGroups: groupIds.length,
+          archivedResults,
+        },
+      });
       return res.json({
         message: req.user.role === 'superadmin'
           ? 'Subject data reset. Submitted results were moved to Archive.'
@@ -512,6 +547,12 @@ exports.masterReset = async (req, res) => {
     // But we could also delete Rubrics if preferred. 
     // Let's stick to event data: Evaluations, Groups, Sections.
     
+    await recordAuditLog(req, {
+      action: subject ? 'subject.reset' : 'global.reset',
+      instructor: subject ? getOwnerId(req) : undefined,
+      subject,
+    });
+
     res.json({ message: 'System has been master reset successfully.' });
   } catch (err) {
     res.status(500).json({ message: 'Reset failed', error: err.message });

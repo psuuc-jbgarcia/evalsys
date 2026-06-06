@@ -5,6 +5,7 @@ import ScoreInput from '../../components/ScoreInput';
 import { CardSkeleton } from '../../components/LoadingSkeleton';
 import { useAuth } from '../../context/useAuth';
 import { formatMemberList, type Member } from '../../utils/members';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 
 interface Level { label: string; minScore: number; maxScore: number; description: string; }
 interface Criteria { key: string; label: string; maxScore: number; levels: Level[]; }
@@ -79,6 +80,7 @@ export default function Grade() {
   const [missingCriteria, setMissingCriteria] = useState<string[]>([]);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const [proposalError, setProposalError] = useState('');
+  const { confirm, ConfirmDialog } = useConfirmDialog();
 
   const [searchParams] = useSearchParams();
   const urlGroupId = searchParams.get('groupId');
@@ -234,10 +236,14 @@ export default function Grade() {
     (hasScoreValues(scores) || Boolean(comments.trim()))
   );
 
-  const confirmContinueWithDraft = () => {
+  const confirmContinueWithDraft = async () => {
     saveDraft();
     if (!hasUnsavedLocalWork()) return true;
-    return confirm('Your scores were saved locally but not submitted yet. Do you want to continue?');
+    return confirm({
+      title: 'Continue With Unsaved Draft?',
+      message: 'Your scores were saved locally but not submitted yet. You can return to this group on the same device/browser to restore them.',
+      confirmLabel: 'Continue',
+    });
   };
 
   // Re-initialize scores when group or rubric changes
@@ -288,7 +294,7 @@ export default function Grade() {
   }, [selectedGroup, selectedExisting, activeRubric]);
 
   const selectGroup = async (group: Group) => {
-    if (group._id !== selectedGroup?._id && !confirmContinueWithDraft()) return;
+    if (group._id !== selectedGroup?._id && !(await confirmContinueWithDraft())) return;
     const requestId = evaluationRequestIdRef.current + 1;
     evaluationRequestIdRef.current = requestId;
     skipAutosaveRef.current = true;
@@ -358,8 +364,12 @@ export default function Grade() {
       return;
     }
 
-    const confirmMsg = `Review your submission for ${selectedGroup?.name}:\n\nTotal Score: ${total}/${maxTotal}\n\nDo you want to proceed?`;
-    if (!confirm(confirmMsg)) return;
+    const ok = await confirm({
+      title: 'Submit Scores?',
+      message: `Review your submission for ${selectedGroup?.name}:\n\nTotal Score: ${total}/${maxTotal}`,
+      confirmLabel: 'Submit Scores',
+    });
+    if (!ok) return;
 
     setError(''); setSuccess('');
     setMissingCriteria([]);
@@ -432,9 +442,15 @@ export default function Grade() {
     return null;
   };
 
-  const clearCurrentDraft = () => {
+  const clearCurrentDraft = async () => {
     if (!selectedGroup) return;
-    if (!confirm('Clear this unsaved local draft? Submitted scores will not be deleted.')) return;
+    const ok = await confirm({
+      title: 'Clear Local Draft?',
+      message: 'This clears the unsaved draft on this browser. Submitted scores will not be deleted.',
+      confirmLabel: 'Clear Draft',
+      danger: true,
+    });
+    if (!ok) return;
     localStorage.removeItem(draftKey(panelId, selectedGroup._id));
     localStorage.removeItem(legacyDraftKey(selectedGroup._id));
     setDraftSavedAt(null);
@@ -509,6 +525,7 @@ export default function Grade() {
 
   return (
     <div className="flex flex-col lg:flex-row gap-6">
+      <ConfirmDialog />
       {/* Group sidebar */}
       <div className="w-full lg:w-72 shrink-0">
         <div className="sticky top-0 pr-2 pb-8">

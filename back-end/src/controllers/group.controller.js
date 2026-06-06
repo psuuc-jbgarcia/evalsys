@@ -18,6 +18,46 @@ const canAccessSubject = (req, subjectId) => (
   (req.user?.assignedSubjects || []).some((id) => id.toString() === subjectId.toString())
 );
 
+const archiveGroupEvaluations = async (group) => {
+  const fullGroup = await Group.findById(group._id)
+    .populate({
+      path: 'section',
+      select: 'name block subject createdBy',
+      populate: [
+        { path: 'subject', select: 'code title' },
+        { path: 'createdBy', select: 'name email' },
+      ],
+    })
+    .populate('createdBy', 'name email');
+
+  const section = fullGroup?.section;
+  const subject = section?.subject;
+  const instructor = fullGroup?.createdBy || section?.createdBy;
+  const evaluations = await Evaluation.find({
+    group: group._id,
+    isLegacyArchived: { $ne: true },
+  }).populate('panel', 'name email');
+  const archivedAt = new Date();
+
+  for (const evaluation of evaluations) {
+    evaluation.isLegacyArchived = true;
+    evaluation.legacyArchivedAt = archivedAt;
+    evaluation.legacySnapshot = {
+      groupName: fullGroup?.name || 'Deleted group',
+      block: section?.block || section?.name || 'Deleted block',
+      subject: [subject?.code, subject?.title].filter(Boolean).join(' - ') || 'Unknown subject',
+      panelName: evaluation.panel?.name || evaluation.legacySnapshot?.panelName || 'Deleted panel',
+      panelEmail: evaluation.panel?.email || evaluation.legacySnapshot?.panelEmail || '',
+      instructorName: instructor?.name || evaluation.legacySnapshot?.instructorName || '',
+      instructorEmail: instructor?.email || evaluation.legacySnapshot?.instructorEmail || '',
+      members: fullGroup?.members || evaluation.legacySnapshot?.members || [],
+    };
+    await evaluation.save();
+  }
+
+  return evaluations.length;
+};
+
 const normalizeMembers = (members) => {
   if (Array.isArray(members)) {
     return members
@@ -435,10 +475,12 @@ exports.deleteGroup = async (req, res) => {
     return res.status(403).json({ message: 'This group does not belong to the current subject' });
   }
   if (!canAccessSubject(req, group.section?.subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
-  const deletedEvaluations = await Evaluation.deleteMany({ group: group._id });
+  const archivedEvaluations = await archiveGroupEvaluations(group);
   await group.deleteOne();
   res.json({
-    message: 'Group and its evaluations deleted',
-    deletedEvaluations: deletedEvaluations.deletedCount,
+    message: archivedEvaluations > 0
+      ? 'Group deleted. Submitted results were moved to Archive.'
+      : 'Group deleted.',
+    archivedEvaluations,
   });
 };

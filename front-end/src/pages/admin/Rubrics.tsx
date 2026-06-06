@@ -3,6 +3,7 @@ import api from '../../services/api';
 import { CardSkeleton } from '../../components/LoadingSkeleton';
 import { notify } from '../../utils/notify';
 import { useAuth } from '../../context/useAuth';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 
 interface Level {
   label: string;
@@ -129,6 +130,7 @@ export default function Rubrics() {
   const [error, setError] = useState('');
   const [expandedRubric, setExpandedRubric] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const { confirm, ConfirmDialog } = useConfirmDialog();
 
   const load = () => {
     setLoading(true);
@@ -226,10 +228,13 @@ export default function Rubrics() {
     const activeMessage = rubric.isActive
       ? '\n\nThis is the active rubric. If another rubric exists for this subject, it will become active after deletion.'
       : '';
-    if (!confirm(
-      `Delete "${rubric.title}"?${activeMessage}\n\n` +
-      'Saved evaluations and results that used this rubric will NOT be deleted.'
-    )) return;
+    const ok = await confirm({
+      title: 'Delete Rubric?',
+      message: `Delete "${rubric.title}"?${activeMessage}\n\nSaved evaluations and results that used this rubric will NOT be deleted.`,
+      confirmLabel: 'Delete Rubric',
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await api.delete(`/rubrics/${rubric._id}`);
       load();
@@ -260,6 +265,7 @@ export default function Rubrics() {
 
   return (
     <div>
+      <ConfirmDialog />
       <div className="flex justify-between items-center mb-6">
         <div>
           <h2 className="evl-page-title">Rubrics</h2>

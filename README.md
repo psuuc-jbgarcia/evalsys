@@ -1,119 +1,242 @@
-# EvalSys - Automated Rubrics Evaluation System
+# EvalSys - IR Project Evaluation System
 
-EvalSys is a modern, block-based automated rubric evaluation platform designed to streamline the grading process for capstone projects, research presentations, and student assessments. It allows administrators to manage blocks (sections), assign panel judges to those blocks, and generate real-time averaged results.
+EvalSys is a multi-subject web-based rubric evaluation system for IT/IR project presentations. It supports Super Admin oversight, instructor-managed subjects, panel grading, structured group registration, proposal document uploads, and clean result exports.
 
-## 🚀 Key Features
+## Key Features
 
-- **Student Self-Registration**: Public registration page with data privacy agreement for student self-enrollment.
-- **Block-Based Architecture**: Organize groups into specific "Blocks" (e.g., 21-ITE-04) for easier management.
-- **Panel-to-Block Assignment**: Assign panel judges to entire blocks in bulk rather than individual groups.
-- **Admin Group Management**: Edit existing group details, names, and member lists directly from the dashboard.
-- **Bulk CSV/Excel Import**: Rapidly populate the system with 100+ groups or panel accounts using simple CSV templates.
-- **Dynamic Rubric System**: Create custom rubrics with multiple criteria and dynamic weightings.
-- **Master Export & Maintenance**: Download a global CSV of ALL results and perform a "Master Reset" while preserving accounts.
-- **Qualitative Feedback System**: Panels can leave constructive text-based comments alongside numerical scores.
-- **Global Grading Lock**: Admins can instantly "freeze" all grading across the entire platform.
-- **Smart Result Computation**: Scores are automatically averaged based on assigned panels, ensuring fairness.
-- **Panel Completion Tracking**: Live checklist view with green checkmarks and status badges for judges.
-- **Submission Review & Safety**: Built-in confirmation system to prevent incomplete or erroneous submissions.
-- **Auto-Save & Offline Backup**: Active grading sessions are auto-saved; supports print-ready offline backups.
-- **Premium UI/UX**: Responsive dashboard with dark/light aesthetics, micro-animations, and tabbed navigation.
-- **Premium UI/UX**: Responsive dashboard with dark/light aesthetics, micro-animations, and tabbed navigation.
+- **Multi-role access**: Super Admin, Instructor, and Panel accounts.
+- **Multi-subject management**: Instructors manage assigned subjects within paid subject limits.
+- **Block and group management**: Create sections/blocks, register groups, and manage structured group members.
+- **Structured member data**: New groups store members as last name, first name, and optional middle name. Old comma-separated/string member records remain supported.
+- **Panel assignment isolation**: Panels belong to an instructor and can only be assigned within that instructor's subjects.
+- **Instructor-owned rubrics**: Instructors create, edit, delete, and activate their own rubrics per subject.
+- **Per-subject grading lock**: Instructors can lock grading for their own subject; Super Admin can control instructor locks.
+- **Panel grading workflow**: Panels grade assigned groups, leave comments, and can view read-only mode when grading is locked.
+- **Autosave and offline draft backup**: Panel scores/comments are saved locally before submission to reduce data loss.
+- **Proposal upload**: Optional PDF/DOC/DOCX/PPT/PPTX proposal files are stored in Supabase Storage and opened through short-lived signed URLs.
+- **Per-block exports**: Export group summary CSV or alphabetized member grades CSV for the selected block.
+- **AI Insights page**: Summarizes completed group scores, strengths, weaknesses, highest group, and panel comments using local score/comment data.
+- **System announcements**: Super Admin can show notices to instructors and panels.
+- **Maintenance mode**: Super Admin can temporarily block instructor/panel access while updates are being applied.
+- **Operations dashboard**: Audit logs, activity monitor, instructor summary, proposal storage cleanup view, and backup exports.
+- **Archive support**: Submitted results are preserved when subjects are reset or when groups/blocks are deleted.
+- **PWA support**: EvalSys can be installed on a device and shows an update notice when a new app build is available.
 
-## 🚀 System Performance & Optimization
+## Tech Stack
 
-To ensure a smooth experience on free-tier hosting (like Render and MongoDB Atlas), the following optimizations have been implemented:
+- **Frontend**: React, TypeScript, Vite, Tailwind CSS, React Router, Axios.
+- **Backend**: Node.js, Express, Mongoose.
+- **Database**: MongoDB Atlas.
+- **File storage**: Supabase Storage private bucket.
+- **Authentication**: JWT with role-based route protection.
+- **Deployment target**: Vercel frontend and Render backend.
 
-### 1. Cold Start Mitigation
-Free-tier instances on Render "sleep" after 15 minutes of inactivity. To fix the 30-second login delay:
-- **Pre-emptive Wake-up**: The frontend (Login and Registration pages) sends a "wake-up" ping to `/api/health` the moment the user lands on the page.
-- **Visual Status**: A pulse animation with the message *"Initializing system… (Server is waking up)"* provides immediate feedback during the cold start.
-
-### 2. Database Connection Pooling
-In `back-end/src/config/db.js`, the connection is optimized for rapid recovery:
-- `maxPoolSize: 10`: Reuses database connections to handle concurrent logins faster.
-- `family: 4`: Forces IPv4 to skip DNS resolution delays (common on some networks).
-- `serverSelectionTimeoutMS: 5000`: Ensures the app doesn't hang if the DB is also waking up.
-
-### 3. Recommended Keep-Alive (Cron Job)
-To keep the server awake 24/7, set up a free cron job at [Cron-job.org](https://cron-job.org/):
-- **Name**: EvalSys Keep-Alive
-- **URL**: `https://<your-backend-url>.onrender.com/api/health`
-- **Schedule**: Every 10 or 14 minutes.
-- **Note**: Replace `<your-backend-url>` with your actual Render service URL (e.g., `evalsys-api.onrender.com`).
-
-## 🛠 Tech Stack
-
-- **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, React Router.
-- **Backend**: Node.js, Express.
-- **Database**: MongoDB (Mongoose ODM).
-- **Authentication**: JWT-based secure authentication for Admin and Panel accounts.
-
-## 📦 Project Structure
+## Project Structure
 
 ```text
 automated-rubrics/
-├── back-end/          # Express API server
-└── front-end/         # Vite + React application
+├── back-end/       Express API server
+├── front-end/      Vite React application
+└── README.md
 ```
 
-## ⚙️ Installation & Setup
+## Backend Setup
 
-### 1. Prerequisites
-- Node.js (v16+)
-- MongoDB (Local or Atlas)
+1. Install dependencies:
 
-### 2. Backend Setup
-1. Navigate to the `back-end` directory.
-2. Install dependencies:
    ```bash
+   cd back-end
    npm install
    ```
-3. Create a `.env` file in the `back-end` folder:
+
+2. Create `back-end/.env`:
+
    ```env
    PORT=5000
    MONGO_URI=your_mongodb_connection_string
-   JWT_SECRET=your_secret_key
+   JWT_SECRET=your_long_random_secret
+
+   SUPABASE_URL=https://your-project-ref.supabase.co
+   SUPABASE_SERVICE_ROLE_KEY=your_backend_only_secret_key
+   SUPABASE_PROPOSAL_BUCKET=evalsys-proposals
+   SUPABASE_STORAGE_LIMIT_MB=1024
+
+   RENDER_API_KEY=optional_render_api_key
+   RENDER_SERVICE_ID=optional_render_service_id
    ```
-4. Start the server:
+
+3. Start the backend:
+
    ```bash
    npm run dev
    ```
 
-### 3. Frontend Setup
-1. Navigate to the `front-end` directory.
-2. Install dependencies:
+Important: never put `SUPABASE_SERVICE_ROLE_KEY` in the frontend or Vercel environment variables. It belongs only in the backend Render service.
+
+## Frontend Setup
+
+1. Install dependencies:
+
    ```bash
+   cd front-end
    npm install
    ```
-3. Start the development server:
+
+2. Optional local `.env`:
+
+   ```env
+   VITE_API_URL=http://localhost:5000/api
+   ```
+
+3. Start the frontend:
+
    ```bash
    npm run dev
    ```
 
-## 📋 Usage Guide
+4. Production build:
 
-### Administrator
-1. **Manage Blocks**: Create sections/blocks in the "Sections" page.
-2. **Bulk Import**: Use the "Bulk Import" buttons on the Accounts or Groups pages to upload data from CSV files. Download the provided templates for the correct format.
-3. **Manage Groups**: Add student groups and assign them to specific blocks.
-4. **Assign Panels**: Create panel accounts and use the "Assign Panels" page to link judges to blocks.
-5. **System Control**: Use the toggle on the Dashboard to lock/unlock grading globally. Use the "Reset" button on the Accounts page to change user passwords.
-6. **View Results**: Check the "Results" page to see averaged scores, view panel feedback, and download CSV exports.
+   ```bash
+   npm run build
+   ```
 
-### Panel Judge
-1. **Dashboard**: See all assigned blocks and their associated groups. Graded groups will show a green checkmark.
-2. **Grade Groups**: Click a group card to open the grading form directly. Select the desired rubric, input scores, and leave comments.
-3. **Safety Check**: Review the total score in the confirmation popup before final submission.
-4. **Recovery**: If the app is closed accidentally, your scores are auto-saved. Use the "Print Offline Backup" if the internet fails.
+## Supabase Storage Setup
 
-## 🔮 Future Roadmap
+Create a private bucket:
 
-- **Evolving to Multi-Subject (MIT) Platform**: Evolve the entire system from a single-subject application to a robust multi-subject (MIT) platform. This will allow administrators to manage multiple subjects/courses, assign subject-specific active rubrics, filter registrations, and track grading progress scoped to each subject.
-- **Deliberation View (Side-by-Side Comparison)**: A detailed admin view to compare individual judge scores side-by-side. This helps identify grading discrepancies (e.g., if one judge is significantly stricter than others) to facilitate fairer deliberations.
-- **Real-Time Leaderboard Mode**: A fullscreen, animated "Hall of Fame" view for projecting top-performing groups during awarding ceremonies.
-- **Radar Chart Analytics**: Visual performance breakdown per group to identify specific strengths and weaknesses in their presentation or technical implementation.
+```env
+SUPABASE_PROPOSAL_BUCKET=evalsys-proposals
+```
 
-## 📄 License
+Recommended bucket settings:
 
-Distributed under the MIT License.
+- Public bucket: off
+- File size limit: 10 MB
+- Allowed MIME types:
+
+```text
+application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation
+```
+
+Allowed upload types:
+
+- PDF
+- DOC
+- DOCX
+- PPT
+- PPTX
+
+Proposal upload is optional. Groups without proposal files still work normally.
+
+## Main Workflows
+
+### Super Admin
+
+- Manage instructor subject limits.
+- Lock CSV export per instructor.
+- Lock grading per instructor subject.
+- Assign instructors to subjects.
+- Manage resources and view storage usage.
+- View audit logs and activity monitor.
+- Export backups.
+- Review archive/legacy data.
+- Publish system announcements.
+- Enable/disable maintenance mode.
+
+### Instructor
+
+- Manage assigned subjects.
+- Create sections/blocks.
+- Create and edit groups.
+- Import groups and panel accounts by CSV.
+- Assign panels to blocks.
+- Create and activate subject rubrics.
+- Manage registration links.
+- View results and export CSV files.
+- Reset a subject for a fresh evaluation cycle.
+
+### Panel
+
+- View assigned blocks and groups.
+- Open uploaded proposal files when available.
+- Grade using the active instructor rubric.
+- Add comments.
+- Update submitted grades when grading is open.
+- Use read-only mode when grading is locked.
+- Rely on local autosave if connection is interrupted.
+
+## Result Preservation Rules
+
+Submitted evaluations are treated as historical records.
+
+- Deleting a panel account keeps submitted results.
+- Deleting a group archives submitted results before removing the active group.
+- Deleting a block archives submitted results before removing active groups.
+- Resetting a subject archives submitted results before clearing active blocks/groups.
+- Deleting a subject archives submitted results before removing the subject setup.
+
+Archived results are available to Super Admin under Archive.
+
+## CSV Exports
+
+When an instructor selects a block in Results, EvalSys supports:
+
+- **Download Group Summary CSV**
+- **Download Member Grades CSV**
+
+Member grades export one row per member and sort alphabetically by:
+
+1. Last Name
+2. First Name
+3. Middle Name
+
+If a group evaluation is incomplete, the exported score is:
+
+```text
+Pending Complete Evaluation
+```
+
+## Security Notes
+
+- Login is rate-limited.
+- Accounts are temporarily locked after repeated failed login attempts.
+- New accounts and reset passwords require users to change their temporary password after signing in.
+- Passwords require uppercase, lowercase, number, symbol, and at least 8 characters.
+- Maintenance mode blocks instructor/panel actions while allowing Super Admin access.
+- Proposal files are served through backend-generated signed URLs.
+- Supabase service role key must remain backend-only.
+
+## Free-tier Hosting Notes
+
+Render free tier may sleep after inactivity. EvalSys keeps polling conservative to avoid consuming hours too quickly.
+
+- Announcement and maintenance status checks run every 30 seconds while the app is open.
+- Socket.IO is not used by default because persistent connections can keep Render awake longer.
+- PWA users receive a "New changes detected" notice when a fresh app build is available.
+
+## Useful Commands
+
+Backend syntax check:
+
+```bash
+cd back-end
+node --check src/index.js
+```
+
+Frontend production build:
+
+```bash
+cd front-end
+npm run build
+```
+
+## Current Known Follow-ups
+
+- Replace remaining native browser `confirm()` calls with the custom EvalSys modal style.
+- Add a frontend `.env.example`.
+- Add a controlled cleanup action for orphaned Supabase proposal files.
+- Consider frontend code splitting if the production bundle grows much larger.
+
+## License
+
+MIT License.

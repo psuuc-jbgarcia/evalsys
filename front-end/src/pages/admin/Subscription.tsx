@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../../services/api';
 import { notify } from '../../utils/notify';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 
 interface Instructor {
   _id: string;
@@ -77,7 +78,6 @@ const downloadCsv = (filename: string, rows: BackupRow[]) => {
   link.click();
   URL.revokeObjectURL(link.href);
 };
-
 export default function Subscription() {
   const [loading, setLoading] = useState(true);
   const [instructors, setInstructors] = useState<Instructor[]>([]);
@@ -89,6 +89,7 @@ export default function Subscription() {
   const [savingGradingLockId, setSavingGradingLockId] = useState<string | null>(null);
   const [dataAction, setDataAction] = useState('');
   const [usage, setUsage] = useState<UsageStatus | null>(null);
+  const { confirm, ConfirmDialog } = useConfirmDialog();
 
   const fetchInstructors = async () => {
     const res = await api.get('/users');
@@ -230,9 +231,14 @@ export default function Subscription() {
     const label = scope === 'subject'
       ? `${currentSubject?.code || 'current subject'}`
       : 'the entire platform';
-    const ok = confirm(scope === 'subject'
-      ? `This will remove active blocks and groups for ${label}. Submitted results will be moved to Archive.\n\nContinue?`
-      : `This will permanently reset evaluation event data for ${label}. Export a backup first.\n\nThis action cannot be undone.\n\nContinue?`);
+    const ok = await confirm({
+      title: scope === 'subject' ? 'Reset Subject?' : 'Global Reset?',
+      message: scope === 'subject'
+        ? `This will remove active blocks and groups for ${label}. Submitted results will be moved to Archive.`
+        : `This will permanently reset evaluation event data for ${label}. Export a backup first.\n\nThis action cannot be undone.`,
+      confirmLabel: scope === 'subject' ? 'Reset Subject' : 'Global Reset',
+      danger: true,
+    });
     if (!ok) return;
 
     setDataAction(`reset-${scope}`);
@@ -263,6 +269,7 @@ export default function Subscription() {
 
   return (
     <div>
+      <ConfirmDialog />
       <div className="mb-8">
         <h2 className="evl-page-title">Manage Subscription</h2>
         <p className="evl-page-subtitle">

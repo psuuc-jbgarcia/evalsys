@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const Admin = require('../models/Admin');
 const Panel = require('../models/Panel');
+const Settings = require('../models/Settings');
 
 const protect = async (req, res, next) => {
   const header = req.headers.authorization;
@@ -27,6 +28,17 @@ const protect = async (req, res, next) => {
       '/api/auth/me',
       '/api/auth/change-password',
     ].includes(req.originalUrl.split('?')[0]);
+
+    if (user.role !== 'superadmin' && !passwordChangeAllowed) {
+      const settings = await Settings.findOne().select('isMaintenanceMode maintenanceMessage');
+      if (settings?.isMaintenanceMode) {
+        return res.status(503).json({
+          message: settings.maintenanceMessage || 'EvalSys is temporarily unavailable while maintenance is in progress.',
+          maintenanceMode: true,
+        });
+      }
+    }
+
     if (user.mustChangePassword && !passwordChangeAllowed) {
       return res.status(403).json({
         message: 'You must change your temporary password before continuing',

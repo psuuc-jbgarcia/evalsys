@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../../services/api';
 import { TableSkeleton } from '../../components/LoadingSkeleton';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 
 interface Section { _id: string; name: string; block: string; }
 
@@ -11,6 +12,7 @@ export default function Sections() {
   const [editValue, setEditValue] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const { confirm, ConfirmDialog } = useConfirmDialog();
 
   const load = () => {
     setLoading(true);
@@ -44,13 +46,20 @@ export default function Sections() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this block?')) return;
+    const ok = await confirm({
+      title: 'Delete Block?',
+      message: 'This removes the active block and its groups. Submitted results will be moved to Archive.',
+      confirmLabel: 'Delete Block',
+      danger: true,
+    });
+    if (!ok) return;
     await api.delete(`/sections/${id}`);
     load();
   };
 
   return (
     <div>
+      <ConfirmDialog />
       <div className="mb-6">
         <h2 className="evl-page-title">Blocks</h2>
         <p className="evl-page-subtitle">Create and manage blocks.</p>

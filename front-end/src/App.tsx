@@ -14,10 +14,14 @@ import RegistrationLinks from './pages/admin/RegistrationLinks';
 import Subjects from './pages/admin/Subjects';
 import Subscription from './pages/admin/Subscription';
 import LegacyData from './pages/admin/LegacyData';
+import Operations from './pages/admin/Operations';
+import SystemControl from './pages/admin/SystemControl';
 import Grade from './pages/panel/Grade';
 import RegisterGroup from './pages/RegisterGroup';
 import Landing from './pages/Landing';
 import AppAlert from './components/AppAlert';
+import UpdateAvailableNotice from './components/UpdateAvailableNotice';
+import SystemNotice from './components/SystemNotice';
 import ChangePassword from './pages/ChangePassword';
 import AccountSecurity from './pages/AccountSecurity';
 import ProposalViewer from './pages/ProposalViewer';
@@ -26,6 +30,8 @@ export default function App() {
   return (
     <AuthProvider>
       <AppAlert />
+      <UpdateAvailableNotice />
+      <SystemNotice />
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Landing />} />
@@ -41,6 +47,8 @@ export default function App() {
           <Route path="/sections" element={<ProtectedRoute role="admin"><Sections /></ProtectedRoute>} />
           <Route path="/subjects" element={<ProtectedRoute role="admin"><Subjects /></ProtectedRoute>} />
           <Route path="/subscription" element={<ProtectedRoute role="admin"><Subscription /></ProtectedRoute>} />
+          <Route path="/operations" element={<ProtectedRoute role="admin" superadminOnly><Operations /></ProtectedRoute>} />
+          <Route path="/system-control" element={<ProtectedRoute role="admin" superadminOnly><SystemControl /></ProtectedRoute>} />
           <Route path="/legacy-data" element={<ProtectedRoute role="admin" superadminOnly><LegacyData /></ProtectedRoute>} />
           <Route path="/groups" element={<ProtectedRoute role="admin"><Groups /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute role="admin"><Users /></ProtectedRoute>} />

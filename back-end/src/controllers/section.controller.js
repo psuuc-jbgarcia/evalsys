@@ -15,6 +15,54 @@ const canAccessSubject = (req, subjectId) => (
   (req.user?.assignedSubjects || []).some((id) => id.toString() === subjectId.toString())
 );
 
+const archiveBlockEvaluations = async (groupIds) => {
+  const evaluations = await Evaluation.find({
+    group: { $in: groupIds },
+    isLegacyArchived: { $ne: true },
+  })
+    .populate('panel', 'name email')
+    .populate({
+      path: 'group',
+      select: 'name members section createdBy',
+      populate: [
+        {
+          path: 'section',
+          select: 'name block subject createdBy',
+          populate: [
+            { path: 'subject', select: 'code title' },
+            { path: 'createdBy', select: 'name email' },
+          ],
+        },
+        { path: 'createdBy', select: 'name email' },
+      ],
+    });
+
+  const archivedAt = new Date();
+  for (const evaluation of evaluations) {
+    const group = evaluation.group;
+    const section = group?.section;
+    const subject = section?.subject;
+    const instructor = group?.createdBy || section?.createdBy;
+    evaluation.isLegacyArchived = true;
+    evaluation.legacyArchivedAt = archivedAt;
+    evaluation.legacySnapshot = {
+      groupName: group?.name || evaluation.legacySnapshot?.groupName || 'Deleted group',
+      block: section?.block || section?.name || evaluation.legacySnapshot?.block || 'Deleted block',
+      subject: [subject?.code, subject?.title].filter(Boolean).join(' - ') ||
+        evaluation.legacySnapshot?.subject ||
+        'Unknown subject',
+      panelName: evaluation.panel?.name || evaluation.legacySnapshot?.panelName || 'Deleted panel',
+      panelEmail: evaluation.panel?.email || evaluation.legacySnapshot?.panelEmail || '',
+      instructorName: instructor?.name || evaluation.legacySnapshot?.instructorName || '',
+      instructorEmail: instructor?.email || evaluation.legacySnapshot?.instructorEmail || '',
+      members: group?.members || evaluation.legacySnapshot?.members || [],
+    };
+    await evaluation.save();
+  }
+
+  return evaluations.length;
+};
+
 const validatePanelAssignments = async (req, panelIds = [], subject) => {
   if (!Array.isArray(panelIds) || !panelIds.length) return null;
 
@@ -69,6 +117,8 @@ exports.getSections = async (req, res) => {
 
   if (!req.user && subject) {
     filter.subject = subject;
+  } else if (!req.user) {
+    return res.status(400).json({ message: 'Subject is required to view public blocks' });
   } else if (req.user && req.user.role === 'panel') {
     filter = { assignedPanels: req.user._id };
     if (req.user.createdBy) {
@@ -131,7 +181,7 @@ exports.deleteSection = async (req, res) => {
   if (!canAccessSubject(req, section.subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
   const groups = await Group.find({ section: section._id }).select('_id');
   const groupIds = groups.map((group) => group._id);
-  const deletedEvaluations = await Evaluation.deleteMany({ group: { $in: groupIds } });
+  const archivedEvaluations = await archiveBlockEvaluations(groupIds);
   await Group.deleteMany({ section: section._id });
   await RegistrationLink.updateMany(
     { sections: section._id },
@@ -139,9 +189,11 @@ exports.deleteSection = async (req, res) => {
   );
   await section.deleteOne();
   res.json({
-    message: 'Block, its groups, and evaluations deleted',
+    message: archivedEvaluations > 0
+      ? 'Block and groups deleted. Submitted results were moved to Archive.'
+      : 'Block and groups deleted.',
     deletedGroups: groupIds.length,
-    deletedEvaluations: deletedEvaluations.deletedCount,
+    archivedEvaluations,
   });
 };
 

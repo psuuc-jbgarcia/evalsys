@@ -12,6 +12,9 @@ const adminSchema = new mongoose.Schema({
   gradingLocked: { type: Boolean, default: false },
   gradingLockedSubjects: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Subject' }],
   mustChangePassword: { type: Boolean, default: false },
+  failedLoginAttempts: { type: Number, default: 0 },
+  lockUntil: { type: Date },
+  lastLoginAt: { type: Date },
   isActive: { type: Boolean, default: true },
 }, { timestamps: true, collection: 'admin_acc' });
 

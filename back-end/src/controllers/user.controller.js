@@ -3,6 +3,7 @@ const Panel = require('../models/Panel');
 const Evaluation = require('../models/Evaluation');
 const Group = require('../models/Group');
 const Section = require('../models/Section');
+const { recordAuditLog } = require('../services/audit.service');
 
 const canManageUser = (req, user) => {
   if (req.user.role === 'superadmin') return true;
@@ -167,7 +168,7 @@ exports.bulkCreateUsers = async (req, res) => {
 
   for (const u of users) {
     try {
-      const { name, email, password, role, assignedSubjects = [], subjectLimit } = u;
+      const { name, email, password, role, assignedSubjects = [], subjectLimit, createdBy } = u;
       const normalizedEmail = normalizeEvalsysEmail(email);
       if (!name || !normalizedEmail || !password || !role) {
         results.skipped++;
@@ -199,7 +200,25 @@ exports.bulkCreateUsers = async (req, res) => {
         mustChangePassword: normalizedRole !== 'superadmin',
       };
       if (normalizedRole === 'admin') payload.subjectLimit = Math.max(1, parseInt(subjectLimit, 10) || 1);
-      if (normalizedRole === 'panel') payload.createdBy = req.user._id;
+      if (normalizedRole === 'panel') {
+        if (req.user.role === 'superadmin') {
+          const ownerId = createdBy || req.headers['x-instructor-id'];
+          if (!ownerId) {
+            results.skipped++;
+            results.errors.push(`${email || name}: select the instructor who owns this panel account`);
+            continue;
+          }
+          const instructor = await Admin.findOne({ _id: ownerId, role: 'admin', isActive: true }).select('_id');
+          if (!instructor) {
+            results.skipped++;
+            results.errors.push(`${email || name}: selected instructor is invalid or inactive`);
+            continue;
+          }
+          payload.createdBy = instructor._id;
+        } else {
+          payload.createdBy = req.user._id;
+        }
+      }
       await Model.create(payload);
       results.created++;
     } catch (err) {
@@ -250,6 +269,11 @@ exports.resetPassword = async (req, res) => {
   user.password = newPassword;
   user.mustChangePassword = user.role !== 'superadmin';
   await user.save();
+  await recordAuditLog(req, {
+    action: 'account.password.reset',
+    entity: { type: user.role, id: user._id, name: user.name },
+    instructor: user.role === 'panel' ? user.createdBy : user._id,
+  });
   res.json({
     message: user.role === 'superadmin'
       ? 'Temporary password saved successfully'
@@ -272,6 +296,12 @@ exports.updateSubjectLimit = async (req, res) => {
 
   instructor.subjectLimit = val;
   await instructor.save();
+  await recordAuditLog(req, {
+    action: 'instructor.subject_limit.update',
+    entity: { type: 'admin', id: instructor._id, name: instructor.name },
+    instructor: instructor._id,
+    metadata: { subjectLimit: val },
+  });
   res.json(instructor);
 };
 
@@ -289,6 +319,12 @@ exports.updateCsvExportLock = async (req, res) => {
 
   instructor.csvExportLocked = req.body.csvExportLocked;
   await instructor.save();
+  await recordAuditLog(req, {
+    action: 'instructor.csv_export_lock.update',
+    entity: { type: 'admin', id: instructor._id, name: instructor.name },
+    instructor: instructor._id,
+    metadata: { csvExportLocked: instructor.csvExportLocked },
+  });
   res.json(instructor);
 };
 
@@ -328,6 +364,13 @@ exports.updateGradingLock = async (req, res) => {
     );
   }
   await instructor.save();
+  await recordAuditLog(req, {
+    action: 'instructor.grading_lock.update',
+    entity: { type: 'admin', id: instructor._id, name: instructor.name },
+    instructor: instructor._id,
+    subject: subjectId,
+    metadata: { gradingLocked: req.body.gradingLocked },
+  });
   res.json(instructor);
 };
 

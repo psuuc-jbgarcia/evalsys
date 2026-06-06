@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import api from '../services/api';
+import { useConfirmDialog } from '../hooks/useConfirmDialog';
 
 const adminLinks = [
   { to: '/dashboard', label: 'Dashboard', icon: '◫' },
@@ -21,7 +22,7 @@ const panelLinks = [
   { to: '/grade', label: 'Grade Groups', icon: '✎' },
 ];
 
-type NavIconName = 'dashboard' | 'sections' | 'groups' | 'users' | 'assign' | 'rubrics' | 'results' | 'ai' | 'link' | 'grade' | 'subjects' | 'subscription' | 'legacy';
+type NavIconName = 'dashboard' | 'sections' | 'groups' | 'users' | 'assign' | 'rubrics' | 'results' | 'ai' | 'link' | 'grade' | 'subjects' | 'subscription' | 'operations' | 'system' | 'legacy';
 
 const getNavIconName = (to: string): NavIconName => {
   if (to === '/subjects') return 'subjects';
@@ -35,6 +36,8 @@ const getNavIconName = (to: string): NavIconName => {
   if (to === '/registration-links') return 'link';
   if (to === '/grade') return 'grade';
   if (to === '/subscription') return 'subscription';
+  if (to === '/operations') return 'operations';
+  if (to === '/system-control') return 'system';
   if (to === '/legacy-data') return 'legacy';
   return 'dashboard';
 };
@@ -86,6 +89,12 @@ const NavIcon = ({ name }: { name: NavIconName }) => {
   }
   if (name === 'legacy') {
     return <svg {...common}><path d="M4 7h16" /><path d="M6 7V4h12v3" /><path d="M6 7v13h12V7" /><path d="M9 11h6" /></svg>;
+  }
+  if (name === 'operations') {
+    return <svg {...common}><path d="M4 5h16" /><path d="M4 12h16" /><path d="M4 19h16" /><circle cx="8" cy="5" r="1.5" /><circle cx="14" cy="12" r="1.5" /><circle cx="10" cy="19" r="1.5" /></svg>;
+  }
+  if (name === 'system') {
+    return <svg {...common}><path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1A2 2 0 1 1 4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1A2 2 0 1 1 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1A2 2 0 1 1 19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" /></svg>;
   }
   return <svg {...common}><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" /></svg>;
 };
@@ -188,6 +197,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   const [currentInstructorId, setCurrentInstructorId] = useState(() => localStorage.getItem(currentInstructorKey) || '');
   const [currentSubjectId, setCurrentSubjectId] = useState(() => localStorage.getItem(currentSubjectKey) || '');
   const [subjectMenuOpen, setSubjectMenuOpen] = useState(false);
+  const { confirm, ConfirmDialog } = useConfirmDialog();
 
   const currentSubject = useMemo(
     () => subjects.find((subject) => subject._id === currentSubjectId) || null,
@@ -231,7 +241,6 @@ export default function Layout({ children }: { children: ReactNode }) {
         if (!savedExists && res.data.length > 0) {
           localStorage.setItem(currentSubjectKey, res.data[0]._id);
           setCurrentSubjectId(res.data[0]._id);
-          window.location.reload();
         } else if (!res.data.length) {
           localStorage.removeItem(currentSubjectKey);
           setCurrentSubjectId('');
@@ -246,7 +255,6 @@ export default function Layout({ children }: { children: ReactNode }) {
     localStorage.removeItem(currentSubjectKey);
     setCurrentInstructorId(instructorId);
     setCurrentSubjectId('');
-    window.location.reload();
   };
 
   const handleSubjectChange = (subjectId: string) => {
@@ -257,21 +265,22 @@ export default function Layout({ children }: { children: ReactNode }) {
     localStorage.setItem(currentSubjectKey, subjectId);
     setCurrentSubjectId(subjectId);
     setSubjectMenuOpen(false);
-    window.location.reload();
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     const draftGroups = user?.role === 'panel' ? getPanelDraftGroups(getPanelId(user)) : [];
     const draftCount = draftGroups.length;
     if (draftCount > 0) {
       const shownGroups = draftGroups.slice(0, 8).map((name) => `- ${name}`).join('\n');
       const extraGroups = draftCount > 8 ? `\n...and ${draftCount - 8} more` : '';
-      const proceed = confirm(
-        `You still have ${draftCount} unsubmitted grading draft${draftCount === 1 ? '' : 's'} saved only on this browser.\n\n` +
-        `Groups:\n${shownGroups}${extraGroups}\n\n` +
-        'If you sign out, those scores are NOT submitted yet. They can only be restored by logging back in on this same device/browser.\n\n' +
-        'Do you still want to sign out?'
-      );
+      const proceed = await confirm({
+        title: 'Sign Out With Drafts?',
+        message: `You still have ${draftCount} unsubmitted grading draft${draftCount === 1 ? '' : 's'} saved only on this browser.\n\n` +
+          `Groups:\n${shownGroups}${extraGroups}\n\n` +
+          'If you sign out, those scores are NOT submitted yet. They can only be restored by logging back in on this same device/browser.',
+        confirmLabel: 'Sign Out',
+        danger: true,
+      });
       if (!proceed) return;
     }
     logout();
@@ -280,6 +289,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-bg relative">
+      <ConfirmDialog />
       {/* Mobile Top Bar */}
       <div className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-dark flex items-center justify-between px-4 z-40">
         <div className="flex items-center gap-2.5">
@@ -341,7 +351,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         {/* Navigation */}
         <nav className="flex flex-col gap-1 flex-1 px-3 py-4 overflow-y-auto">
           {(user?.role === 'admin' || user?.role === 'superadmin') && (!collapsed || mobileOpen) && (
-            <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.035] p-3">
+            <div className="mb-4 px-1 pb-4 border-b border-white/10">
               {user?.role === 'superadmin' && (
                 <div className="mb-3">
                   <label className="text-[9px] font-black uppercase tracking-widest text-white/45 block mb-1.5">
@@ -350,7 +360,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                   <select
                     value={currentInstructorId}
                     onChange={(event) => handleInstructorChange(event.target.value)}
-                    className="w-full min-h-10 rounded-xl bg-white/10 border border-white/10 text-white text-xs font-bold px-3 py-2 outline-none hover:bg-white/15 focus:ring-2 focus:ring-primary/40 transition-colors"
+                    className="w-full min-h-10 rounded-lg bg-white/[0.07] border border-white/10 text-white text-xs font-bold px-3 py-2 outline-none hover:bg-white/10 focus:ring-2 focus:ring-primary/40 transition-colors"
                   >
                     {!instructors.length && <option value="">No instructors</option>}
                     {instructors.map((instructor) => (
@@ -368,7 +378,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                 <button
                   type="button"
                   onClick={() => setSubjectMenuOpen((open) => !open)}
-                  className="w-full min-h-10 rounded-xl bg-white/10 border border-white/10 text-white text-left px-3 py-2 outline-none hover:bg-white/15 focus:ring-2 focus:ring-primary/40 transition-colors"
+                  className="w-full min-h-10 rounded-lg bg-white/[0.07] border border-white/10 text-white text-left px-3 py-2 outline-none hover:bg-white/10 focus:ring-2 focus:ring-primary/40 transition-colors"
                   title={currentSubject ? `${currentSubject.code} - ${currentSubject.title}` : 'Select subject'}
                 >
                   <span className="block text-xs font-bold truncate pr-5">
@@ -410,7 +420,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               <Link
                 to="/subjects"
                 onClick={() => setMobileOpen(false)}
-                className="mt-2 w-full text-[10px] font-black text-white/80 bg-white/5 hover:bg-white/10 rounded-xl py-2 transition-colors flex items-center justify-center gap-1"
+                className="mt-2 w-full text-[10px] font-black text-primary hover:text-white hover:bg-primary/20 rounded-lg py-2 transition-colors flex items-center justify-center gap-1"
               >
                 Manage Subjects
               </Link>
@@ -463,6 +473,34 @@ export default function Layout({ children }: { children: ReactNode }) {
                 {(!collapsed || mobileOpen) && <span>Resources</span>}
               </Link>
               <Link
+                to="/operations"
+                onClick={() => setMobileOpen(false)}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-bold transition-all duration-150 ${
+                  location.pathname === '/operations'
+                    ? 'bg-primary text-white shadow-sm shadow-primary/25'
+                    : 'text-white/70 hover:text-white hover:bg-white/[0.07]'
+                }`}
+              >
+                <span className="w-5 h-5 flex items-center justify-center shrink-0">
+                  <NavIcon name="operations" />
+                </span>
+                {(!collapsed || mobileOpen) && <span>Operations</span>}
+              </Link>
+              <Link
+                to="/system-control"
+                onClick={() => setMobileOpen(false)}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-bold transition-all duration-150 ${
+                  location.pathname === '/system-control'
+                    ? 'bg-primary text-white shadow-sm shadow-primary/25'
+                    : 'text-white/70 hover:text-white hover:bg-white/[0.07]'
+                }`}
+              >
+                <span className="w-5 h-5 flex items-center justify-center shrink-0">
+                  <NavIcon name="system" />
+                </span>
+                {(!collapsed || mobileOpen) && <span>System Control</span>}
+              </Link>
+              <Link
                 to="/legacy-data"
                 onClick={() => setMobileOpen(false)}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-bold transition-all duration-150 ${
@@ -481,11 +519,11 @@ export default function Layout({ children }: { children: ReactNode }) {
         </nav>
 
         {/* User info */}
-        <div className="border-t border-white/10 p-3 shrink-0 bg-black/10">
+        <div className="border-t border-white/10 p-3 shrink-0">
           {(!collapsed || mobileOpen) ? (
             <>
-              <div className="flex items-center gap-2.5 mb-3 rounded-2xl bg-white/[0.04] border border-white/10 p-2.5">
-                <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center text-white/75 text-xs font-black uppercase shrink-0">
+              <div className="flex items-center gap-2.5 mb-3 px-1">
+                <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-white/75 text-xs font-black uppercase shrink-0">
                   {user?.name?.charAt(0)}
                 </div>
                 <div className="min-w-0">
@@ -515,7 +553,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               onClick={handleLogout}
               className="w-full text-white/65 hover:text-danger py-2 flex items-center justify-center text-sm transition-colors"
             >
-              ⏻
+              â»
             </button>
           )}
         </div>
@@ -523,9 +561,13 @@ export default function Layout({ children }: { children: ReactNode }) {
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto pt-16 lg:pt-0">
-        <div className="px-4 py-6 sm:px-6 lg:px-10 lg:py-8 2xl:px-14">{children}</div>
+        <div
+          key={`${currentInstructorId || 'self'}:${currentSubjectId || 'none'}`}
+          className="px-4 py-6 sm:px-6 lg:px-10 lg:py-8 2xl:px-14"
+        >
+          {children}
+        </div>
       </main>
     </div>
   );
 }
-

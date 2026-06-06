@@ -3,6 +3,7 @@ import api from '../../services/api';
 import { TableSkeleton } from '../../components/LoadingSkeleton';
 import { formatMemberList, memberSearchText, type Member, type StructuredMember } from '../../utils/members';
 import { notify } from '../../utils/notify';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 
 interface Section { _id: string; name: string; block: string; }
 interface ProposalFile { path?: string; originalName?: string; mimeType?: string; size?: number; uploadedAt?: string; }
@@ -105,6 +106,7 @@ export default function Groups() {
   const [editForm, setEditForm] = useState({ name: '', section: '' });
   const [editMemberRows, setEditMemberRows] = useState<MemberFormRow[]>([emptyMember()]);
   const [loading, setLoading] = useState(true);
+  const { confirm, ConfirmDialog } = useConfirmDialog();
 
 
 
@@ -186,7 +188,13 @@ export default function Groups() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this group?')) return;
+    const ok = await confirm({
+      title: 'Delete Group?',
+      message: 'This removes the active group. Submitted results will be moved to Archive.',
+      confirmLabel: 'Delete Group',
+      danger: true,
+    });
+    if (!ok) return;
     await api.delete(`/groups/${id}`);
     load();
   };
@@ -279,6 +287,7 @@ export default function Groups() {
 
   return (
     <div>
+      <ConfirmDialog />
       <div className="flex justify-between items-center mb-6">
         <div>
           <h2 className="evl-page-title">Groups</h2>

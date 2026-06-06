@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import { formatMemberName, type StructuredMember } from '../utils/members';
+import { useConfirmDialog } from '../hooks/useConfirmDialog';
 
 interface Subject { _id: string; code: string; title: string; }
 interface Section { _id: string; name: string; block: string; subject?: string | Subject; }
@@ -26,6 +27,7 @@ export default function RegisterGroup() {
   const [registrationClosed, setRegistrationClosed] = useState(!token);
   const [expiresAt, setExpiresAt] = useState('');
   const proposalInputRef = useRef<HTMLInputElement | null>(null);
+  const { confirm, ConfirmDialog } = useConfirmDialog();
 
   const [isWakingUp, setIsWakingUp] = useState(false);
 
@@ -101,16 +103,18 @@ export default function RegisterGroup() {
     const selectedSubject = subjects.find(s => s._id === form.subject);
     const selectedBlock = sections.find(s => s._id === form.section)?.block;
     const memberPreview = cleanMembers.map(formatMemberName).join(', ');
-    const confirmMsg = `Please confirm your details:\n\n` + 
-                       `Group/Name: ${form.name}\n` + 
-                       `Subject: ${selectedSubject ? `${selectedSubject.code} - ${selectedSubject.title}` : ''}\n` +
-                       `Block: ${selectedBlock}\n` + 
-                       `Members: ${memberPreview}\n` +
-                       `Proposal File: ${proposalFile?.name || 'None'}\n\n` +
-                       `Is this correct?\n\n` +
-                       `Note: If you made a mistake after submitting, please contact the person who sent you this form for corrections.`;
-                       
-    if (!window.confirm(confirmMsg)) return;
+    const ok = await confirm({
+      title: 'Submit Registration?',
+      message: `Please confirm your details:\n\n` +
+        `Group/Name: ${form.name}\n` +
+        `Subject: ${selectedSubject ? `${selectedSubject.code} - ${selectedSubject.title}` : ''}\n` +
+        `Block: ${selectedBlock}\n` +
+        `Members: ${memberPreview}\n` +
+        `Proposal File: ${proposalFile?.name || 'None'}\n\n` +
+        `If you made a mistake after submitting, please contact the person who sent you this form for corrections.`,
+      confirmLabel: 'Submit Registration',
+    });
+    if (!ok) return;
 
     setLoading(true);
     setError('');
@@ -182,6 +186,7 @@ export default function RegisterGroup() {
 
   return (
     <div className="min-h-screen bg-bg flex items-center justify-center p-4 py-10">
+      <ConfirmDialog />
       <div className="w-full max-w-4xl">
         {/* Header */}
         <div className="text-center mb-8">

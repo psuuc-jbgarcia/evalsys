@@ -21,6 +21,13 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   (err) => {
+    if (err.response?.status === 503 && err.response?.data?.maintenanceMode) {
+      window.dispatchEvent(new CustomEvent('evalsys:maintenance-mode', {
+        detail: {
+          message: err.response.data.message,
+        },
+      }));
+    }
     if (err.response?.status === 401 && !err.config.url?.includes('/auth/login')) {
       localStorage.removeItem('token');
       window.location.href = '/login';
