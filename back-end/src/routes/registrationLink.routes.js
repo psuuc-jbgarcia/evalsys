@@ -8,9 +8,10 @@ const {
   registerGroupWithLink,
 } = require('../controllers/registrationLink.controller');
 const { protect, adminOnly, superadminInstructorContext } = require('../middleware/auth.middleware');
+const proposalUpload = require('../middleware/proposalUpload.middleware');
 
 router.get('/public/:token', getPublicRegistrationLink);
-router.post('/public/:token/register', registerGroupWithLink);
+router.post('/public/:token/register', proposalUpload, registerGroupWithLink);
 
 router.use(protect, adminOnly, superadminInstructorContext);
 

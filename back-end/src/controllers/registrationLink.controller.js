@@ -2,6 +2,10 @@ const RegistrationLink = require('../models/RegistrationLink');
 const Subject = require('../models/Subject');
 const Section = require('../models/Section');
 const Group = require('../models/Group');
+const {
+  buildProposalPath,
+  uploadProposalFile,
+} = require('../services/proposalStorage.service');
 
 const getSubjectId = (req) => req.headers['x-subject-id'] || req.query.subject || req.body.subject;
 const getOwnerId = (req) => req.user?.role === 'superadmin'
@@ -111,6 +115,17 @@ exports.updateRegistrationLink = async (req, res) => {
   res.json(populated);
 };
 
+const parseMembers = (members) => {
+  if (Array.isArray(members)) return members;
+  if (typeof members !== 'string') return [];
+  try {
+    const parsed = JSON.parse(members);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
 exports.deleteRegistrationLink = async (req, res) => {
   const link = await RegistrationLink.findById(req.params.id);
   if (!link) return res.status(404).json({ message: 'Registration link not found' });
@@ -152,7 +167,8 @@ exports.registerGroupWithLink = async (req, res) => {
   const { link, error } = await findUsableLink(req.params.token);
   if (error) return res.status(403).json({ message: error });
 
-  const { name, section, members } = req.body;
+  const { name, section } = req.body;
+  const members = parseMembers(req.body.members);
   if (!name || !section) return res.status(400).json({ message: 'Name and section required' });
 
   const sectionDoc = await Section.findById(section);
@@ -183,6 +199,38 @@ exports.registerGroupWithLink = async (req, res) => {
     createdBy: link.createdBy._id,
     members: members || [],
   });
+
+  if (req.file) {
+    const storagePath = buildProposalPath({
+      instructorId: link.createdBy._id,
+      subjectId: link.subject._id,
+      groupId: group._id,
+      originalName: req.file.originalname,
+    });
+
+    try {
+      await uploadProposalFile({
+        buffer: req.file.buffer,
+        storagePath,
+        mimeType: req.file.mimetype,
+      });
+      group.proposalFile = {
+        path: storagePath,
+        originalName: req.file.originalname,
+        mimeType: req.file.mimetype,
+        size: req.file.size,
+        uploadedAt: new Date(),
+      };
+      await group.save();
+    } catch (err) {
+      await group.deleteOne();
+      return res.status(502).json({
+        message: err.message === 'Supabase Storage is not configured'
+          ? 'Proposal upload is not configured yet. Please contact the instructor.'
+          : 'Proposal upload failed. Please try again.',
+      });
+    }
+  }
 
   res.status(201).json(group);
 };

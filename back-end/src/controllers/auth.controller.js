@@ -164,3 +164,29 @@ exports.changePassword = async (req, res) => {
   await user.save();
   res.json({ message: 'Password changed successfully', mustChangePassword: false });
 };
+
+exports.updateOwnPassword = async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ message: 'Current password and new password are required' });
+  }
+  if (!isStrongPassword(newPassword)) {
+    return res.status(400).json({ message: passwordRuleMessage });
+  }
+
+  const Model = ['admin', 'superadmin'].includes(req.user.role) ? Admin : Panel;
+  const user = await Model.findById(req.user._id);
+  if (!user) return res.status(404).json({ message: 'Account not found' });
+
+  if (!(await user.matchPassword(currentPassword))) {
+    return res.status(400).json({ message: 'Current password is incorrect' });
+  }
+  if (await user.matchPassword(newPassword)) {
+    return res.status(400).json({ message: 'New password must be different from the current password' });
+  }
+
+  user.password = newPassword;
+  user.mustChangePassword = false;
+  await user.save();
+  res.json({ message: 'Password updated successfully' });
+};

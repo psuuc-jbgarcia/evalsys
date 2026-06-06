@@ -10,7 +10,8 @@ interface Level { label: string; minScore: number; maxScore: number; description
 interface Criteria { key: string; label: string; maxScore: number; levels: Level[]; }
 interface Rubric { _id: string; title: string; criteria: Criteria[]; isActive: boolean; subject?: string; }
 interface Section { _id: string; name: string; block: string; subject?: string | { _id: string; code?: string; title?: string }; }
-interface Group { _id: string; name: string; section: Section; members: Member[]; isGraded?: boolean; }
+interface ProposalFile { path?: string; originalName?: string; mimeType?: string; size?: number; uploadedAt?: string; }
+interface Group { _id: string; name: string; section: Section; members: Member[]; isGraded?: boolean; proposalFile?: ProposalFile; }
 
 const LEVEL_COLORS: Record<string, string> = {
   Excellent: 'bg-success/10 text-success',
@@ -77,6 +78,7 @@ export default function Grade() {
   const [hasCurrentDraft, setHasCurrentDraft] = useState(false);
   const [missingCriteria, setMissingCriteria] = useState<string[]>([]);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  const [proposalError, setProposalError] = useState('');
 
   const [searchParams] = useSearchParams();
   const urlGroupId = searchParams.get('groupId');
@@ -297,6 +299,7 @@ export default function Grade() {
     setRubrics([]);
     setSelectedRubricId('');
     setMissingCriteria([]);
+    setProposalError('');
     setSuccess(''); setError('');
     if (!subjectId) {
       setError('This group is not connected to a subject yet. Ask the instructor to run the subject migration.');
@@ -549,7 +552,7 @@ export default function Grade() {
               </div>
             ) : sections.length > 0 && selectedSidebarSectionId && (
               <>
-                <h4 className="text-[10px] font-extrabold text-text/40 uppercase tracking-widest mb-2 px-1 mt-2">
+                <h4 className="text-[10px] font-extrabold text-text/70 uppercase tracking-widest mb-2 px-1 mt-2">
                   Groups in Block
                 </h4>
                 {visibleGroups.length > 0 ? (
@@ -570,27 +573,27 @@ export default function Grade() {
                             Draft
                           </span>
                         ) : (
-                          <span className={`text-[9px] font-black uppercase rounded px-1.5 py-0.5 shrink-0 ${selectedGroup?._id === g._id ? 'bg-white/10 text-white/70' : 'bg-muted/20 text-text/30'}`}>
+                          <span className={`text-[9px] font-black uppercase rounded px-1.5 py-0.5 shrink-0 ${selectedGroup?._id === g._id ? 'bg-white/10 text-white/85' : 'bg-muted/20 text-text/60'}`}>
                             New
                           </span>
                         )}
                       </div>
-                      <p className={`text-[11px] mt-1 truncate ${selectedGroup?._id === g._id ? 'text-white/70' : 'text-text/40'}`}>
+                      <p className={`text-[11px] mt-1 truncate ${selectedGroup?._id === g._id ? 'text-white/85' : 'text-text/70'}`}>
                         {getSubjectLabel(g.section)}
                       </p>
-                      <p className={`text-[11px] mt-0.5 truncate ${selectedGroup?._id === g._id ? 'text-white/70' : 'text-text/40'}`}>
+                      <p className={`text-[11px] mt-0.5 truncate ${selectedGroup?._id === g._id ? 'text-white/85' : 'text-text/70'}`}>
                         {formatMemberList(g.members) || 'No members'}
                       </p>
                     </button>
                   ))
                 ) : (
                   <div className="px-2 py-4 rounded-lg border border-dashed border-muted/40 bg-surface/50 text-center">
-                    <p className="text-xs text-text/40 font-medium">No groups added yet</p>
+                    <p className="text-xs text-text/70 font-medium">No groups added yet</p>
                   </div>
                 )}
               </>
             )}
-            {!loadingSidebar && !sections.length && <p className="text-text/50 text-sm px-1">No blocks assigned</p>}
+            {!loadingSidebar && !sections.length && <p className="text-text/70 text-sm px-1">No blocks assigned</p>}
           </div>
         </div>
       </div>
@@ -600,8 +603,8 @@ export default function Grade() {
         {!selectedGroup ? (
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
-              <div className="text-text/20 text-4xl mb-3">✎</div>
-              <p className="text-text/40 text-sm">Select a group from your assigned blocks to start grading</p>
+              <div className="text-text/60 text-4xl mb-3">✎</div>
+              <p className="text-text/70 text-sm">Select a group from your assigned blocks to start grading</p>
             </div>
           </div>
         ) : loadingRubrics ? (
@@ -620,19 +623,29 @@ export default function Grade() {
                     Submitted Evaluation
                   </p>
                   <h2 className="text-2xl md:text-3xl font-extrabold text-text leading-tight">{selectedGroup.name}</h2>
-                  <p className="text-text/50 text-sm mt-2 font-medium">
+                  <p className="text-text/70 text-sm mt-2 font-medium">
                     <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-xs uppercase tracking-wider">{selectedGroup.section?.block}</span>
                     <span className="ml-2">{getSubjectLabel(selectedGroup.section)}</span>
                   </p>
                   <p className="text-text/60 text-sm mt-4 max-w-2xl">
                     The rubric used for this submitted score was deleted, but the saved scores and feedback are still preserved.
                   </p>
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    {selectedGroup.proposalFile?.path ? (
+                      <a href={`/proposal/${selectedGroup._id}`} target="_blank" rel="noreferrer" className="evl-btn-secondary text-xs px-4 py-2">
+                        View Proposal
+                      </a>
+                    ) : (
+                      <span className="text-xs font-bold text-text/70">No proposal uploaded.</span>
+                    )}
+                    {proposalError && <span className="text-xs font-bold text-danger">{proposalError}</span>}
+                  </div>
                 </div>
                 <div className="evl-card px-6 py-5 text-center min-w-[160px] bg-surface">
-                  <p className="text-text/40 text-[10px] font-extrabold uppercase tracking-widest mb-1">Submitted Total</p>
+                  <p className="text-text/70 text-[10px] font-extrabold uppercase tracking-widest mb-1">Submitted Total</p>
                   <p className="text-4xl font-black text-text">{submittedTotal}</p>
                   {submittedAt && (
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-text/35 mt-2">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-text/65 mt-2">
                       Updated {submittedAt}
                     </p>
                   )}
@@ -643,7 +656,7 @@ export default function Grade() {
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {Object.entries(existingScores).map(([key, value]) => (
                 <div key={key} className="evl-card p-5">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-text/40 mb-2">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-text/70 mb-2">
                     {formatScoreKey(key)}
                   </p>
                   <p className="text-3xl font-black text-text">{String(value)}</p>
@@ -653,7 +666,7 @@ export default function Grade() {
 
             {comments && (
               <div className="evl-card p-6">
-                <p className="text-[10px] font-black uppercase tracking-widest text-text/40 mb-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-text/70 mb-2">
                   Panel Feedback
                 </p>
                 <p className="text-text/70 text-sm leading-relaxed whitespace-pre-wrap">{comments}</p>
@@ -669,8 +682,18 @@ export default function Grade() {
         ) : !visibleRubric ? (
           <div className="flex items-center justify-center h-64">
             <div className="text-center max-w-md">
-              <p className="text-text/40 text-sm font-semibold mb-1">No rubrics available for this subject.</p>
-              <p className="text-text/50 text-xs">Please ask the instructor to create a grading rubric before grading this group.</p>
+              <p className="text-text/70 text-sm font-semibold mb-1">No rubrics available for this subject.</p>
+              <p className="text-text/70 text-xs">Please ask the instructor to create a grading rubric before grading this group.</p>
+              <div className="mt-5 flex flex-col items-center gap-2">
+                {selectedGroup.proposalFile?.path ? (
+                  <a href={`/proposal/${selectedGroup._id}`} target="_blank" rel="noreferrer" className="evl-btn-secondary text-xs px-4 py-2">
+                    View Proposal
+                  </a>
+                ) : (
+                  <span className="text-xs font-bold text-text/70">No proposal uploaded.</span>
+                )}
+                {proposalError && <span className="text-xs font-bold text-danger">{proposalError}</span>}
+              </div>
             </div>
           </div>
         ) : (
@@ -679,11 +702,21 @@ export default function Grade() {
             <div className="flex flex-col md:flex-row justify-between items-start gap-6 mb-8">
               <div className="w-full md:flex-1">
                 <h2 className="text-2xl md:text-3xl font-extrabold text-text leading-tight">{selectedGroup.name}</h2>
-                <p className="text-text/50 text-sm mt-2 font-medium">
+                <p className="text-text/70 text-sm mt-2 font-medium">
                   <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-xs uppercase tracking-wider">{selectedGroup.section?.block}</span>
                   <span className="ml-2">{getSubjectLabel(selectedGroup.section)}</span>
                   {selectedGroup.members.length ? ` - ${formatMemberList(selectedGroup.members)}` : ''}
                 </p>
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  {selectedGroup.proposalFile?.path ? (
+                    <a href={`/proposal/${selectedGroup._id}`} target="_blank" rel="noreferrer" className="evl-btn-secondary text-xs px-4 py-2">
+                      View Proposal
+                    </a>
+                  ) : (
+                    <span className="text-xs font-bold text-text/70">No proposal uploaded.</span>
+                  )}
+                  {proposalError && <span className="text-xs font-bold text-danger">{proposalError}</span>}
+                </div>
                 {gradingLocked && (
                   <span className="inline-flex mt-3 px-2.5 py-1 rounded-md bg-danger/10 text-danger text-[10px] font-black uppercase tracking-widest">
                     Read-only mode
@@ -691,7 +724,7 @@ export default function Grade() {
                 )}
 
                 <div className="mt-6 p-4 bg-surface rounded-xl border border-muted/20">
-                  <label className="text-[10px] font-bold text-text/40 uppercase tracking-widest block mb-2">Grading Rubric In Use</label>
+                  <label className="text-[10px] font-bold text-text/70 uppercase tracking-widest block mb-2">Grading Rubric In Use</label>
                   <div className="rounded-lg border border-muted/40 bg-bg px-4 py-2.5">
                     <p className="text-sm font-bold text-text">{visibleRubric.title}</p>
                     <p className="text-[10px] text-success font-black uppercase tracking-widest mt-1">
@@ -703,10 +736,10 @@ export default function Grade() {
 
               <div className="w-full md:w-auto flex flex-col items-stretch md:items-end gap-3">
                 <div className="evl-card px-6 py-5 text-center min-w-[160px] bg-surface border-primary/20 shadow-lg shadow-primary/5">
-                  <p className="text-text/40 text-[10px] font-extrabold uppercase tracking-widest mb-1">Current Total</p>
+                  <p className="text-text/70 text-[10px] font-extrabold uppercase tracking-widest mb-1">Current Total</p>
                   <p className="text-4xl font-black text-text">
                     {total}
-                    <span className="text-text/30 text-lg font-normal">/{maxTotal}</span>
+                    <span className="text-text/60 text-lg font-normal">/{maxTotal}</span>
                   </p>
                   <div className="w-full bg-muted/30 rounded-full h-2 mt-3">
                     <div
@@ -741,7 +774,7 @@ export default function Grade() {
                         Submitted Score: {submittedTotal}/{maxTotal}
                       </span>
                       {submittedAt && (
-                        <span className="text-[10px] font-bold text-text/35 uppercase tracking-widest">
+                        <span className="text-[10px] font-bold text-text/65 uppercase tracking-widest">
                           Last updated {submittedAt}
                         </span>
                       )}
@@ -760,7 +793,7 @@ export default function Grade() {
                       </button>
                     </div>
                   ) : (
-                    <span className="text-[10px] font-bold text-text/30 uppercase tracking-widest">
+                    <span className="text-[10px] font-bold text-text/60 uppercase tracking-widest">
                       No local draft yet
                     </span>
                   )}
@@ -839,7 +872,7 @@ export default function Grade() {
             <div className="evl-card p-6 mb-6 bg-surface">
               <label className="evl-label flex items-center gap-2 mb-3">
                 <span>💬 Panel Feedback & Comments</span>
-                <span className="text-[10px] font-normal lowercase bg-muted/40 px-1.5 py-0.5 rounded text-text/40">Optional</span>
+                <span className="text-[10px] font-normal lowercase bg-muted/40 px-1.5 py-0.5 rounded text-text/70">Optional</span>
               </label>
               <textarea
                 value={comments}
@@ -868,3 +901,5 @@ export default function Grade() {
     </div>
   );
 }
+
+

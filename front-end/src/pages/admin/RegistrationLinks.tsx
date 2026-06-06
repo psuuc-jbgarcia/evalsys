@@ -162,7 +162,7 @@ export default function RegistrationLinks() {
                   {subject ? `${subject.code} - ${subject.title}` : 'No current subject selected'}
                 </span>
               </div>
-              <p className="text-[11px] text-text/40 mt-2">
+              <p className="text-[11px] text-text/65 mt-2">
                 Change the current subject from the sidebar to generate links for another subject.
               </p>
             </div>
@@ -202,7 +202,7 @@ export default function RegistrationLinks() {
                   </label>
                 ))}
                 {!visibleSections.length && (
-                  <p className="text-sm text-text/50 py-4 text-center">No blocks found for this subject.</p>
+                  <p className="text-sm text-text/70 py-4 text-center">No blocks found for this subject.</p>
                 )}
               </div>
               <div className="mt-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
@@ -229,7 +229,7 @@ export default function RegistrationLinks() {
             <div className="p-5 border-b border-muted/20 flex items-center justify-between gap-4">
               <div>
                 <h3 className="text-text font-bold text-sm">Generated Links</h3>
-                <p className="text-xs text-text/40 mt-1">Only students with an active link can register.</p>
+                <p className="text-xs text-text/65 mt-1">Only students with an active link can register.</p>
               </div>
             </div>
             <div className="divide-y divide-muted/20">
@@ -242,19 +242,19 @@ export default function RegistrationLinks() {
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 mb-2">
                           <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${
-                            active ? 'bg-success/10 text-success' : 'bg-muted/40 text-text/40'
+                            active ? 'bg-success/10 text-success' : 'bg-muted/40 text-text/65'
                           }`}>
                             {expired ? 'Expired' : link.isActive ? 'Open' : 'Closed'}
                           </span>
-                          <span className="text-xs text-text/40">
+                          <span className="text-xs text-text/65">
                             Expires {new Date(link.expiresAt).toLocaleString()}
                           </span>
                         </div>
                         <p className="text-sm font-semibold text-text truncate">{linkUrl(link.token)}</p>
-                        <p className="text-xs text-text/45 mt-2">
+                        <p className="text-xs text-text/65 mt-2">
                           Blocks: {link.sections.length ? link.sections.map((section) => section.block).join(', ') : 'All blocks in subject'}
                         </p>
-                        <p className="text-xs text-text/35 mt-1">
+                        <p className="text-xs text-text/60 mt-1">
                           Created by: {link.createdBy?.name || link.createdBy?.email || 'Unknown'}
                         </p>
                       </div>
@@ -281,7 +281,7 @@ export default function RegistrationLinks() {
                 );
               })}
               {!links.length && (
-                <div className="p-12 text-center text-text/50">
+                <div className="p-12 text-center text-text/70">
                   No registration links yet for this subject.
                 </div>
               )}
@@ -321,3 +321,4 @@ export default function RegistrationLinks() {
     </div>
   );
 }
+

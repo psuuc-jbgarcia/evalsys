@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import { formatMemberName, type StructuredMember } from '../utils/members';
@@ -18,12 +18,14 @@ export default function RegisterGroup() {
   const [sections, setSections] = useState<Section[]>([]);
   const [form, setForm] = useState({ name: '', subject: '', section: '' });
   const [members, setMembers] = useState<StructuredMember[]>([emptyMember()]);
+  const [proposalFile, setProposalFile] = useState<File | null>(null);
   const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
   const [registrationClosed, setRegistrationClosed] = useState(!token);
   const [expiresAt, setExpiresAt] = useState('');
+  const proposalInputRef = useRef<HTMLInputElement | null>(null);
 
   const [isWakingUp, setIsWakingUp] = useState(false);
 
@@ -35,6 +37,10 @@ export default function RegisterGroup() {
     setMembers((current) => current.map((member, i) => (
       i === index ? { ...member, [field]: value } : member
     )));
+  };
+  const clearProposalFile = () => {
+    setProposalFile(null);
+    if (proposalInputRef.current) proposalInputRef.current.value = '';
   };
   const normalizedMembers = () => members.map((member) => ({
     lastName: member.lastName.trim(),
@@ -86,6 +92,11 @@ export default function RegisterGroup() {
       return;
     }
 
+    if (proposalFile && proposalFile.size > 10 * 1024 * 1024) {
+      setError('Proposal file must be 10 MB or smaller.');
+      return;
+    }
+
     // Confirmation Dialog
     const selectedSubject = subjects.find(s => s._id === form.subject);
     const selectedBlock = sections.find(s => s._id === form.section)?.block;
@@ -94,7 +105,8 @@ export default function RegisterGroup() {
                        `Group/Name: ${form.name}\n` + 
                        `Subject: ${selectedSubject ? `${selectedSubject.code} - ${selectedSubject.title}` : ''}\n` +
                        `Block: ${selectedBlock}\n` + 
-                       `Members: ${memberPreview}\n\n` +
+                       `Members: ${memberPreview}\n` +
+                       `Proposal File: ${proposalFile?.name || 'None'}\n\n` +
                        `Is this correct?\n\n` +
                        `Note: If you made a mistake after submitting, please contact the person who sent you this form for corrections.`;
                        
@@ -104,11 +116,13 @@ export default function RegisterGroup() {
     setError('');
     
     try {
-      await api.post(`/registration-links/public/${token}/register`, {
-        name: form.name,
-        section: form.section,
-        members: cleanMembers,
-      });
+      const payload = new FormData();
+      payload.append('name', form.name);
+      payload.append('section', form.section);
+      payload.append('members', JSON.stringify(cleanMembers));
+      if (proposalFile) payload.append('proposalFile', proposalFile);
+
+      await api.post(`/registration-links/public/${token}/register`, payload);
       setSuccess(true);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Registration failed. Please check your inputs.');
@@ -125,12 +139,13 @@ export default function RegisterGroup() {
             ✓
           </div>
           <h2 className="text-2xl font-black text-text mb-2">Registration Successful!</h2>
-          <p className="text-text/50 mb-8">Your group <strong>{form.name}</strong> has been registered. You can now wait for your panel to start the evaluation.</p>
+          <p className="text-text/70 mb-8">Your group <strong>{form.name}</strong> has been registered. You can now wait for your panel to start the evaluation.</p>
           <button 
             onClick={() => {
               setSuccess(false);
               setForm((current) => ({ ...current, name: '', section: '' }));
               setMembers([emptyMember()]);
+              clearProposalFile();
               setAgreedToPrivacy(false);
               setError('');
             }}
@@ -154,7 +169,7 @@ export default function RegisterGroup() {
             E
           </div>
           <h1 className="text-2xl font-black text-text mb-2">Registration Closed</h1>
-          <p className="text-sm text-text/50 leading-relaxed mb-6">
+          <p className="text-sm text-text/70 leading-relaxed mb-6">
             {error || 'Please use the registration link from your instructor.'}
           </p>
           <Link to="/login" className="evl-btn-primary inline-flex justify-center w-full">
@@ -174,7 +189,7 @@ export default function RegisterGroup() {
             E
           </div>
           <h1 className="text-3xl md:text-4xl font-black text-text tracking-tight mb-2">Group Registration</h1>
-          <p className="text-text/40 text-sm font-medium">EvalSys · Automated Rubric Evaluation System</p>
+          <p className="text-text/65 text-sm font-medium">EvalSys · Automated Rubric Evaluation System</p>
         </div>
 
         {/* Instructions Card */}
@@ -193,7 +208,7 @@ export default function RegisterGroup() {
         </div>
 
         {expiresAt && (
-          <div className="mb-6 text-center text-xs font-semibold text-text/45">
+          <div className="mb-6 text-center text-xs font-semibold text-text/65">
             Registration is open until {new Date(expiresAt).toLocaleString()}.
           </div>
         )}
@@ -288,7 +303,7 @@ export default function RegisterGroup() {
                 {members.map((member, index) => (
                   <div key={index} className="rounded-xl border border-muted/30 bg-bg/60 p-4">
                     <div className="flex items-center justify-between mb-3">
-                      <p className="text-xs font-black text-text/50 uppercase tracking-widest">Member {index + 1}</p>
+                      <p className="text-xs font-black text-text/70 uppercase tracking-widest">Member {index + 1}</p>
                       {members.length > 1 && (
                         <button
                           type="button"
@@ -301,7 +316,7 @@ export default function RegisterGroup() {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <div>
-                        <label className="text-[10px] font-bold text-text/40 uppercase block mb-1">Last Name</label>
+                        <label className="text-[10px] font-bold text-text/65 uppercase block mb-1">Last Name</label>
                         <input
                           value={member.lastName}
                           onChange={(e) => updateMember(index, 'lastName', e.target.value)}
@@ -311,7 +326,7 @@ export default function RegisterGroup() {
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] font-bold text-text/40 uppercase block mb-1">First Name</label>
+                        <label className="text-[10px] font-bold text-text/65 uppercase block mb-1">First Name</label>
                         <input
                           value={member.firstName}
                           onChange={(e) => updateMember(index, 'firstName', e.target.value)}
@@ -321,7 +336,7 @@ export default function RegisterGroup() {
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] font-bold text-text/40 uppercase block mb-1">Middle Name</label>
+                        <label className="text-[10px] font-bold text-text/65 uppercase block mb-1">Middle Name</label>
                         <input
                           value={member.middleName}
                           onChange={(e) => updateMember(index, 'middleName', e.target.value)}
@@ -333,7 +348,49 @@ export default function RegisterGroup() {
                   </div>
                 ))}
               </div>
-              <p className="text-[10px] text-text/35 mt-3 font-medium">Last Name and First Name are required. Middle Name is optional.</p>
+              <p className="text-[10px] text-text/60 mt-3 font-medium">Last Name and First Name are required. Middle Name is optional.</p>
+            </div>
+
+            <div className="p-6 md:p-8 border-b border-muted/30">
+              <div className="mb-4">
+                <p className="text-[10px] font-black text-primary uppercase tracking-widest mb-1">Project Document</p>
+                <h2 className="text-lg font-extrabold text-text">Upload a proposal or project document if required.</h2>
+                <p className="text-xs text-text/70 mt-1 font-medium">
+                  Optional. Accepted files: PDF, DOC, DOCX, PPT, PPTX. Maximum size: 10 MB.
+                </p>
+              </div>
+              <div className="rounded-xl border border-dashed border-muted/50 bg-bg/60 p-4">
+                <input
+                  ref={proposalInputRef}
+                  type="file"
+                  accept=".pdf,.doc,.docx,.ppt,.pptx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    if (file && file.size > 10 * 1024 * 1024) {
+                      clearProposalFile();
+                      setError('Proposal file must be 10 MB or smaller.');
+                      return;
+                    }
+                    setError('');
+                    setProposalFile(file);
+                  }}
+                  className="block w-full text-sm text-text/80 file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-4 file:py-2.5 file:text-sm file:font-bold file:text-white hover:file:bg-primary/90"
+                />
+                {proposalFile ? (
+                  <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-lg bg-primary/5 border border-primary/10 px-3 py-2">
+                    <p className="text-sm font-semibold text-text truncate">{proposalFile.name}</p>
+                    <button
+                      type="button"
+                      onClick={clearProposalFile}
+                      className="text-xs font-black text-danger uppercase tracking-widest hover:underline self-start sm:self-auto"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-text/65 mt-3 font-medium">No proposal uploaded. You can continue without a file.</p>
+                )}
+              </div>
             </div>
 
             <div className="p-6 md:p-8">
@@ -347,7 +404,7 @@ export default function RegisterGroup() {
                       required
                       className="mt-0.5 w-4 h-4 rounded border-muted text-primary focus:ring-primary/30 cursor-pointer"
                     />
-                    <span className="text-[11px] text-text/50 leading-relaxed">
+                    <span className="text-[11px] text-text/70 leading-relaxed">
                       By registering, you agree that the information provided will be used solely for project evaluation and grading within the <span className="font-bold text-primary">EvalSys Platform</span>.
                     </span>
                   </label>
@@ -370,7 +427,7 @@ export default function RegisterGroup() {
         {/* Footer */}
         <div className="mt-8 flex flex-col items-center gap-3">
           <Link to="/login" className="text-xs font-bold text-primary hover:underline">← Back to Login</Link>
-          <p className="text-text/20 text-[10px] font-medium">
+          <p className="text-text/60 text-[10px] font-medium">
             &copy; 2026 EvalSys · <span className="uppercase tracking-widest">Developed by Jerico B. Garcia</span>
           </p>
         </div>
@@ -378,3 +435,4 @@ export default function RegisterGroup() {
     </div>
   );
 }
+

@@ -40,6 +40,17 @@ interface UsageStatus {
     status?: string;
     note?: string;
   };
+  proposalStorage: {
+    configured: boolean;
+    bucket?: string;
+    files?: number;
+    folders?: number;
+    usedMb?: number;
+    freeTierLimitMb?: number;
+    usagePercent?: number;
+    message?: string;
+    error?: string;
+  };
 }
 
 const getErrorMessage = (err: unknown, fallback: string) => {
@@ -261,12 +272,12 @@ export default function Subscription() {
 
       <div className="mb-8">
         {usage && (
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-6">
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-6">
             <div className="evl-card p-5">
               <div className="flex items-start justify-between gap-4 mb-4">
                 <div>
                   <h3 className="font-bold text-text text-sm">MongoDB Storage</h3>
-                  <p className="text-text/45 text-xs mt-0.5">{usage.mongo.database}</p>
+                  <p className="text-text/65 text-xs mt-0.5">{usage.mongo.database}</p>
                 </div>
                 <span className="evl-badge-primary">{usage.mongo.estimatedUsagePercent}% used</span>
               </div>
@@ -278,19 +289,19 @@ export default function Subscription() {
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-text/35">Total</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-text/60">Total</p>
                   <p className="text-sm font-black text-text">{usage.mongo.estimatedTotalMb} MB</p>
                 </div>
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-text/35">Limit</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-text/60">Limit</p>
                   <p className="text-sm font-black text-text">{usage.mongo.freeTierLimitMb} MB</p>
                 </div>
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-text/35">Collections</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-text/60">Collections</p>
                   <p className="text-sm font-black text-text">{usage.mongo.collections}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-text/35">Records</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-text/60">Records</p>
                   <p className="text-sm font-black text-text">{usage.mongo.objects}</p>
                 </div>
               </div>
@@ -299,8 +310,57 @@ export default function Subscription() {
             <div className="evl-card p-5">
               <div className="flex items-start justify-between gap-4 mb-4">
                 <div>
+                  <h3 className="font-bold text-text text-sm">Proposal Storage</h3>
+                  <p className="text-text/65 text-xs mt-0.5">
+                    {usage.proposalStorage.bucket || 'Supabase Storage'}
+                  </p>
+                </div>
+                <span className={usage.proposalStorage.configured && !usage.proposalStorage.error ? 'evl-badge-success' : 'evl-badge-warning'}>
+                  {usage.proposalStorage.configured ? `${usage.proposalStorage.usagePercent ?? 0}% used` : 'Not Configured'}
+                </span>
+              </div>
+              {usage.proposalStorage.configured && !usage.proposalStorage.error ? (
+                <>
+                  <div className="h-2 rounded-full bg-muted/30 overflow-hidden mb-4">
+                    <div
+                      className="h-full bg-success rounded-full"
+                      style={{ width: `${Math.min(100, usage.proposalStorage.usagePercent ?? 0)}%` }}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-text/60">Used</p>
+                      <p className="text-sm font-black text-text">{usage.proposalStorage.usedMb ?? 0} MB</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-text/60">Limit</p>
+                      <p className="text-sm font-black text-text">{usage.proposalStorage.freeTierLimitMb ?? 0} MB</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-text/60">Files</p>
+                      <p className="text-sm font-black text-text">{usage.proposalStorage.files ?? 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-text/60">Folders</p>
+                      <p className="text-sm font-black text-text">{usage.proposalStorage.folders ?? 0}</p>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-text/60 mt-4 leading-relaxed">
+                    This counts files in the EvalSys proposal bucket only.
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-text/70 leading-relaxed">
+                  {usage.proposalStorage.error || usage.proposalStorage.message || 'Proposal storage usage is not available.'}
+                </p>
+              )}
+            </div>
+
+            <div className="evl-card p-5">
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <div>
                   <h3 className="font-bold text-text text-sm">Render Service</h3>
-                  <p className="text-text/45 text-xs mt-0.5">
+                  <p className="text-text/65 text-xs mt-0.5">
                     Checked {new Date(usage.checkedAt).toLocaleString()}
                   </p>
                 </div>
@@ -311,15 +371,15 @@ export default function Subscription() {
               {usage.render.configured && !usage.render.error ? (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-text/35">Service</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-text/60">Service</p>
                     <p className="text-sm font-black text-text">{usage.render.name || 'Render'}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-text/35">Plan</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-text/60">Plan</p>
                     <p className="text-sm font-black text-text">{usage.render.plan || 'Unknown'}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-text/35">Status</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-text/60">Status</p>
                     <p className="text-sm font-black text-text">{usage.render.status || 'Unknown'}</p>
                   </div>
                 </div>
@@ -328,7 +388,7 @@ export default function Subscription() {
                   {usage.render.error || usage.render.message || 'Render usage is not available.'}
                 </p>
               )}
-              <p className="text-[11px] text-text/35 mt-4 leading-relaxed">
+              <p className="text-[11px] text-text/60 mt-4 leading-relaxed">
                 Render free-tier hours are account-level, so exact remaining hours may need checking in the Render dashboard.
               </p>
             </div>
@@ -339,10 +399,10 @@ export default function Subscription() {
           <div className="px-6 py-4 border-b border-muted/30 flex items-center justify-between">
             <div>
               <h3 className="font-bold text-text text-sm">Instructor Subject Limits</h3>
-              <p className="text-text/50 text-xs mt-0.5">Set paid allowance and subject-level feature access per instructor.</p>
+              <p className="text-text/70 text-xs mt-0.5">Set paid allowance and subject-level feature access per instructor.</p>
             </div>
             <div className="flex items-center gap-3">
-              <label className="text-[10px] font-black uppercase tracking-widest text-text/35">
+              <label className="text-[10px] font-black uppercase tracking-widest text-text/60">
                 Grading Subject
               </label>
               <select
@@ -354,7 +414,7 @@ export default function Subscription() {
                   <option key={subject._id} value={subject._id}>{subject.code}</option>
                 ))}
               </select>
-              <span className="text-[10px] font-black uppercase tracking-widest text-text/30 bg-muted/20 px-2 py-1 rounded-md">
+              <span className="text-[10px] font-black uppercase tracking-widest text-text/55 bg-muted/20 px-2 py-1 rounded-md">
                 {instructors.length} Instructor{instructors.length !== 1 ? 's' : ''}
               </span>
             </div>
@@ -362,7 +422,7 @@ export default function Subscription() {
 
           {instructors.length === 0 ? (
             <div className="p-12 text-center">
-              <p className="text-text/40 text-sm">No instructor accounts found.</p>
+              <p className="text-text/65 text-sm">No instructor accounts found.</p>
             </div>
           ) : (
             <table className="evl-table">
@@ -400,9 +460,9 @@ export default function Subscription() {
                           <span className="font-semibold text-text text-sm">{instructor.name}</span>
                         </div>
                       </td>
-                      <td className="text-text/50 text-xs">{instructor.email}</td>
+                      <td className="text-text/70 text-xs">{instructor.email}</td>
                       <td>
-                        <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full ${instructor.isActive ? 'bg-success/10 text-success' : 'bg-muted/20 text-text/40'}`}>
+                        <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full ${instructor.isActive ? 'bg-success/10 text-success' : 'bg-muted/20 text-text/65'}`}>
                           {instructor.isActive ? 'Active' : 'Blocked'}
                         </span>
                       </td>
@@ -427,7 +487,7 @@ export default function Subscription() {
                       <td className="text-center">
                         <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full ${
                           !assignedToCurrentSubject
-                            ? 'bg-muted/20 text-text/35'
+                            ? 'bg-muted/20 text-text/60'
                             : currentSubjectLocked ? 'bg-danger/10 text-danger' : 'bg-success/10 text-success'
                         }`}>
                           {!assignedToCurrentSubject ? 'Not Assigned' : currentSubjectLocked ? 'Locked' : 'Allowed'}
@@ -477,7 +537,7 @@ export default function Subscription() {
             </table>
           )}
           <div className="px-6 py-3 border-t border-muted/30 bg-bg/60">
-            <p className="text-[11px] text-text/40 leading-relaxed">
+            <p className="text-[11px] text-text/65 leading-relaxed">
               Updating a limit changes how many paid subjects the instructor can manage. CSV export is per instructor. Grading lock applies only to the selected subject.
             </p>
           </div>
@@ -487,7 +547,7 @@ export default function Subscription() {
       <div className="evl-card overflow-hidden">
         <div className="px-6 py-4 border-b border-muted/30">
           <h3 className="font-bold text-text text-sm">Data Safety</h3>
-          <p className="text-text/50 text-xs mt-0.5">Export backups before resetting scoped or global event data.</p>
+          <p className="text-text/70 text-xs mt-0.5">Export backups before resetting scoped or global event data.</p>
         </div>
         <div className="p-6 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto] gap-4 items-end">
           <div>
@@ -541,3 +601,4 @@ export default function Subscription() {
     </div>
   );
 }
+

@@ -125,7 +125,7 @@ export default function Sections() {
                 </tr>
               ))}
               {!sections.length && (
-                <tr><td colSpan={2} className="text-center text-text/50 py-12">No blocks yet. Add one above.</td></tr>
+                <tr><td colSpan={2} className="text-center text-text/70 py-12">No blocks yet. Add one above.</td></tr>
               )}
             </tbody>
           </table>
@@ -134,3 +134,4 @@ export default function Sections() {
     </div>
   );
 }
+

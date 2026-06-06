@@ -5,10 +5,12 @@ import { formatMemberList, memberSearchText, type Member, type StructuredMember 
 import { notify } from '../../utils/notify';
 
 interface Section { _id: string; name: string; block: string; }
+interface ProposalFile { path?: string; originalName?: string; mimeType?: string; size?: number; uploadedAt?: string; }
 interface Group {
   _id: string; name: string;
   section: Section;
   members: Member[];
+  proposalFile?: ProposalFile;
 }
 
 type MemberFormRow = StructuredMember & { legacyName?: string };
@@ -346,7 +348,7 @@ export default function Groups() {
             placeholder="Search group, block, or member..."
           />
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold text-text/40 uppercase tracking-widest whitespace-nowrap">Filter by Block:</span>
+            <span className="text-[10px] font-bold text-text/65 uppercase tracking-widest whitespace-nowrap">Filter by Block:</span>
             <select
               value={filterBlock}
               onChange={(e) => {
@@ -390,10 +392,19 @@ export default function Groups() {
               {paginatedGroups.map((g) => (
                 <tr key={g._id}>
                   <td className="font-semibold text-text">{g.name}</td>
-                  <td className="text-text/50">{g.section?.block}</td>
-                  <td className="text-text/50 text-xs max-w-[200px] truncate">{formatMemberList(g.members) || '—'}</td>
+                  <td className="text-text/70">{g.section?.block}</td>
+                  <td className="text-text/70 text-xs max-w-[200px] truncate">{formatMemberList(g.members) || '—'}</td>
                   <td className="col-actions">
                     <div className="flex justify-end gap-1">
+                      {g.proposalFile?.path ? (
+                        <a href={`/proposal/${g._id}`} target="_blank" rel="noreferrer" className="evl-btn-ghost text-success border-success/30 hover:bg-success/5 hover:border-success/50">
+                          View Proposal
+                        </a>
+                      ) : (
+                        <span className="inline-flex items-center px-3 py-1.5 rounded-lg text-[11px] font-bold border border-muted/40 text-text/65 bg-muted/10 whitespace-nowrap">
+                          No Proposal
+                        </span>
+                      )}
                       <button onClick={() => startEdit(g)} className="evl-btn-ghost text-primary border-primary/30 hover:bg-primary/5 hover:border-primary/50">
                         Edit
                       </button>
@@ -405,13 +416,13 @@ export default function Groups() {
                 </tr>
               ))}
               {!filteredGroups.length && (
-                <tr><td colSpan={4} className="text-center text-text/50 py-12">No groups found.</td></tr>
+                <tr><td colSpan={4} className="text-center text-text/70 py-12">No groups found.</td></tr>
               )}
             </tbody>
           </table>
           {filteredGroups.length > 0 && (
             <div className="px-5 py-3 border-t border-muted/30 bg-bg/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <p className="text-[11px] text-text/45 font-semibold">
+              <p className="text-[11px] text-text/65 font-semibold">
                 Showing {startDisplay}-{endDisplay} of {filteredGroups.length}
               </p>
               <div className="flex items-center gap-2">
@@ -423,7 +434,7 @@ export default function Groups() {
                 >
                   Previous
                 </button>
-                <span className="text-[11px] font-bold text-text/50 px-2">
+                <span className="text-[11px] font-bold text-text/70 px-2">
                   Page {currentPage} of {totalPages}
                 </span>
                 <button
@@ -487,7 +498,7 @@ function MemberRowsEditor({
         {rows.map((member, index) => (
           <div key={index} className="rounded-xl border border-muted/30 bg-bg/50 p-4">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-black text-text/50 uppercase tracking-widest">Member {index + 1}</p>
+              <p className="text-xs font-black text-text/70 uppercase tracking-widest">Member {index + 1}</p>
               {rows.length > 1 && (
                 <button
                   type="button"
@@ -501,21 +512,21 @@ function MemberRowsEditor({
 
             {member.legacyName !== undefined ? (
               <div>
-                <label className="text-[10px] font-bold text-text/40 uppercase block mb-1">Old Full Name</label>
+                <label className="text-[10px] font-bold text-text/65 uppercase block mb-1">Old Full Name</label>
                 <input
                   value={member.legacyName}
                   onChange={(e) => setRows((current) => updateMemberRow(current, index, 'legacyName', e.target.value))}
                   className="evl-input !py-2 !text-sm"
                   placeholder="Old member name"
                 />
-                <p className="text-[10px] text-text/35 mt-1.5">
+                <p className="text-[10px] text-text/60 mt-1.5">
                   This is old data. It will stay as a full-name record unless replaced with structured fields.
                 </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
-                  <label className="text-[10px] font-bold text-text/40 uppercase block mb-1">Last Name</label>
+                  <label className="text-[10px] font-bold text-text/65 uppercase block mb-1">Last Name</label>
                   <input
                     value={member.lastName}
                     onChange={(e) => setRows((current) => updateMemberRow(current, index, 'lastName', e.target.value))}
@@ -525,7 +536,7 @@ function MemberRowsEditor({
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-text/40 uppercase block mb-1">First Name</label>
+                  <label className="text-[10px] font-bold text-text/65 uppercase block mb-1">First Name</label>
                   <input
                     value={member.firstName}
                     onChange={(e) => setRows((current) => updateMemberRow(current, index, 'firstName', e.target.value))}
@@ -535,7 +546,7 @@ function MemberRowsEditor({
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-text/40 uppercase block mb-1">Middle Name</label>
+                  <label className="text-[10px] font-bold text-text/65 uppercase block mb-1">Middle Name</label>
                   <input
                     value={member.middleName}
                     onChange={(e) => setRows((current) => updateMemberRow(current, index, 'middleName', e.target.value))}
@@ -548,7 +559,7 @@ function MemberRowsEditor({
           </div>
         ))}
       </div>
-      <p className="text-[10px] text-text/35 mt-3 font-medium">Last Name and First Name are required for structured members. Middle Name is optional.</p>
+      <p className="text-[10px] text-text/60 mt-3 font-medium">Last Name and First Name are required for structured members. Middle Name is optional.</p>
     </div>
   );
 }
@@ -570,7 +581,7 @@ function EditModal({ group, form, setForm, memberRows, setMemberRows, onAddMembe
       <div className="bg-surface w-full max-w-5xl rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
         <div className="px-6 py-4 border-b border-muted/30 flex justify-between items-center bg-bg">
           <h3 className="font-bold text-text">Edit Group: {group.name}</h3>
-          <button onClick={onCancel} className="text-text/40 hover:text-text text-xl">×</button>
+          <button onClick={onCancel} className="text-text/65 hover:text-text text-xl">×</button>
         </div>
         <form onSubmit={onSave} className="p-6 space-y-4 max-h-[82vh] overflow-y-auto">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -612,3 +623,4 @@ function EditModal({ group, form, setForm, memberRows, setMemberRows, onAddMembe
     </div>
   );
 }
+

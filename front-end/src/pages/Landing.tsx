@@ -107,7 +107,7 @@ export default function Landing() {
             </span>
             <span>
               <span className="block text-sm font-black tracking-tight uppercase">EvalSys</span>
-              <span className="block text-[10px] text-white/45 uppercase tracking-widest font-bold">
+              <span className="block text-[10px] text-white/70 uppercase tracking-widest font-bold">
                 Project Evaluation System
               </span>
             </span>
@@ -166,13 +166,13 @@ export default function Landing() {
                   ['Read-only lock', 'View scores when locked'],
                 ].map(([label, desc]) => (
                   <div key={label} className="border border-muted/50 bg-white rounded-lg p-3">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-text/40">{label}</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-text/65">{label}</p>
                     <p className="text-xs text-text/60 mt-1 leading-snug">{desc}</p>
                   </div>
                 ))}
               </div>
 
-              <p className="mt-6 text-xs text-text/45">
+              <p className="mt-6 text-xs text-text/65">
                 Accounts are created by administrators.{' '}
                 <button onClick={() => setShowAccountModal(true)} className="text-primary font-bold hover:underline">
                   Request access
@@ -183,7 +183,7 @@ export default function Landing() {
             <div className="border border-muted/60 rounded-lg bg-surface shadow-xl overflow-hidden">
               <div className="px-4 py-3 bg-dark text-white flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-white/45">Results</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-white/70">Results</p>
                   <p className="text-sm font-extrabold">22-ITE-04</p>
                 </div>
                 <div className="flex gap-2">
@@ -196,7 +196,7 @@ export default function Landing() {
                 <div className="p-4 border-b md:border-b-0 md:border-r border-muted/40">
                   <div className="flex items-center justify-between mb-3">
                     <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-text/40">Group</p>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-text/65">Group</p>
                       <p className="font-black text-dark">Project Alpha</p>
                     </div>
                     <span className="evl-badge-success">92.5 / 100</span>
@@ -227,7 +227,7 @@ export default function Landing() {
 
                 <div className="p-4 bg-bg/70">
                   <div className="flex items-center justify-between gap-3 mb-3">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-text/40">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-text/65">
                       Member export preview
                     </p>
                     <span className="text-[9px] font-black uppercase tracking-widest text-primary bg-primary/10 px-2 py-1 rounded">
@@ -244,11 +244,11 @@ export default function Landing() {
                       <div key={`${last}-${first}`} className="grid grid-cols-3 gap-2 text-[11px] bg-white border border-muted/40 rounded-lg px-3 py-2">
                         <span className="font-bold text-dark truncate">{last}</span>
                         <span className="text-text/60 truncate">{first}</span>
-                        <span className="text-text/40 truncate">{middle}</span>
+                        <span className="text-text/65 truncate">{middle}</span>
                       </div>
                     ))}
                   </div>
-                  <p className="mt-3 text-[11px] text-text/45 leading-relaxed">
+                  <p className="mt-3 text-[11px] text-text/65 leading-relaxed">
                     Member rows are exported alphabetically by Last Name, then First Name, then Middle Name.
                   </p>
                 </div>
@@ -281,7 +281,7 @@ export default function Landing() {
                   <div key={step} className="p-5 border-b md:border-b-0 md:border-r last:border-r-0 last:border-b-0 border-muted/40 bg-surface">
                     <p className="text-[10px] font-black text-primary uppercase tracking-widest">{step}</p>
                     <h3 className="font-black text-dark mt-2">{label}</h3>
-                    <p className="text-xs text-text/50 leading-relaxed mt-1">{desc}</p>
+                    <p className="text-xs text-text/70 leading-relaxed mt-1">{desc}</p>
                   </div>
                 ))}
               </div>
@@ -326,7 +326,7 @@ export default function Landing() {
               <h2 className="text-3xl font-black mt-2 tracking-tight">
                 Focused grading for live presentations.
               </h2>
-              <p className="text-sm text-white/50 leading-relaxed mt-3">
+              <p className="text-sm text-white/75 leading-relaxed mt-3">
                 Panels see their assigned blocks and groups, grade through the current rubric, and keep local drafts until submission.
               </p>
             </div>
@@ -338,7 +338,7 @@ export default function Landing() {
                     {String(index + 1).padStart(2, '0')}
                   </p>
                   <h3 className="font-black text-white mt-2">{item.label}</h3>
-                  <p className="text-xs text-white/50 leading-relaxed mt-2">{item.desc}</p>
+                  <p className="text-xs text-white/75 leading-relaxed mt-2">{item.desc}</p>
                 </div>
               ))}
             </div>
@@ -369,14 +369,14 @@ export default function Landing() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="border border-muted/50 rounded-lg p-5 bg-bg">
-                <p className="text-[10px] font-black uppercase tracking-widest text-text/40">Instructor / Panel</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-text/65">Instructor / Panel</p>
                 <h3 className="font-black text-dark mt-2">Temporary password flow</h3>
                 <p className="text-xs text-text/55 leading-relaxed mt-2">
                   New accounts and reset passwords require users to set a private password before continuing.
                 </p>
               </div>
               <div className="border border-muted/50 rounded-lg p-5 bg-bg">
-                <p className="text-[10px] font-black uppercase tracking-widest text-text/40">Students</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-text/65">Students</p>
                 <h3 className="font-black text-dark mt-2">Token registration only</h3>
                 <p className="text-xs text-text/55 leading-relaxed mt-2">
                   Group registration opens from secure links and can be scoped to selected blocks.
@@ -410,7 +410,7 @@ export default function Landing() {
                       className="w-full px-5 py-4 text-left flex justify-between items-center gap-4 hover:bg-bg/50 transition-colors"
                     >
                       <span className="font-bold text-sm text-dark">{faq.q}</span>
-                      <span className="text-text/40 text-xs font-mono font-bold">{active ? '[-]' : '[+]'}</span>
+                      <span className="text-text/65 text-xs font-mono font-bold">{active ? '[-]' : '[+]'}</span>
                     </button>
                     {active && (
                       <div className="px-5 pb-5 pt-1 border-t border-muted/20 text-sm text-text/60 leading-relaxed">
@@ -433,7 +433,7 @@ export default function Landing() {
             </div>
             <div>
               <p className="text-sm font-black uppercase tracking-wider">EvalSys</p>
-              <p className="text-[10px] text-white/40">Project rubric evaluations and panel grading.</p>
+              <p className="text-[10px] text-white/65">Project rubric evaluations and panel grading.</p>
             </div>
           </div>
 
@@ -452,7 +452,7 @@ export default function Landing() {
           <div className="bg-white rounded-lg shadow-2xl border border-muted max-w-md w-full p-6 relative">
             <button
               onClick={() => setShowStudentModal(false)}
-              className="absolute right-4 top-4 text-text/40 hover:text-text font-bold text-sm"
+              className="absolute right-4 top-4 text-text/65 hover:text-text font-bold text-sm"
             >
               x
             </button>
@@ -466,7 +466,7 @@ export default function Landing() {
             <p className="text-xs text-text/60 leading-relaxed mt-4 font-semibold p-4 bg-primary/5 border border-primary/20 rounded-lg">
               Check your class group or email for a link like <code className="text-primary font-mono text-[10px]">/register?token=...</code>.
             </p>
-            <p className="text-xs text-text/50 leading-relaxed mt-4">
+            <p className="text-xs text-text/70 leading-relaxed mt-4">
               Contact your subject instructor if you have not received your registration link.
             </p>
             <button
@@ -484,7 +484,7 @@ export default function Landing() {
           <div className="bg-white rounded-lg shadow-2xl border border-muted max-w-md w-full p-6 relative">
             <button
               onClick={() => setShowAccountModal(false)}
-              className="absolute right-4 top-4 text-text/40 hover:text-text font-bold text-sm"
+              className="absolute right-4 top-4 text-text/65 hover:text-text font-bold text-sm"
             >
               x
             </button>
@@ -501,7 +501,7 @@ export default function Landing() {
                 garciajerico217@gmail.com
               </span>
             </p>
-            <p className="text-xs text-text/50 leading-relaxed mt-4">
+            <p className="text-xs text-text/70 leading-relaxed mt-4">
               Include your full name, role, and subject or department.
             </p>
             <button
@@ -516,3 +516,4 @@ export default function Landing() {
     </div>
   );
 }
+

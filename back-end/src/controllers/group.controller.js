@@ -3,6 +3,10 @@ const Section = require('../models/Section');
 const Admin = require('../models/Admin');
 const Panel = require('../models/Panel');
 const Evaluation = require('../models/Evaluation');
+const {
+  createProposalSignedUrl,
+  isProposalPathForGroup,
+} = require('../services/proposalStorage.service');
 
 const getSubjectId = (req) => req.headers['x-subject-id'] || req.query.subject || req.body.subject;
 const getOwnerId = (req) => req.user?.role === 'superadmin'
@@ -293,6 +297,81 @@ exports.getGroup = async (req, res) => {
     }
   }
   res.json(group);
+};
+
+exports.getGroupProposalUrl = async (req, res) => {
+  const group = await Group.findById(req.params.id)
+    .populate({
+      path: 'section',
+      select: 'name block subject assignedPanels',
+      populate: { path: 'subject', select: 'code title' },
+    })
+    .populate('assignedPanels', 'name email');
+
+  if (!group) return res.status(404).json({ message: 'Group not found' });
+  if (!group.proposalFile?.path) return res.status(404).json({ message: 'No proposal uploaded for this group' });
+
+  const selectedSubject = getSubjectId(req);
+  const groupSubjectId = group.section?.subject?._id || group.section?.subject;
+  if (!isProposalPathForGroup({
+    storagePath: group.proposalFile.path,
+    instructorId: group.createdBy,
+    subjectId: groupSubjectId,
+    groupId: group._id,
+  })) {
+    return res.status(409).json({ message: 'Proposal file is not linked to this group correctly' });
+  }
+
+  if (req.user.role !== 'panel') {
+    if (selectedSubject && groupSubjectId?.toString() !== selectedSubject.toString()) {
+      return res.status(403).json({ message: 'This group does not belong to the current subject' });
+    }
+    if (!group.createdBy || group.createdBy.toString() !== getOwnerId(req)?.toString()) {
+      return res.status(403).json({ message: 'This group does not belong to the current instructor' });
+    }
+    if (!canAccessSubject(req, groupSubjectId)) {
+      return res.status(403).json({ message: 'You are not assigned to this subject' });
+    }
+  }
+
+  if (req.user.role === 'panel') {
+    if (req.user.createdBy) {
+      const instructor = await Admin.findOne({
+        _id: req.user.createdBy,
+        role: 'admin',
+        isActive: true,
+        assignedSubjects: groupSubjectId,
+      }).select('_id');
+      if (!instructor) {
+        return res.status(403).json({ message: 'This group belongs to another instructor subject' });
+      }
+    }
+
+    const isSectionAssigned = (group.section?.assignedPanels || []).some(
+      (panelId) => panelId.toString() === req.user._id.toString()
+    );
+    const isGroupAssigned = (group.assignedPanels || []).some(
+      (panelId) => (panelId._id || panelId).toString() === req.user._id.toString()
+    );
+    if (!isSectionAssigned && !isGroupAssigned) {
+      return res.status(403).json({ message: 'You are not assigned to this group proposal' });
+    }
+  }
+
+  try {
+    const url = await createProposalSignedUrl(group.proposalFile.path);
+    res.json({
+      url,
+      originalName: group.proposalFile.originalName,
+      expiresInSeconds: 600,
+    });
+  } catch (err) {
+    res.status(502).json({
+      message: err.message === 'Supabase Storage is not configured'
+        ? 'Proposal storage is not configured yet'
+        : 'Unable to open proposal right now',
+    });
+  }
 };
 
 exports.updateGroup = async (req, res) => {

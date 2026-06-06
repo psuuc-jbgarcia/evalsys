@@ -311,10 +311,10 @@ export default function Rubrics() {
                     <div className="md:col-span-4">
                       <label className="evl-label !mb-1.5 flex items-center gap-2">
                         System Key
-                        <span className="text-[9px] bg-muted/40 px-1 rounded text-text/40">Auto</span>
+                        <span className="text-[9px] bg-muted/40 px-1 rounded text-text/65">Auto</span>
                       </label>
                       <input value={c.key} readOnly
-                        className="evl-input bg-muted/20 border-muted/30 text-text/40 cursor-not-allowed font-mono text-[11px]" 
+                        className="evl-input bg-muted/20 border-muted/30 text-text/65 cursor-not-allowed font-mono text-[11px]" 
                         placeholder="Auto-generated..." />
                     </div>
                     <div className="md:col-span-3">
@@ -322,14 +322,14 @@ export default function Rubrics() {
                       <div className="relative">
                         <input type="number" value={c.maxScore} onChange={(e) => updateCriteria(ci, 'maxScore', Number(e.target.value))} required min={1} step="0.01"
                           className="evl-input pr-10" />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-text/30 uppercase">pts</span>
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-text/55 uppercase">pts</span>
                       </div>
                     </div>
                   </div>
 
                   <div className="bg-muted/5 rounded-xl p-4 border border-muted/20">
                     <div className="flex items-center gap-2 mb-4 px-1">
-                      <span className="text-[10px] font-extrabold text-text/40 uppercase tracking-widest">Score Level Definitions</span>
+                      <span className="text-[10px] font-extrabold text-text/65 uppercase tracking-widest">Score Level Definitions</span>
                       <div className="h-[1px] flex-1 bg-muted/20"></div>
                     </div>
                     <div className="space-y-4">
@@ -337,23 +337,23 @@ export default function Rubrics() {
                         <div key={li} className="bg-surface rounded-lg p-3 border border-muted/10 shadow-sm">
                           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
                             <div className="lg:col-span-3">
-                              <label className="text-[9px] font-bold text-text/40 uppercase block mb-1">Level Name</label>
+                              <label className="text-[9px] font-bold text-text/65 uppercase block mb-1">Level Name</label>
                               <input value={l.label} onChange={(e) => updateLevel(ci, li, 'label', e.target.value)}
                                 className={`evl-input !py-1.5 !text-xs font-bold ${l.label === 'Excellent' ? 'text-success' : l.label === 'Poor' ? 'text-danger' : 'text-primary'}`} 
                                 placeholder="Label" />
                             </div>
                             <div className="lg:col-span-2">
-                              <label className="text-[9px] font-bold text-text/40 uppercase block mb-1">Range</label>
+                              <label className="text-[9px] font-bold text-text/65 uppercase block mb-1">Range</label>
                               <div className="flex items-center gap-2">
                                 <input type="number" value={l.minScore} onChange={(e) => updateLevel(ci, li, 'minScore', Number(e.target.value))} min={0} max={c.maxScore || undefined} step="0.01"
                                   className="evl-input !py-1.5 !text-xs text-center" placeholder="Min" />
-                                <span className="text-text/30 text-xs">—</span>
+                                <span className="text-text/55 text-xs">—</span>
                                 <input type="number" value={l.maxScore} onChange={(e) => updateLevel(ci, li, 'maxScore', Number(e.target.value))} min={0} max={c.maxScore || undefined} step="0.01"
                                   className="evl-input !py-1.5 !text-xs text-center" placeholder="Max" />
                               </div>
                             </div>
                             <div className="lg:col-span-7">
-                              <label className="text-[9px] font-bold text-text/40 uppercase block mb-1">Grading Description</label>
+                              <label className="text-[9px] font-bold text-text/65 uppercase block mb-1">Grading Description</label>
                               <input value={l.description} onChange={(e) => updateLevel(ci, li, 'description', e.target.value)}
                                 className="evl-input !py-1.5 !text-xs" placeholder={`Describe what qualifies for ${l.label || 'this level'}...`} />
                             </div>
@@ -381,7 +381,7 @@ export default function Rubrics() {
           )}
 
           <div className="mt-10 pt-6 border-t border-muted/20 flex items-center justify-between">
-            <div className="text-xs text-text/50">
+            <div className="text-xs text-text/70">
               Total Rubric Value: <span className="font-bold text-text">{criteria.reduce((acc, curr) => acc + curr.maxScore, 0)} Points</span>
             </div>
             <button type="submit" className="evl-btn-primary shadow-lg shadow-primary/20">
@@ -409,10 +409,10 @@ export default function Rubrics() {
                         <p className="font-bold text-text">{r.title}</p>
                         {r.isActive && <span className="evl-badge-success">Active</span>}
                       </div>
-                      <p className="text-text/50 text-xs mt-0.5">
+                      <p className="text-text/70 text-xs mt-0.5">
                         {r.criteria.length} criteria · Created {new Date(r.createdAt).toLocaleDateString()}
                       </p>
-                      <p className="text-text/35 text-[11px] mt-1 font-semibold">
+                      <p className="text-text/60 text-[11px] mt-1 font-semibold">
                         Created by: {getOwnerLabel(r)}
                       </p>
                     </div>
@@ -448,14 +448,14 @@ export default function Rubrics() {
                         <div key={c.key}>
                           <div className="flex justify-between items-center mb-3">
                             <p className="font-bold text-text">{c.label}</p>
-                            <span className="text-text/50 text-xs font-semibold">{c.maxScore} pts</span>
+                            <span className="text-text/70 text-xs font-semibold">{c.maxScore} pts</span>
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
                             {c.levels.map((l) => (
                               <div key={l.label} className={`rounded-lg p-4 border ${levelBg(l.label)}`}>
                                 <div className="flex items-center justify-between mb-2">
                                   <span className={levelColor(l.label)}>{l.label}</span>
-                                  <span className="text-text/40 text-[11px] font-semibold">{l.minScore}–{l.maxScore}</span>
+                                  <span className="text-text/65 text-[11px] font-semibold">{l.minScore}–{l.maxScore}</span>
                                 </div>
                                 <p className="text-text/60 text-xs leading-relaxed">{l.description}</p>
                               </div>
@@ -468,10 +468,11 @@ export default function Rubrics() {
                 )}
               </div>
             ))}
-            {!rubrics.length && <p className="text-text/50 text-sm">No rubrics yet. Create one to get started.</p>}
+            {!rubrics.length && <p className="text-text/70 text-sm">No rubrics yet. Create one to get started.</p>}
           </>
         )}
       </div>
     </div>
   );
 }
+

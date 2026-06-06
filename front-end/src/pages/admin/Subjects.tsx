@@ -242,8 +242,8 @@ export default function Subjects() {
         </div>
       ) : subjects.length === 0 ? (
         <div className="evl-card p-12 text-center">
-          <div className="text-text/20 text-4xl mb-3">📚</div>
-          <p className="text-text/50 text-sm">No subjects yet. Create one to get started.</p>
+          <div className="text-text/60 text-4xl mb-3">📚</div>
+          <p className="text-text/70 text-sm">No subjects yet. Create one to get started.</p>
         </div>
       ) : (
         <div className="evl-card overflow-hidden">
@@ -270,7 +270,7 @@ export default function Subjects() {
                       <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full ${
                         s.isActive
                           ? 'bg-success/10 text-success'
-                          : 'bg-muted/20 text-text/40'
+                          : 'bg-muted/20 text-text/65'
                       }`}>
                         {s.isActive ? 'Active' : 'Inactive'}
                       </span>
@@ -279,7 +279,7 @@ export default function Subjects() {
                       <td className="text-xs text-text/60">
                         {assigned.length > 0
                           ? assigned.map((a) => a.name).join(', ')
-                          : <span className="text-text/30 italic">None assigned</span>}
+                          : <span className="text-text/55 italic">None assigned</span>}
                       </td>
                     )}
                     <td className="col-actions">
@@ -331,9 +331,9 @@ export default function Subjects() {
             <div className="px-6 py-4 border-b border-danger/20 flex justify-between items-center bg-danger/5">
               <div>
                 <h3 className="font-bold text-danger">Reset Subject</h3>
-                <p className="text-text/50 text-xs mt-0.5">{resetSubject.code} - {resetSubject.title}</p>
+                <p className="text-text/70 text-xs mt-0.5">{resetSubject.code} - {resetSubject.title}</p>
               </div>
-              <button onClick={() => setResetSubject(null)} className="text-text/40 hover:text-text text-xl">x</button>
+              <button onClick={() => setResetSubject(null)} className="text-text/65 hover:text-text text-xl">x</button>
             </div>
             <form onSubmit={handleSubjectReset} className="p-6 space-y-4">
               <div className="bg-warning/5 border border-warning/30 rounded-lg p-4 space-y-2">
@@ -377,7 +377,7 @@ export default function Subjects() {
           <div className="bg-surface w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
             <div className="px-6 py-4 border-b border-muted/30 flex justify-between items-center bg-bg">
               <h3 className="font-bold text-text">New Subject</h3>
-              <button onClick={() => setShowCreate(false)} className="text-text/40 hover:text-text text-xl">×</button>
+              <button onClick={() => setShowCreate(false)} className="text-text/65 hover:text-text text-xl">×</button>
             </div>
             <form onSubmit={handleCreate} className="p-6 space-y-4">
               <div>
@@ -420,7 +420,7 @@ export default function Subjects() {
                           className="accent-primary"
                         />
                         <span className="text-xs text-text font-medium">{a.name}</span>
-                        <span className="text-[10px] text-text/40 ml-auto">{count}/{limit} subjects</span>
+                        <span className="text-[10px] text-text/65 ml-auto">{count}/{limit} subjects</span>
                       </label>
                       );
                     })}
@@ -446,7 +446,7 @@ export default function Subjects() {
           <div className="bg-surface w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
             <div className="px-6 py-4 border-b border-muted/30 flex justify-between items-center bg-bg">
               <h3 className="font-bold text-text">Edit Subject</h3>
-              <button onClick={() => setEditSubject(null)} className="text-text/40 hover:text-text text-xl">×</button>
+              <button onClick={() => setEditSubject(null)} className="text-text/65 hover:text-text text-xl">×</button>
             </div>
             <form onSubmit={handleSave} className="p-6 space-y-4">
               <div>
@@ -499,13 +499,13 @@ export default function Subjects() {
             <div className="px-6 py-4 border-b border-muted/30 flex justify-between items-center bg-bg">
               <div>
                 <h3 className="font-bold text-text">Assign Instructors</h3>
-                <p className="text-text/50 text-xs mt-0.5">{assignSubject.code} — {assignSubject.title}</p>
+                <p className="text-text/70 text-xs mt-0.5">{assignSubject.code} — {assignSubject.title}</p>
               </div>
-              <button onClick={() => setAssignSubject(null)} className="text-text/40 hover:text-text text-xl">×</button>
+              <button onClick={() => setAssignSubject(null)} className="text-text/65 hover:text-text text-xl">×</button>
             </div>
             <form onSubmit={handleAssign} className="p-6 space-y-4">
               {admins.length === 0 ? (
-                <p className="text-text/50 text-sm text-center py-4">No instructor accounts found.</p>
+                <p className="text-text/70 text-sm text-center py-4">No instructor accounts found.</p>
               ) : (
                 <div className="space-y-1 max-h-60 overflow-y-auto border border-muted rounded-lg p-2 bg-bg">
                   {admins.map((a) => {
@@ -525,7 +525,7 @@ export default function Subjects() {
                         className="accent-primary"
                       />
                       <span className="text-xs text-text font-medium">{a.name}</span>
-                      <span className="text-[10px] text-text/40 ml-auto">{count}/{limit} subjects</span>
+                      <span className="text-[10px] text-text/65 ml-auto">{count}/{limit} subjects</span>
                     </label>
                     );
                   })}
@@ -550,9 +550,9 @@ export default function Subjects() {
             <div className="px-6 py-4 border-b border-danger/20 flex justify-between items-center bg-danger/5">
               <div>
                 <h3 className="font-bold text-danger">Delete Subject</h3>
-                <p className="text-text/50 text-xs mt-0.5">{subjectToDelete.code} — {subjectToDelete.title}</p>
+                <p className="text-text/70 text-xs mt-0.5">{subjectToDelete.code} — {subjectToDelete.title}</p>
               </div>
-              <button onClick={() => setSubjectToDelete(null)} className="text-text/40 hover:text-text text-xl">×</button>
+              <button onClick={() => setSubjectToDelete(null)} className="text-text/65 hover:text-text text-xl">×</button>
             </div>
             <form onSubmit={handleDelete} className="p-6 space-y-4">
               <div className="bg-danger/5 border border-danger/20 rounded-xl p-4 space-y-2">
@@ -602,3 +602,4 @@ export default function Subjects() {
     </div>
   );
 }
+

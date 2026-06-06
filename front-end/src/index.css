@@ -49,7 +49,7 @@ body {
   /* Form inputs */
   .evl-input {
     @apply w-full border border-muted rounded-lg px-4 py-3 text-base text-text bg-white
-           placeholder:text-muted
+           placeholder:text-text/45
            focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary
            transition-all duration-150;
   }
@@ -65,7 +65,7 @@ body {
   }
 
   .evl-label {
-    @apply block text-[13px] font-bold text-text/70 mb-1.5 uppercase tracking-wider;
+    @apply block text-[13px] font-extrabold text-text/80 mb-1.5 uppercase tracking-wider;
   }
 
   /* Buttons */
@@ -99,7 +99,7 @@ body {
   .evl-btn-ghost {
     @apply inline-flex items-center justify-center gap-1.5
            min-h-9 whitespace-nowrap
-           text-[11px] font-bold text-text/60
+           text-xs font-bold text-text/70
            px-3 py-1.5 rounded-lg
            border border-muted/60 bg-white
            hover:text-text hover:bg-gray-50 hover:border-text/20
@@ -119,10 +119,10 @@ body {
     @apply bg-bg;
   }
   .evl-table th {
-    @apply px-5 py-4 text-left text-xs font-bold text-text/50 uppercase tracking-wider align-middle;
+    @apply px-5 py-4 text-left text-xs font-extrabold text-text/70 uppercase tracking-wider align-middle;
   }
   .evl-table td {
-    @apply px-5 py-4 align-middle;
+    @apply px-5 py-4 align-middle text-text/80;
   }
   .evl-table tbody tr {
     @apply border-t border-muted/40 transition-colors hover:bg-bg;
@@ -170,6 +170,6 @@ body {
     @apply text-3xl font-extrabold text-text tracking-tight;
   }
   .evl-page-subtitle {
-    @apply text-base text-text/50 mt-1.5;
+    @apply text-base text-text/65 mt-1.5;
   }
 }

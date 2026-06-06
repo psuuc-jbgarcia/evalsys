@@ -235,13 +235,13 @@ export default function Results() {
               className={`px-4 py-2.5 rounded-lg text-sm font-semibold border transition-all duration-150 ${
                 selected?._id === s._id
                   ? 'bg-primary text-white border-primary'
-                  : 'border-muted text-text/50 bg-surface hover:text-text hover:border-text/20'
+                  : 'border-muted text-text/70 bg-surface hover:text-text hover:border-text/20'
               }`}>
               {s.name === s.block ? s.block : `${s.name} — ${s.block}`}
             </button>
           ))
         )}
-        {!loadingSections && !sections.length && <p className="text-text/50 text-sm">No sections available.</p>}
+        {!loadingSections && !sections.length && <p className="text-text/70 text-sm">No sections available.</p>}
       </div>
 
       {/* Results table */}
@@ -249,10 +249,7 @@ export default function Results() {
         <TableSkeleton rows={6} cols={8} />
       ) : selected && (
         <div className="overflow-hidden border-y border-muted/30 bg-surface">
-          <div className="px-2 sm:px-0 py-4 border-b border-muted/40 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-            <h3 className="text-text font-bold text-sm">
-              {selected.name === selected.block ? selected.block : `${selected.name} - ${selected.block}`}
-            </h3>
+          <div className="px-2 sm:px-0 py-4 border-b border-muted/40 flex justify-end">
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={downloadGroupSummaryCSV}
@@ -282,7 +279,7 @@ export default function Results() {
                   {criteriaColumns.map((criteria) => (
                     <th key={criteria.key} className="text-center">
                       {criteria.label}
-                      <span className="block text-[10px] font-semibold text-text/35">/{criteria.maxScore}</span>
+                      <span className="block text-[10px] font-semibold text-text/65">/{criteria.maxScore}</span>
                     </th>
                   ))}
                   <th className="text-center">Final</th>
@@ -318,9 +315,9 @@ export default function Results() {
                           )}
                         </div>
                       </td>
-                      <td className="text-text/50 text-xs max-w-[200px]">{formatMemberList(group.members) || '—'}</td>
+                      <td className="text-text/70 text-xs max-w-[200px]">{formatMemberList(group.members) || '—'}</td>
                       {criteriaColumns.map((criteria) => (
-                        <td key={criteria.key} className={`text-center ${!isIncomplete && averaged ? scoreColor(averaged[criteria.key] || 0, criteria.maxScore) : 'text-text/40'}`}>
+                        <td key={criteria.key} className={`text-center ${!isIncomplete && averaged ? scoreColor(averaged[criteria.key] || 0, criteria.maxScore) : 'text-text/70'}`}>
                           {!isIncomplete && averaged ? (averaged[criteria.key] ?? 0) : '—'}
                         </td>
                       ))}
@@ -346,14 +343,14 @@ export default function Results() {
                             🗑 Clear Score
                           </button>
                         ) : (
-                          <span className="text-text/20 text-xs">—</span>
+                          <span className="text-text/60 text-xs">—</span>
                         )}
                       </td>
                     </tr>
                   );
                 })}
                 {!results.length && (
-                  <tr><td colSpan={criteriaColumns.length + 4} className="text-center text-text/40 py-12">No results for this section yet.</td></tr>
+                  <tr><td colSpan={criteriaColumns.length + 4} className="text-center text-text/70 py-12">No results for this section yet.</td></tr>
                 )}
               </tbody>
             </table>
@@ -367,7 +364,7 @@ export default function Results() {
           <div className="bg-surface w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="px-6 py-4 border-b border-muted/30 flex justify-between items-center bg-bg">
               <h3 className="font-bold text-text">Feedback for {viewFeedback.group}</h3>
-              <button onClick={() => setViewFeedback(null)} className="text-text/40 hover:text-text text-xl">×</button>
+              <button onClick={() => setViewFeedback(null)} className="text-text/70 hover:text-text text-xl">×</button>
             </div>
             <div className="p-6 max-h-[70vh] overflow-y-auto space-y-4">
               {viewFeedback.items.map((item, i) => (
@@ -396,11 +393,11 @@ export default function Results() {
             <div className="px-6 py-4 border-b border-muted/30 flex justify-between items-center bg-bg">
               <div>
                 <h3 className="font-bold text-text">Clear Panel Score</h3>
-                <p className="text-text/50 text-xs mt-0.5">{clearModal.group.group.name}</p>
+                <p className="text-text/70 text-xs mt-0.5">{clearModal.group.group.name}</p>
               </div>
               <button
                 onClick={() => { setClearModal(null); setConfirmClearId(null); }}
-                className="text-text/40 hover:text-text text-xl"
+                className="text-text/70 hover:text-text text-xl"
               >×</button>
             </div>
 
@@ -435,7 +432,7 @@ export default function Results() {
                         </button>
                         <button
                           onClick={() => setConfirmClearId(null)}
-                          className="px-3 py-1 rounded-lg text-[11px] font-bold border border-muted text-text/50 hover:text-text transition-all"
+                          className="px-3 py-1 rounded-lg text-[11px] font-bold border border-muted text-text/70 hover:text-text transition-all"
                         >
                           Cancel
                         </button>
@@ -451,7 +448,7 @@ export default function Results() {
                   </div>
                 ))
               ) : (
-                <p className="text-center text-text/40 text-sm py-8">No evaluations to clear for this group.</p>
+                <p className="text-center text-text/70 text-sm py-8">No evaluations to clear for this group.</p>
               )}
             </div>
 
@@ -470,5 +467,7 @@ export default function Results() {
     </div>
   );
 }
+
+
 
 

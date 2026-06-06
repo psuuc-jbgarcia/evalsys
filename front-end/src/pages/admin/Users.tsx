@@ -250,15 +250,15 @@ export default function Users() {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
         <div className="evl-card p-4">
-          <p className="text-[10px] font-black uppercase tracking-widest text-text/40">Total Accounts</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-text/65">Total Accounts</p>
           <p className="text-2xl font-black text-text mt-1">{users.length}</p>
         </div>
         <div className="evl-card p-4">
-          <p className="text-[10px] font-black uppercase tracking-widest text-text/40">Active</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-text/65">Active</p>
           <p className="text-2xl font-black text-success mt-1">{activeCount}</p>
         </div>
         <div className="evl-card p-4">
-          <p className="text-[10px] font-black uppercase tracking-widest text-text/40">{isSuperadmin ? 'Panels' : 'Blocked'}</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-text/65">{isSuperadmin ? 'Panels' : 'Blocked'}</p>
           <p className="text-2xl font-black text-primary mt-1">
             {isSuperadmin ? users.filter((item) => item.role === 'panel').length : users.length - activeCount}
           </p>
@@ -368,17 +368,17 @@ export default function Users() {
               <div className="px-5 py-4 border-b border-muted/30 flex items-center justify-between bg-bg/50">
                 <div>
                   <h3 className="text-sm font-black text-text">{group.label}</h3>
-                  <p className="text-[11px] text-text/45 mt-0.5">
+                  <p className="text-[11px] text-text/65 mt-0.5">
                     {group.users.length} account{group.users.length !== 1 ? 's' : ''}
                   </p>
                 </div>
-                <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md bg-muted/20 text-text/35">
+                <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md bg-muted/20 text-text/60">
                   {group.users.filter((item) => item.isActive).length} Active
                 </span>
               </div>
 
               {group.users.length === 0 ? (
-                <div className="px-5 py-10 text-center text-sm text-text/40">
+                <div className="px-5 py-10 text-center text-sm text-text/65">
                   No {group.label.toLowerCase()} accounts yet.
                 </div>
               ) : (
@@ -391,7 +391,7 @@ export default function Users() {
                         </div>
                         <div className="min-w-0">
                           <p className="font-bold text-text truncate">{u.name}</p>
-                          <p className="text-[11px] text-text/35">{roleText(u.role)}</p>
+                          <p className="text-[11px] text-text/60">{roleText(u.role)}</p>
                         </div>
                       </div>
                       <p className="text-sm text-text/55 truncate">{u.email}</p>
@@ -490,3 +490,4 @@ export default function Users() {
     </div>
   );
 }
+

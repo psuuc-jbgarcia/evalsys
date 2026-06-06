@@ -112,7 +112,7 @@ export default function AssignPanels() {
             <div className="p-4 border-b border-muted/40">
               <h3 className="font-bold text-text text-sm">Select Panel Judge</h3>
               {isSuperadmin && (
-                <p className="text-[11px] text-text/45 mt-1">
+                <p className="text-[11px] text-text/65 mt-1">
                   Showing panels owned by the current sidebar instructor.
                 </p>
               )}
@@ -129,18 +129,18 @@ export default function AssignPanels() {
                   }`}
                 >
                   <p className="font-semibold text-sm">{p.name}</p>
-                  <p className={`text-xs mt-0.5 ${selectedPanel?._id === p._id ? 'text-white/70' : 'text-text/50'}`}>
+                  <p className={`text-xs mt-0.5 ${selectedPanel?._id === p._id ? 'text-white/70' : 'text-text/70'}`}>
                     {p.email}
                   </p>
                   {isSuperadmin && (
-                    <p className={`text-[11px] mt-1 font-semibold ${selectedPanel?._id === p._id ? 'text-white/60' : 'text-text/35'}`}>
+                    <p className={`text-[11px] mt-1 font-semibold ${selectedPanel?._id === p._id ? 'text-white/60' : 'text-text/60'}`}>
                       Created by: {getPanelOwnerLabel(p)}
                     </p>
                   )}
                 </button>
               ))}
               {!filteredPanels.length && (
-                <p className="text-text/50 text-sm p-4 text-center">No active panel accounts found.</p>
+                <p className="text-text/70 text-sm p-4 text-center">No active panel accounts found.</p>
               )}
             </div>
           </div>
@@ -151,8 +151,8 @@ export default function AssignPanels() {
           <div className="evl-card h-full p-6">
             {!selectedPanel ? (
               <div className="h-64 flex flex-col items-center justify-center text-center">
-                <div className="text-4xl text-text/20 mb-3">👤</div>
-                <p className="text-text/50">Select a panel judge from the list to assign blocks.</p>
+                <div className="text-4xl text-text/60 mb-3">👤</div>
+                <p className="text-text/70">Select a panel judge from the list to assign blocks.</p>
               </div>
             ) : (
               <div>
@@ -161,7 +161,7 @@ export default function AssignPanels() {
                     <h3 className="font-bold text-text text-base">
                       Blocks for <span className="text-primary">{selectedPanel.name}</span>
                     </h3>
-                    <p className="text-text/50 text-xs mt-1">
+                    <p className="text-text/70 text-xs mt-1">
                       {isSuperadmin
                         ? `Created by: ${getPanelOwnerLabel(selectedPanel)}`
                         : 'Check the blocks this panel should grade.'}
@@ -202,7 +202,7 @@ export default function AssignPanels() {
                     </label>
                   ))}
                   {!sections.length && (
-                    <p className="col-span-2 text-text/50 text-sm text-center py-8">
+                    <p className="col-span-2 text-text/70 text-sm text-center py-8">
                       {isSuperadmin && !currentSubjectId
                         ? 'Select or create a subject for this instructor before assigning blocks.'
                         : 'No blocks have been created yet.'}
@@ -217,3 +217,4 @@ export default function AssignPanels() {
     </div>
   );
 }
+

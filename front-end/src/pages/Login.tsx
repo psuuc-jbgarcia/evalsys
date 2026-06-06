@@ -52,7 +52,7 @@ export default function Login() {
             E
           </div>
           <h1 className="text-2xl font-extrabold text-text tracking-tight">Welcome back</h1>
-          <p className="text-text/50 text-sm mt-1">Sign in to EvalSys</p>
+          <p className="text-text/70 text-sm mt-1">Sign in to EvalSys</p>
         </div>
 
         {/* Card */}
@@ -115,11 +115,12 @@ export default function Login() {
           </form>
         </div>
         <div className="mt-8 text-center border-t border-muted/20 pt-8">
-          <p className="text-text/20 text-[10px] font-bold uppercase tracking-widest mb-1">Developed & Maintained by</p>
-          <p className="text-text/40 text-sm font-black tracking-tight">Jerico B. Garcia</p>
+          <p className="text-text/60 text-[10px] font-bold uppercase tracking-widest mb-1">Developed & Maintained by</p>
+          <p className="text-text/65 text-sm font-black tracking-tight">Jerico B. Garcia</p>
         </div>
       </div>
     </div>
   );
 }
+
 

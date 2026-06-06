@@ -125,7 +125,7 @@ function AdminDashboard({ name, role, userId }: { name: string; role: 'admin' | 
                 {currentSubject.code}
               </div>
               <div className="min-w-0 flex-1">
-                <span className="block text-[10px] font-bold uppercase tracking-widest text-text/40">Current Subject</span>
+                <span className="block text-[10px] font-bold uppercase tracking-widest text-text/65">Current Subject</span>
                 <span className="block text-sm font-extrabold text-text truncate" title={currentSubject.title}>
                   {currentSubject.title}
                 </span>
@@ -136,7 +136,7 @@ function AdminDashboard({ name, role, userId }: { name: string; role: 'admin' | 
           {role !== 'superadmin' && (
             <div className={`evl-card min-h-[64px] px-4 py-3 flex items-center justify-between gap-3 transition-colors ${locked ? 'bg-danger/5 border-danger/20' : 'bg-success/5 border-success/20'}`}>
               <div className="min-w-0">
-                <span className="block text-[10px] font-bold uppercase tracking-widest text-text/40">Subject Status</span>
+                <span className="block text-[10px] font-bold uppercase tracking-widest text-text/65">Subject Status</span>
                 <span className={`block text-xs font-extrabold uppercase truncate ${locked ? 'text-danger' : 'text-success'}`}>
                   {locked ? 'Grading Locked' : 'Grading Active'}
                 </span>
@@ -172,7 +172,7 @@ function AdminDashboard({ name, role, userId }: { name: string; role: 'admin' | 
             <h3 className="text-text font-bold text-base mb-1 group-hover:text-primary transition-colors">
               {role === 'superadmin' && 'superadminLabel' in card ? card.superadminLabel : card.label}
             </h3>
-            <p className="text-text/50 text-sm leading-relaxed">
+            <p className="text-text/70 text-sm leading-relaxed">
               {role === 'superadmin' && 'superadminDesc' in card ? card.superadminDesc : card.desc}
             </p>
             <div className="mt-4 text-primary text-xs font-semibold flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -267,8 +267,8 @@ function PanelDashboard({ name, panelId }: { name: string; panelId: string }) {
           <div className="evl-card px-6 py-4 flex items-center gap-6 min-w-[280px] bg-surface/50 border-primary/20">
             <div className="flex-1">
               <div className="flex justify-between items-end mb-1.5">
-                <span className="text-[10px] font-bold text-text/40 uppercase tracking-widest">Your Progress</span>
-                <span className="text-xs font-black text-primary">{gradedCount}/{totalCount} <span className="text-[10px] text-text/40 font-medium">Graded</span></span>
+                <span className="text-[10px] font-bold text-text/65 uppercase tracking-widest">Your Progress</span>
+                <span className="text-xs font-black text-primary">{gradedCount}/{totalCount} <span className="text-[10px] text-text/65 font-medium">Graded</span></span>
               </div>
               <div className="w-full bg-muted/20 rounded-full h-1.5">
                 <div 
@@ -290,8 +290,8 @@ function PanelDashboard({ name, panelId }: { name: string; panelId: string }) {
         </div>
       ) : sections.length === 0 ? (
         <div className="evl-card p-12 text-center">
-          <div className="text-text/20 text-4xl mb-3">⊞</div>
-          <p className="text-text/50 text-sm">No groups have been assigned to you yet.</p>
+          <div className="text-text/60 text-4xl mb-3">⊞</div>
+          <p className="text-text/70 text-sm">No groups have been assigned to you yet.</p>
         </div>
       ) : (
         <>
@@ -304,7 +304,7 @@ function PanelDashboard({ name, panelId }: { name: string; panelId: string }) {
             className={`px-4 py-2 rounded-lg text-xs font-bold border transition-all duration-150 ${
               !selectedSection
                 ? 'bg-primary text-white border-primary shadow-sm shadow-primary/20'
-                : 'border-muted/40 text-text/50 bg-surface hover:text-text'
+                : 'border-muted/40 text-text/70 bg-surface hover:text-text'
             }`}
           >
             All Blocks
@@ -316,7 +316,7 @@ function PanelDashboard({ name, panelId }: { name: string; panelId: string }) {
               className={`px-4 py-2 rounded-lg text-xs font-bold border transition-all duration-150 ${
                 selectedSection === s._id
                   ? 'bg-primary text-white border-primary shadow-sm shadow-primary/20'
-                  : 'border-muted/40 text-text/50 bg-surface hover:text-text'
+                  : 'border-muted/40 text-text/70 bg-surface hover:text-text'
               }`}
             >
               {s.block}
@@ -326,7 +326,7 @@ function PanelDashboard({ name, panelId }: { name: string; panelId: string }) {
 
         {/* Search Bar */}
         <div className="w-full md:w-64 relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text/30 text-sm">🔍</span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text/55 text-sm">🔍</span>
           <input 
             type="text"
             placeholder="Search group or student..."
@@ -366,7 +366,7 @@ function PanelDashboard({ name, panelId }: { name: string; panelId: string }) {
                 }`}>
                   {g.name}
                 </h3>
-                <p className="text-text/50 text-sm leading-relaxed">
+                <p className="text-text/70 text-sm leading-relaxed">
                   {formatMemberList(g.members) || 'No members listed'}
                 </p>
                 <div className={`mt-4 text-xs font-semibold flex items-center gap-1 transition-all ${
@@ -378,7 +378,7 @@ function PanelDashboard({ name, panelId }: { name: string; panelId: string }) {
             ))}
             {filteredGroups.length === 0 && (
               <div className="col-span-full evl-card p-12 text-center">
-                <p className="text-text/40 text-sm">No groups in this block.</p>
+                <p className="text-text/65 text-sm">No groups in this block.</p>
               </div>
             )}
           </div>
@@ -387,3 +387,4 @@ function PanelDashboard({ name, panelId }: { name: string; panelId: string }) {
     </div>
   );
 }
+

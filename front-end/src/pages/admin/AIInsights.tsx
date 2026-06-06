@@ -159,14 +159,14 @@ export default function AIInsights() {
               className={`px-4 py-2.5 rounded-lg text-sm font-semibold border transition-all duration-150 ${
                 selected?._id === section._id
                   ? 'bg-primary text-white border-primary'
-                  : 'border-muted text-text/50 bg-surface hover:text-text hover:border-text/20'
+                  : 'border-muted text-text/70 bg-surface hover:text-text hover:border-text/20'
               }`}
             >
               {section.name === section.block ? section.block : `${section.name} - ${section.block}`}
             </button>
           ))
         )}
-        {!loadingSections && !sections.length && <p className="text-text/50 text-sm">No sections available.</p>}
+        {!loadingSections && !sections.length && <p className="text-text/70 text-sm">No sections available.</p>}
       </div>
 
       {loading ? (
@@ -203,7 +203,7 @@ export default function AIInsights() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-text/50">No complete group evaluation yet.</p>
+                  <p className="text-sm text-text/70">No complete group evaluation yet.</p>
                 )}
               </section>
 
@@ -226,7 +226,7 @@ export default function AIInsights() {
                         : 'No complete score data yet.'}
                     </p>
                   </div>
-                  <p className="text-xs text-text/45">
+                  <p className="text-xs text-text/65">
                     Complete groups: {insights.completeCount}/{insights.totalCount}
                     {insights.pendingCount > 0 ? `, pending: ${insights.pendingCount}` : ''}
                   </p>
@@ -246,7 +246,7 @@ export default function AIInsights() {
                           ))}
                         </ul>
                       ) : (
-                        <p className="text-xs text-text/45">No clear strength phrases detected yet.</p>
+                        <p className="text-xs text-text/65">No clear strength phrases detected yet.</p>
                       )}
                     </div>
                     <div>
@@ -258,26 +258,27 @@ export default function AIInsights() {
                           ))}
                         </ul>
                       ) : (
-                        <p className="text-xs text-text/45">No clear weakness phrases detected yet.</p>
+                        <p className="text-xs text-text/65">No clear weakness phrases detected yet.</p>
                       )}
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-text/50">No panel comments submitted yet.</p>
+                  <p className="text-sm text-text/70">No panel comments submitted yet.</p>
                 )}
               </section>
             </div>
           </div>
 
-          <p className="text-xs text-text/45">
+          <p className="text-xs text-text/65">
             AI-assisted analytics are generated from submitted panel scores and comments. They support instructor review but do not replace panel grading.
           </p>
         </div>
       ) : (
         <div className="border-y border-muted/30 bg-surface py-14 text-center">
-          <p className="text-text/50 text-sm">Select a block to generate AI insights.</p>
+          <p className="text-text/70 text-sm">Select a block to generate AI insights.</p>
         </div>
       )}
     </div>
   );
 }
+

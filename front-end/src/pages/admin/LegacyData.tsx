@@ -172,7 +172,7 @@ export default function LegacyData() {
           type="button"
           onClick={() => setActiveTab('sections')}
           className={`px-4 py-3 text-sm font-bold border-b-2 ${
-            activeTab === 'sections' ? 'border-primary text-primary' : 'border-transparent text-text/50'
+            activeTab === 'sections' ? 'border-primary text-primary' : 'border-transparent text-text/70'
           }`}
         >
           Old Blocks ({data.sections.length})
@@ -181,7 +181,7 @@ export default function LegacyData() {
           type="button"
           onClick={() => setActiveTab('groups')}
           className={`px-4 py-3 text-sm font-bold border-b-2 ${
-            activeTab === 'groups' ? 'border-primary text-primary' : 'border-transparent text-text/50'
+            activeTab === 'groups' ? 'border-primary text-primary' : 'border-transparent text-text/70'
           }`}
         >
           Old Groups ({data.groups.length})
@@ -190,7 +190,7 @@ export default function LegacyData() {
           type="button"
           onClick={() => setActiveTab('panels')}
           className={`px-4 py-3 text-sm font-bold border-b-2 ${
-            activeTab === 'panels' ? 'border-primary text-primary' : 'border-transparent text-text/50'
+            activeTab === 'panels' ? 'border-primary text-primary' : 'border-transparent text-text/70'
           }`}
         >
           Old Panel Accounts ({data.panels.length})
@@ -199,7 +199,7 @@ export default function LegacyData() {
           type="button"
           onClick={() => setActiveTab('results')}
           className={`px-4 py-3 text-sm font-bold border-b-2 ${
-            activeTab === 'results' ? 'border-primary text-primary' : 'border-transparent text-text/50'
+            activeTab === 'results' ? 'border-primary text-primary' : 'border-transparent text-text/70'
           }`}
         >
           Archived Results ({data.results.length})
@@ -236,7 +236,7 @@ export default function LegacyData() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={activeTab === 'sections' ? 5 : activeTab === 'panels' ? 6 : 7} className="text-center py-12 text-text/40">Loading archive...</td></tr>
+              <tr><td colSpan={activeTab === 'sections' ? 5 : activeTab === 'panels' ? 6 : 7} className="text-center py-12 text-text/65">Loading archive...</td></tr>
             ) : activeTab === 'sections' ? data.sections.map((section) => (
               <tr key={section._id}>
                 <td className="font-bold text-text">{section.block || section.name}</td>
@@ -296,12 +296,12 @@ export default function LegacyData() {
               <tr key={result._id}>
                 <td>
                   <p className="font-bold text-text">{result.legacySnapshot?.groupName || 'Deleted old group'}</p>
-                  <p className="text-[11px] text-text/45 mt-0.5">{result.legacySnapshot?.subject || 'Unknown subject'}</p>
+                  <p className="text-[11px] text-text/65 mt-0.5">{result.legacySnapshot?.subject || 'Unknown subject'}</p>
                 </td>
                 <td>{result.legacySnapshot?.block || 'Deleted old block'}</td>
                 <td>
                   <p>{result.legacySnapshot?.panelName || 'Deleted old panel'}</p>
-                  <p className="text-[11px] text-text/45 mt-0.5">{result.legacySnapshot?.panelEmail}</p>
+                  <p className="text-[11px] text-text/65 mt-0.5">{result.legacySnapshot?.panelEmail}</p>
                   {result.legacySnapshot?.instructorName && (
                     <p className="text-[11px] text-primary/70 mt-1">
                       Instructor: {result.legacySnapshot.instructorName}
@@ -329,16 +329,16 @@ export default function LegacyData() {
               </tr>
             ))}
             {!loading && activeTab === 'sections' && !data.sections.length && (
-              <tr><td colSpan={5} className="text-center py-12 text-text/40">No old blocks found.</td></tr>
+              <tr><td colSpan={5} className="text-center py-12 text-text/65">No old blocks found.</td></tr>
             )}
             {!loading && activeTab === 'groups' && !data.groups.length && (
-              <tr><td colSpan={7} className="text-center py-12 text-text/40">No old groups found.</td></tr>
+              <tr><td colSpan={7} className="text-center py-12 text-text/65">No old groups found.</td></tr>
             )}
             {!loading && activeTab === 'panels' && !data.panels.length && (
-              <tr><td colSpan={6} className="text-center py-12 text-text/40">No old panel accounts found.</td></tr>
+              <tr><td colSpan={6} className="text-center py-12 text-text/65">No old panel accounts found.</td></tr>
             )}
             {!loading && activeTab === 'results' && !data.results.length && (
-              <tr><td colSpan={7} className="text-center py-12 text-text/40">No archived results found.</td></tr>
+              <tr><td colSpan={7} className="text-center py-12 text-text/65">No archived results found.</td></tr>
             )}
           </tbody>
         </table>
@@ -381,3 +381,4 @@ export default function LegacyData() {
     </div>
   );
 }
+

@@ -75,7 +75,7 @@ export default function PasswordField({
         <button
           type="button"
           onClick={() => setVisible((current) => !current)}
-          className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-md flex items-center justify-center text-text/45 hover:text-primary hover:bg-primary/5 transition-colors"
+          className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-md flex items-center justify-center text-text/65 hover:text-primary hover:bg-primary/5 transition-colors"
           aria-label={visible ? 'Hide password' : 'Show password'}
           title={visible ? 'Hide password' : 'Show password'}
         >
@@ -85,3 +85,4 @@ export default function PasswordField({
     </div>
   );
 }
+

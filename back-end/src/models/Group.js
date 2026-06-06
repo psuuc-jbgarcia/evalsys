@@ -7,6 +7,13 @@ const groupSchema = new mongoose.Schema({
   // Supports old string members and new structured name objects.
   members: [{ type: mongoose.Schema.Types.Mixed }],
   assignedPanels: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Panel' }],
+  proposalFile: {
+    path: { type: String },
+    originalName: { type: String },
+    mimeType: { type: String },
+    size: { type: Number },
+    uploadedAt: { type: Date },
+  },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Group', groupSchema);

@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { getProposalStorageUsage } = require('../services/proposalStorage.service');
 
 const bytesToMb = (bytes = 0) => Math.round((bytes / 1024 / 1024) * 100) / 100;
 
@@ -65,14 +66,21 @@ const getRenderUsage = async () => {
 };
 
 exports.getPlatformUsage = async (_req, res) => {
-  const [mongo, render] = await Promise.all([
+  const [mongo, render, proposalStorageResult] = await Promise.allSettled([
     getMongoUsage(),
     getRenderUsage(),
+    getProposalStorageUsage(),
   ]);
 
   res.json({
-    mongo,
-    render,
+    mongo: mongo.status === 'fulfilled' ? mongo.value : { error: mongo.reason?.message || 'MongoDB usage unavailable' },
+    render: render.status === 'fulfilled' ? render.value : { configured: false, error: render.reason?.message || 'Render usage unavailable' },
+    proposalStorage: proposalStorageResult.status === 'fulfilled'
+      ? proposalStorageResult.value
+      : {
+          configured: true,
+          error: proposalStorageResult.reason?.message || 'Supabase storage usage unavailable',
+        },
     checkedAt: new Date().toISOString(),
   });
 };

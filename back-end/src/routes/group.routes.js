@@ -1,5 +1,13 @@
 const router = require('express').Router();
-const { createGroup, getGroups, getGroup, updateGroup, deleteGroup, bulkCreateGroups } = require('../controllers/group.controller');
+const {
+  createGroup,
+  getGroups,
+  getGroup,
+  getGroupProposalUrl,
+  updateGroup,
+  deleteGroup,
+  bulkCreateGroups,
+} = require('../controllers/group.controller');
 const { protect, adminOnly, superadminInstructorContext } = require('../middleware/auth.middleware');
 
 router.post('/register', (_req, res) => {
@@ -8,6 +16,7 @@ router.post('/register', (_req, res) => {
 
 router.use(protect, superadminInstructorContext);
 router.get('/', getGroups);
+router.get('/:id/proposal-url', getGroupProposalUrl);
 router.get('/:id', getGroup);
 
 router.post('/', adminOnly, createGroup);

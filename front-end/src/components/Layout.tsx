@@ -307,23 +307,23 @@ export default function Layout({ children }: { children: ReactNode }) {
       {/* Sidebar */}
       <aside
         className={`
-          ${collapsed ? 'lg:w-[68px]' : 'lg:w-60'} 
+          ${collapsed ? 'lg:w-[72px]' : 'lg:w-64'} 
           ${mobileOpen ? 'translate-x-0 w-64' : '-translate-x-full w-64'}
           lg:translate-x-0 lg:flex
           fixed lg:sticky top-0 h-screen left-0
-          bg-dark flex flex-col shrink-0 transition-all duration-200 z-50
+          bg-dark flex flex-col shrink-0 transition-all duration-200 z-50 shadow-xl shadow-dark/10
         `}
       >
         {/* Brand */}
-        <div className="h-16 flex items-center justify-between px-4 border-b border-white/10 shrink-0">
+        <div className="h-[70px] flex items-center justify-between px-4 border-b border-white/10 shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white text-sm font-extrabold">
+            <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center text-white text-sm font-extrabold shadow-sm shadow-primary/30">
               E
             </div>
             {(!collapsed || mobileOpen) && (
               <div>
-                <h1 className="text-white font-bold text-sm leading-none">EvalSys</h1>
-                <p className="text-white/40 text-[10px] mt-0.5 uppercase tracking-widest font-semibold">
+                <h1 className="text-white font-extrabold text-sm leading-none">EvalSys</h1>
+                <p className="text-white/60 text-[10px] mt-1 uppercase tracking-widest font-bold">
                   {roleLabel(user?.role)}
                 </p>
               </div>
@@ -332,25 +332,25 @@ export default function Layout({ children }: { children: ReactNode }) {
           {/* Collapse toggle (only desktop) */}
           <button
             onClick={() => setCollapsed(!collapsed)}
-            className="hidden lg:flex w-6 h-6 items-center justify-center rounded text-white/40 hover:text-white hover:bg-white/10 transition-colors text-xs"
+            className="hidden lg:flex w-7 h-7 items-center justify-center rounded-lg text-white/55 hover:text-white hover:bg-white/10 transition-colors text-xs"
           >
             {collapsed ? '▸' : '◂'}
           </button>
         </div>
 
         {/* Navigation */}
-        <nav className="flex flex-col gap-0.5 flex-1 px-3 py-4 overflow-y-auto">
+        <nav className="flex flex-col gap-1 flex-1 px-3 py-4 overflow-y-auto">
           {(user?.role === 'admin' || user?.role === 'superadmin') && (!collapsed || mobileOpen) && (
-            <div className="mb-4 px-1">
+            <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.035] p-3">
               {user?.role === 'superadmin' && (
                 <div className="mb-3">
-                  <label className="text-[9px] font-black uppercase tracking-widest text-white/30 block mb-1.5">
-                    Current Instructor
+                  <label className="text-[9px] font-black uppercase tracking-widest text-white/45 block mb-1.5">
+                    Instructor
                   </label>
                   <select
                     value={currentInstructorId}
                     onChange={(event) => handleInstructorChange(event.target.value)}
-                    className="w-full min-h-10 rounded-lg bg-white/10 border border-white/10 text-white text-xs font-bold px-3 py-2 outline-none hover:bg-white/15 focus:ring-2 focus:ring-primary/40 transition-colors"
+                    className="w-full min-h-10 rounded-xl bg-white/10 border border-white/10 text-white text-xs font-bold px-3 py-2 outline-none hover:bg-white/15 focus:ring-2 focus:ring-primary/40 transition-colors"
                   >
                     {!instructors.length && <option value="">No instructors</option>}
                     {instructors.map((instructor) => (
@@ -361,20 +361,20 @@ export default function Layout({ children }: { children: ReactNode }) {
                   </select>
                 </div>
               )}
-              <label className="text-[9px] font-black uppercase tracking-widest text-white/30 block mb-1.5">
-                Current Subject
+              <label className="text-[9px] font-black uppercase tracking-widest text-white/45 block mb-1.5">
+                Subject
               </label>
               <div className="relative">
                 <button
                   type="button"
                   onClick={() => setSubjectMenuOpen((open) => !open)}
-                  className="w-full min-h-10 rounded-lg bg-white/10 border border-white/10 text-white text-left px-3 py-2 outline-none hover:bg-white/15 focus:ring-2 focus:ring-primary/40 transition-colors"
+                  className="w-full min-h-10 rounded-xl bg-white/10 border border-white/10 text-white text-left px-3 py-2 outline-none hover:bg-white/15 focus:ring-2 focus:ring-primary/40 transition-colors"
                   title={currentSubject ? `${currentSubject.code} - ${currentSubject.title}` : 'Select subject'}
                 >
                   <span className="block text-xs font-bold truncate pr-5">
                     {currentSubject ? `${currentSubject.code} - ${currentSubject.title}` : 'Select subject'}
                   </span>
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 text-[10px]">
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/65 text-[10px]">
                     {subjectMenuOpen ? '^' : 'v'}
                   </span>
                 </button>
@@ -401,7 +401,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                         );
                       })}
                       {!subjects.length && (
-                        <div className="px-3 py-2 text-xs text-white/40">No subjects yet</div>
+                        <div className="px-3 py-2 text-xs text-white/65">No subjects yet</div>
                       )}
                     </div>
                   </div>
@@ -410,10 +410,15 @@ export default function Layout({ children }: { children: ReactNode }) {
               <Link
                 to="/subjects"
                 onClick={() => setMobileOpen(false)}
-                className="mt-2 w-full text-[10px] font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-lg py-1.5 transition-colors flex items-center justify-center gap-1"
+                className="mt-2 w-full text-[10px] font-black text-white/80 bg-white/5 hover:bg-white/10 rounded-xl py-2 transition-colors flex items-center justify-center gap-1"
               >
-                ⚙ Manage Subjects
+                Manage Subjects
               </Link>
+            </div>
+          )}
+          {(!collapsed || mobileOpen) && (
+            <div className="px-2 pt-1 pb-1">
+              <span className="text-[9px] font-black uppercase tracking-widest text-white/35">Workspace</span>
             </div>
           )}
           {links.map((link) => {
@@ -424,9 +429,9 @@ export default function Layout({ children }: { children: ReactNode }) {
                 key={link.to}
                 to={link.to}
                 onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150 ${isActive
-                    ? 'bg-primary text-white'
-                    : 'text-white/50 hover:text-white hover:bg-white/5'
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-bold transition-all duration-150 ${isActive
+                    ? 'bg-primary text-white shadow-sm shadow-primary/25'
+                    : 'text-white/70 hover:text-white hover:bg-white/[0.07]'
                   }`}
               >
                 <span className="w-5 h-5 flex items-center justify-center shrink-0">
@@ -439,31 +444,31 @@ export default function Layout({ children }: { children: ReactNode }) {
           {(user?.role === 'superadmin') && (
             <>
               {(!collapsed || mobileOpen) && (
-                <div className="mt-3 mb-1 px-1">
-                  <span className="text-[9px] font-black uppercase tracking-widest text-white/20">Super Admin</span>
+                <div className="mt-4 mb-1 px-2 pt-3 border-t border-white/10">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-white/35">Super Admin</span>
                 </div>
               )}
               <Link
                 to="/subscription"
                 onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150 ${
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-bold transition-all duration-150 ${
                   location.pathname === '/subscription'
-                    ? 'bg-primary text-white'
-                    : 'text-white/50 hover:text-white hover:bg-white/5'
+                    ? 'bg-primary text-white shadow-sm shadow-primary/25'
+                    : 'text-white/70 hover:text-white hover:bg-white/[0.07]'
                 }`}
               >
                 <span className="w-5 h-5 flex items-center justify-center shrink-0">
                   <NavIcon name="subscription" />
                 </span>
-                {(!collapsed || mobileOpen) && <span>Manage Subscription</span>}
+                {(!collapsed || mobileOpen) && <span>Resources</span>}
               </Link>
               <Link
                 to="/legacy-data"
                 onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150 ${
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-bold transition-all duration-150 ${
                   location.pathname === '/legacy-data'
-                    ? 'bg-primary text-white'
-                    : 'text-white/50 hover:text-white hover:bg-white/5'
+                    ? 'bg-primary text-white shadow-sm shadow-primary/25'
+                    : 'text-white/70 hover:text-white hover:bg-white/[0.07]'
                 }`}
               >
                 <span className="w-5 h-5 flex items-center justify-center shrink-0">
@@ -476,29 +481,39 @@ export default function Layout({ children }: { children: ReactNode }) {
         </nav>
 
         {/* User info */}
-        <div className="border-t border-white/10 p-3 shrink-0">
+        <div className="border-t border-white/10 p-3 shrink-0 bg-black/10">
           {(!collapsed || mobileOpen) ? (
             <>
-              <div className="flex items-center gap-2.5 mb-3 px-1">
-                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white/60 text-xs font-bold uppercase shrink-0">
+              <div className="flex items-center gap-2.5 mb-3 rounded-2xl bg-white/[0.04] border border-white/10 p-2.5">
+                <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center text-white/75 text-xs font-black uppercase shrink-0">
                   {user?.name?.charAt(0)}
                 </div>
                 <div className="min-w-0">
-                  <p className="text-white text-xs font-semibold truncate">{user?.name}</p>
-                  <p className="text-white/40 text-[10px] truncate">{user?.email}</p>
+                  <p className="text-white text-xs font-bold truncate">{user?.name}</p>
+                  <p className="text-white/55 text-[10px] truncate">{user?.email}</p>
                 </div>
               </div>
-              <button
-                onClick={handleLogout}
-                className="w-full text-xs text-white/40 hover:text-danger hover:bg-danger/10 py-2 rounded-lg transition-colors font-medium"
-              >
-                Sign out
-              </button>
+              <div className="flex items-center gap-2">
+                <Link
+                  to="/account-security"
+                  onClick={() => setMobileOpen(false)}
+                  className="flex-1 inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-2 py-2 text-[11px] font-bold text-white/75 hover:bg-white/10 hover:text-white transition-colors"
+                  title="Change password"
+                >
+                  Password
+                </Link>
+                <button
+                  onClick={handleLogout}
+                  className="flex-1 inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-2 py-2 text-[11px] font-bold text-white/65 hover:border-danger/30 hover:bg-danger/10 hover:text-danger transition-colors"
+                >
+                  Sign out
+                </button>
+              </div>
             </>
           ) : (
             <button
               onClick={handleLogout}
-              className="w-full text-white/40 hover:text-danger py-2 flex items-center justify-center text-sm transition-colors"
+              className="w-full text-white/65 hover:text-danger py-2 flex items-center justify-center text-sm transition-colors"
             >
               ⏻
             </button>
@@ -513,3 +528,4 @@ export default function Layout({ children }: { children: ReactNode }) {
     </div>
   );
 }
+

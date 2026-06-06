@@ -5,10 +5,6 @@ const Group = require('../models/Group');
 const Evaluation = require('../models/Evaluation');
 const Rubric = require('../models/Rubric');
 const RegistrationLink = require('../models/RegistrationLink');
-const {
-  migrateDefaultSubject,
-  getDefaultSubjectMigrationStatus,
-} = require('../services/defaultSubjectMigration');
 
 const isSuperadmin = (user) => user?.role === 'superadmin';
 const isAssignedToSubject = (user, subjectId) => (
@@ -226,31 +222,3 @@ exports.deleteSubject = async (req, res) => {
   }
 };
 
-exports.getDefaultSubjectMigrationStatus = async (_req, res) => {
-  try {
-    const status = await getDefaultSubjectMigrationStatus();
-    res.json(status);
-  } catch (err) {
-    console.error('Default subject migration status failed:', err);
-    res.status(500).json({
-      message: 'Default subject migration status check failed.',
-      error: err.message,
-    });
-  }
-};
-
-exports.migrateDefaultSubject = async (_req, res) => {
-  try {
-    const result = await migrateDefaultSubject();
-    res.json({
-      message: 'Default subject migration complete.',
-      ...result,
-    });
-  } catch (err) {
-    console.error('Default subject migration failed:', err);
-    res.status(500).json({
-      message: 'Default subject migration failed.',
-      error: err.message,
-    });
-  }
-};

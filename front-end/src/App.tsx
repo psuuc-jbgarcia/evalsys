@@ -19,6 +19,8 @@ import RegisterGroup from './pages/RegisterGroup';
 import Landing from './pages/Landing';
 import AppAlert from './components/AppAlert';
 import ChangePassword from './pages/ChangePassword';
+import AccountSecurity from './pages/AccountSecurity';
+import ProposalViewer from './pages/ProposalViewer';
 
 export default function App() {
   return (
@@ -29,6 +31,8 @@ export default function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/change-password" element={<ChangePassword />} />
+          <Route path="/account-security" element={<ProtectedRoute><AccountSecurity /></ProtectedRoute>} />
+          <Route path="/proposal/:groupId" element={<ProtectedRoute><ProposalViewer /></ProtectedRoute>} />
           <Route path="/register" element={<RegisterGroup />} />
           <Route path="/register/:token" element={<RegisterGroup />} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
