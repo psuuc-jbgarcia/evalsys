@@ -39,7 +39,7 @@ export default function SystemNotice() {
     };
     load();
     window.addEventListener('evalsys:maintenance-mode', handleMaintenanceMode);
-    const timer = window.setInterval(load, 30000);
+    const timer = window.setInterval(load, 60000);
     return () => {
       active = false;
       window.removeEventListener('evalsys:maintenance-mode', handleMaintenanceMode);

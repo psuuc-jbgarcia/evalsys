@@ -63,6 +63,34 @@ const panelFeatures = [
   },
 ];
 
+const demoSteps = [
+  {
+    time: '00:01',
+    title: 'Super Admin prepares access',
+    desc: 'Create instructor and panel accounts, set subject limits, and monitor security or maintenance controls.',
+  },
+  {
+    time: '00:18',
+    title: 'Instructor sets up the subject',
+    desc: 'Create subjects, sections, groups, active rubrics, registration links, and panel assignments.',
+  },
+  {
+    time: '00:42',
+    title: 'Students register groups',
+    desc: 'Students use the instructor registration link, add structured members, and optionally upload a proposal file.',
+  },
+  {
+    time: '01:05',
+    title: 'Panels grade assigned groups',
+    desc: 'Panel judges open their assigned block, view proposals, score each rubric criterion, and submit comments.',
+  },
+  {
+    time: '01:35',
+    title: 'Instructor reviews and exports',
+    desc: 'Results show averages, missing panels, comments, and CSV exports for group summaries or alphabetical member grades.',
+  },
+];
+
 const faqs = [
   {
     q: 'How do student groups register?',
@@ -284,6 +312,118 @@ export default function Landing() {
                     <p className="text-xs text-text/70 leading-relaxed mt-1">{desc}</p>
                   </div>
                 ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="bg-bg border-b border-muted/30">
+          <div className="max-w-7xl mx-auto px-5 sm:px-6 py-14">
+            <div className="grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] gap-10 lg:gap-14 items-center">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-primary">
+                  Demo Walkthrough
+                </p>
+                <h2 className="text-3xl font-black text-dark mt-2 tracking-tight">
+                  See how EvalSys is used from setup to export.
+                </h2>
+                <p className="text-sm text-text/55 leading-relaxed mt-3 max-w-lg">
+                  This quick guide shows the normal flow for Super Admin, Instructor, Student Registration, Panel Grading, and Results Export.
+                </p>
+
+                <div className="mt-6 space-y-3">
+                  {demoSteps.map((step) => (
+                    <div key={step.time} className="grid grid-cols-[56px_1fr] gap-3 rounded-lg border border-muted/50 bg-white px-4 py-3">
+                      <span className="text-[11px] font-black text-primary bg-primary/10 rounded-md px-2 py-1 self-start text-center">
+                        {step.time}
+                      </span>
+                      <div>
+                        <h3 className="font-black text-dark text-sm">{step.title}</h3>
+                        <p className="text-xs text-text/60 leading-relaxed mt-1">{step.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="border border-muted/60 bg-white rounded-lg shadow-xl overflow-hidden">
+                <div className="bg-dark text-white px-4 py-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-danger" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-warning" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-success" />
+                  </div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-white/70">
+                    EvalSys Demo Preview
+                  </p>
+                </div>
+
+                <div className="relative aspect-video bg-slate-950 overflow-hidden">
+                  <div className="absolute inset-0 opacity-70 bg-[linear-gradient(135deg,#0f172a_0%,#1e293b_45%,#2563eb_100%)]" />
+                  <div className="absolute inset-5 rounded-lg border border-white/10 bg-white/95 shadow-2xl overflow-hidden">
+                    <div className="h-10 bg-dark flex items-center justify-between px-3">
+                      <div className="flex items-center gap-2">
+                        <span className="w-7 h-7 rounded-lg bg-primary text-white text-xs font-black flex items-center justify-center">E</span>
+                        <span className="text-white text-xs font-black">EvalSys</span>
+                      </div>
+                      <span className="text-[9px] font-black uppercase tracking-widest text-white/60">Live Flow</span>
+                    </div>
+                    <div className="grid grid-cols-[90px_1fr] h-[calc(100%-2.5rem)]">
+                      <div className="bg-slate-900 p-3 space-y-2">
+                        {['Subjects', 'Groups', 'Rubrics', 'Grade', 'Results'].map((item, index) => (
+                          <div key={item} className={`h-7 rounded-md ${index === 4 ? 'bg-primary' : 'bg-white/10'} px-2 flex items-center`}>
+                            <span className="text-[8px] font-bold text-white/85 truncate">{item}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="p-4 bg-bg">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <div className="h-3 w-28 bg-slate-900 rounded-sm" />
+                            <div className="h-2 w-44 bg-muted rounded-sm mt-2" />
+                          </div>
+                          <div className="h-8 w-24 bg-primary rounded-lg" />
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 mb-3">
+                          {[85, 92, 100].map((width, index) => (
+                            <div key={index} className="rounded-lg border border-muted/50 bg-white p-3">
+                              <div className="h-2 w-14 bg-muted rounded-sm mb-3" />
+                              <div className="h-2 rounded-full bg-muted/40 overflow-hidden">
+                                <div className="h-full bg-success" style={{ width: `${width}%` }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="rounded-lg border border-muted/50 bg-white overflow-hidden">
+                          {[0, 1, 2, 3].map((row) => (
+                            <div key={row} className="grid grid-cols-[1.1fr_0.8fr_0.8fr_0.6fr] gap-2 px-3 py-2 border-b last:border-b-0 border-muted/30">
+                              <div className="h-2 bg-slate-800 rounded-sm" />
+                              <div className="h-2 bg-muted rounded-sm" />
+                              <div className="h-2 bg-muted rounded-sm" />
+                              <div className="h-2 bg-success rounded-sm" />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="absolute left-6 right-6 bottom-5">
+                    <div className="h-1.5 rounded-full bg-white/20 overflow-hidden">
+                      <div className="h-full bg-primary evalsys-demo-progress" />
+                    </div>
+                    <div className="mt-3 flex items-center justify-between text-white">
+                      <span className="text-[10px] font-bold uppercase tracking-widest">How to use EvalSys</span>
+                      <span className="text-[10px] font-mono">01:45</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="px-4 py-3 bg-white border-t border-muted/40">
+                  <p className="text-xs text-text/60 leading-relaxed">
+                    Demo preview only. A recorded MP4 can be added later if you want a narrated version.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
