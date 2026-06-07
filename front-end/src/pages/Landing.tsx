@@ -1,91 +1,81 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const instructorFeatures = [
+const roleFlow = [
   {
-    tag: 'SUBJECTS',
-    label: 'Instructor-owned subjects',
-    desc: 'Keep blocks, groups, panels, rubrics, locks, and results scoped to the instructor and selected subject.',
+    tag: 'INSTRUCTOR',
+    label: 'Sets up the evaluation',
+    desc: 'The instructor creates the subject, sections, groups, rubrics, panel accounts, and registration links for the current project evaluation.',
   },
   {
-    tag: 'GROUPS',
-    label: 'Structured group members',
-    desc: 'Use Last Name, First Name, and optional Middle Name fields for clean exports, while older full-name records still work.',
+    tag: 'STUDENTS',
+    label: 'Register their group',
+    desc: 'Students open the registration link, enter members in structured name fields, and optionally attach a proposal or project document.',
   },
   {
     tag: 'PANELS',
-    label: 'Panel isolation',
-    desc: 'Assign active panel judges to blocks without mixing panels or rubrics across different instructors.',
-  },
-  {
-    tag: 'RUBRICS',
-    label: 'Validated rubric builder',
-    desc: 'Create criteria, score levels, and ranges with validation before a rubric can be used for grading.',
+    label: 'Grade assigned groups',
+    desc: 'Panel judges only see their assigned blocks and groups, use the active rubric, add scores and feedback, and submit the evaluation.',
   },
   {
     tag: 'RESULTS',
-    label: 'Per-block results',
-    desc: 'Review averaged group scores, missing panel submissions, evaluator comments, and clear a single score when re-grading is needed.',
-  },
-  {
-    tag: 'EXPORTS',
-    label: 'Alphabetical grade exports',
-    desc: 'Download group summary CSVs or member-grade CSVs sorted alphabetically by Last Name, First Name, and Middle Name.',
-  },
-  {
-    tag: 'LOCKS',
-    label: 'Subject grading lock',
-    desc: 'Disable panel saving for a subject while keeping submitted scores visible in read-only mode.',
-  },
-  {
-    tag: 'RESET',
-    label: 'Subject reset',
-    desc: 'Start a fresh evaluation cycle by removing the current blocks and groups while accounts and rubrics stay available.',
+    label: 'Instructor reviews and exports',
+    desc: 'EvalSys averages panel scores, shows missing panel submissions, keeps comments, and exports group or member-grade CSV files.',
   },
 ];
 
-const panelFeatures = [
+const systemNotes = [
   {
-    label: 'Active rubric only',
-    desc: 'Panels grade with the instructor-selected active rubric for the group subject.',
+    label: 'Data is separated by instructor and subject',
+    desc: 'Subjects, sections, groups, rubrics, panels, and grading locks stay scoped to the owner so records do not mix.',
   },
   {
-    label: 'Validated scores',
-    desc: 'Missing fields and invalid values are blocked before submission.',
+    label: 'Old records are still supported',
+    desc: 'Older comma-separated member data can still be displayed while newer registrations use structured member fields.',
   },
   {
-    label: 'Local drafts',
-    desc: 'Unsubmitted scores and comments are restored on the same device if the page refreshes.',
+    label: 'Results stay available for review',
+    desc: 'Submitted evaluations are preserved for results and archive views even when accounts or old data are cleaned up.',
+  },
+];
+
+const panelFlow = [
+  {
+    label: 'Open assigned block',
+    desc: 'The panel account shows only the blocks and groups assigned by the instructor.',
   },
   {
-    label: 'Read-only lock mode',
-    desc: 'When grading is locked, panels can view submitted scores and feedback without saving changes.',
+    label: 'Review proposal if uploaded',
+    desc: 'If students attached a proposal, the panel can open it while grading the group.',
+  },
+  {
+    label: 'Score using the active rubric',
+    desc: 'Scores are checked before submission so missing or invalid fields are caught early.',
+  },
+  {
+    label: 'Submit feedback',
+    desc: 'Comments and scores are saved for the instructor to review in the Results page.',
   },
 ];
 
 const demoSteps = [
   {
     time: '00:01',
-    title: 'Super Admin prepares access',
-    desc: 'Create instructor and panel accounts, set subject limits, and monitor security or maintenance controls.',
-  },
-  {
-    time: '00:18',
     title: 'Instructor sets up the subject',
     desc: 'Create subjects, sections, groups, active rubrics, registration links, and panel assignments.',
   },
   {
-    time: '00:42',
+    time: '00:25',
     title: 'Students register groups',
     desc: 'Students use the instructor registration link, add structured members, and optionally upload a proposal file.',
   },
   {
-    time: '01:05',
+    time: '00:50',
     title: 'Panels grade assigned groups',
     desc: 'Panel judges open their assigned block, view proposals, score each rubric criterion, and submit comments.',
   },
   {
-    time: '01:35',
+    time: '01:20',
     title: 'Instructor reviews and exports',
     desc: 'Results show averages, missing panels, comments, and CSV exports for group summaries or alphabetical member grades.',
   },
@@ -94,19 +84,19 @@ const demoSteps = [
 const faqs = [
   {
     q: 'How do student groups register?',
-    a: 'Students register through a secure link generated by their instructor. Direct public registration without a token is disabled.',
+    a: 'The instructor creates a registration link for the subject or block. Students use that link to submit their group name, member names, and optional proposal file.',
   },
   {
     q: 'How do I get an Instructor or Panel account?',
-    a: 'Accounts are created by an administrator. New users are required to change their temporary password after signing in.',
+    a: 'Accounts are created by an authorized administrator or instructor. The user receives a temporary password, signs in, and then creates a private password before using the system.',
   },
   {
-    q: 'Can panel judges modify grades after submission?',
-    a: 'Yes, while grading is open for the subject. If grading is locked, panels can view submitted scores but cannot save changes.',
+    q: 'What does the instructor review after panels submit?',
+    a: 'The Results page shows averaged scores per group, missing panel submissions, panel comments, final scores, and CSV export options.',
   },
   {
     q: 'What happens when a panel account is deleted?',
-    a: 'The account and assignments are removed, but submitted evaluations remain available in results.',
+    a: 'The account and assignments are removed, but submitted evaluations remain preserved so results are not lost.',
   },
 ];
 
@@ -169,7 +159,7 @@ export default function Landing() {
                 EvalSys
               </h1>
               <p className="mt-5 text-lg text-text/65 leading-relaxed max-w-xl font-medium">
-                Run subject-based project grading with isolated instructor data, validated rubrics, panel submissions, and block-ready grade exports.
+                EvalSys guides project evaluation from account setup to student registration, panel grading, instructor review, and final grade export.
               </p>
 
               <div className="mt-8 flex flex-col sm:flex-row gap-3">
@@ -189,9 +179,9 @@ export default function Landing() {
 
               <div className="mt-8 grid grid-cols-3 gap-3 max-w-xl">
                 {[
-                  ['Subject scoped', 'No mixed instructor data'],
-                  ['CSV ready', 'Group and member exports'],
-                  ['Read-only lock', 'View scores when locked'],
+                  ['Setup', 'Create subjects and panels'],
+                  ['Evaluate', 'Panels grade assigned groups'],
+                  ['Review', 'Export final grade lists'],
                 ].map(([label, desc]) => (
                   <div key={label} className="border border-muted/50 bg-white rounded-lg p-3">
                     <p className="text-[10px] font-black uppercase tracking-widest text-text/65">{label}</p>
@@ -211,7 +201,7 @@ export default function Landing() {
             <div className="border border-muted/60 rounded-lg bg-surface shadow-xl overflow-hidden">
               <div className="px-4 py-3 bg-dark text-white flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-white/70">Results</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-white/70">Final Review</p>
                   <p className="text-sm font-extrabold">22-ITE-04</p>
                 </div>
                 <div className="flex gap-2">
@@ -296,15 +286,15 @@ export default function Landing() {
                   From setup to export.
                 </h2>
                 <p className="text-sm text-text/55 leading-relaxed mt-3">
-                  EvalSys follows the real evaluation flow: create subjects, register groups, assign panels, grade with the active rubric, then export results.
+                  EvalSys follows the same order used during a project defense or final presentation: prepare the class setup, collect groups, grade presentations, review results, then export.
                 </p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-4 border border-muted/50 rounded-lg overflow-hidden">
                 {[
-                  ['01', 'Prepare', 'Subjects, blocks, groups, panels'],
-                  ['02', 'Grade', 'Rubrics, scores, comments'],
-                  ['03', 'Review', 'Averages, missing panels, locks'],
-                  ['04', 'Export', 'Group summary and member grades'],
+                  ['01', 'Prepare', 'Create the subject, blocks, panels, and rubric'],
+                  ['02', 'Register', 'Students submit their group and members'],
+                  ['03', 'Evaluate', 'Panel judges score assigned groups'],
+                  ['04', 'Finalize', 'Instructor reviews and exports grades'],
                 ].map(([step, label, desc]) => (
                   <div key={step} className="p-5 border-b md:border-b-0 md:border-r last:border-r-0 last:border-b-0 border-muted/40 bg-surface">
                     <p className="text-[10px] font-black text-primary uppercase tracking-widest">{step}</p>
@@ -328,7 +318,7 @@ export default function Landing() {
                   See how EvalSys is used from setup to export.
                 </h2>
                 <p className="text-sm text-text/55 leading-relaxed mt-3 max-w-lg">
-                  This quick guide shows the normal flow for Super Admin, Instructor, Student Registration, Panel Grading, and Results Export.
+                  This quick guide follows the whole evaluation journey, from instructor setup to exporting the final grade list.
                 </p>
 
                 <div className="mt-6 space-y-3">
@@ -421,7 +411,7 @@ export default function Landing() {
 
                 <div className="px-4 py-3 bg-white border-t border-muted/40">
                   <p className="text-xs text-text/60 leading-relaxed">
-                    Demo preview only. A recorded MP4 can be added later if you want a narrated version.
+                    Demo preview only. It explains the workflow without requiring a recorded video file.
                   </p>
                 </div>
               </div>
@@ -434,19 +424,19 @@ export default function Landing() {
             <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-5 mb-8">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.22em] text-primary">
-                  Instructor Controls
+                  How it works
                 </p>
                 <h2 className="text-3xl font-black text-dark mt-2 tracking-tight">
-                  Control the evaluation without mixing data.
+                  Each user has a clear part in the evaluation.
                 </h2>
               </div>
               <p className="text-sm text-text/55 max-w-md leading-relaxed">
-                The instructor workspace is built for repeated evaluation cycles with clear ownership and recoverable results.
+                EvalSys is organized around the real people involved in evaluation: instructor, students, panel judges, and results reviewer.
               </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-              {instructorFeatures.map((item) => (
+              {roleFlow.map((item) => (
                 <div key={item.tag} className="bg-white border border-muted/50 rounded-lg p-5">
                   <p className="text-[10px] font-black text-primary uppercase tracking-widest">{item.tag}</p>
                   <h3 className="font-black text-dark mt-2">{item.label}</h3>
@@ -461,18 +451,18 @@ export default function Landing() {
           <div className="max-w-7xl mx-auto px-5 sm:px-6 py-14 grid grid-cols-1 lg:grid-cols-[0.8fr_1.2fr] gap-10">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.22em] text-success">
-                Panel Workspace
+                During evaluation
               </p>
               <h2 className="text-3xl font-black mt-2 tracking-tight">
-                Focused grading for live presentations.
+                Instructors manage while panels grade.
               </h2>
               <p className="text-sm text-white/75 leading-relaxed mt-3">
-                Panels see their assigned blocks and groups, grade through the current rubric, and keep local drafts until submission.
+                Instructors control the subject setup, rubric, panel assignments, grading locks, and results review. Panels focus on their assigned groups, score the active rubric, and submit comments.
               </p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {panelFeatures.map((item, index) => (
+              {panelFlow.map((item, index) => (
                 <div key={item.label} className="border border-white/10 rounded-lg p-5 bg-white/[0.03]">
                   <p className="text-[10px] font-black text-success uppercase tracking-widest">
                     {String(index + 1).padStart(2, '0')}
@@ -489,13 +479,13 @@ export default function Landing() {
           <div className="max-w-7xl mx-auto px-5 sm:px-6 py-14 grid grid-cols-1 lg:grid-cols-[0.8fr_1.2fr] gap-10">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.22em] text-primary">
-                Access
+                System behavior
               </p>
               <h2 className="text-3xl font-black text-dark mt-2 tracking-tight">
-                Accounts and registration stay controlled.
+                The system protects the evaluation records.
               </h2>
               <p className="text-sm text-text/55 leading-relaxed mt-3 max-w-md">
-                Instructors and panels use admin-created accounts. Students register only through instructor-generated tokens.
+                EvalSys keeps ownership clear, supports old data during migration, and keeps submitted results available for later review.
               </p>
               <div className="mt-6 flex flex-col sm:flex-row gap-3">
                 <button onClick={() => setShowAccountModal(true)} className="evl-btn-primary !text-sm">
@@ -507,21 +497,13 @@ export default function Landing() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="border border-muted/50 rounded-lg p-5 bg-bg">
-                <p className="text-[10px] font-black uppercase tracking-widest text-text/65">Instructor / Panel</p>
-                <h3 className="font-black text-dark mt-2">Temporary password flow</h3>
-                <p className="text-xs text-text/55 leading-relaxed mt-2">
-                  New accounts and reset passwords require users to set a private password before continuing.
-                </p>
-              </div>
-              <div className="border border-muted/50 rounded-lg p-5 bg-bg">
-                <p className="text-[10px] font-black uppercase tracking-widest text-text/65">Students</p>
-                <h3 className="font-black text-dark mt-2">Token registration only</h3>
-                <p className="text-xs text-text/55 leading-relaxed mt-2">
-                  Group registration opens from secure links and can be scoped to selected blocks.
-                </p>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {systemNotes.map((item) => (
+                <div key={item.label} className="border border-muted/50 rounded-lg p-5 bg-bg">
+                  <h3 className="font-black text-dark">{item.label}</h3>
+                  <p className="text-xs text-text/55 leading-relaxed mt-2">{item.desc}</p>
+                </div>
+              ))}
             </div>
           </div>
         </section>
