@@ -9,13 +9,14 @@ const {
 } = require('../controllers/registrationLink.controller');
 const { protect, adminOnly, superadminInstructorContext } = require('../middleware/auth.middleware');
 const proposalUpload = require('../middleware/proposalUpload.middleware');
+const { cacheResponse } = require('../middleware/cache.middleware');
 
-router.get('/public/:token', getPublicRegistrationLink);
+router.get('/public/:token', cacheResponse('registration-links:public', 10000), getPublicRegistrationLink);
 router.post('/public/:token/register', proposalUpload, registerGroupWithLink);
 
 router.use(protect, adminOnly, superadminInstructorContext);
 
-router.get('/', getRegistrationLinks);
+router.get('/', cacheResponse('registration-links:list', 15000), getRegistrationLinks);
 router.post('/', createRegistrationLink);
 router.patch('/:id', updateRegistrationLink);
 router.delete('/:id', deleteRegistrationLink);

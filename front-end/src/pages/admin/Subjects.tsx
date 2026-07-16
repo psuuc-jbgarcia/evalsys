@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import api from '../../services/api';
 import { useAuth } from '../../context/useAuth';
 import { notify } from '../../utils/notify';
+import { waitForJob } from '../../services/backgroundJobs';
 
 interface Subject {
   _id: string;
@@ -202,10 +203,12 @@ export default function Subjects() {
     if (!resetSubject || resetConfirmCode !== resetSubject.code) return;
     setResetting(true);
     try {
-      const res = await api.post('/evaluations/master-reset', { confirmText: 'RESET' }, {
+      const queued = await api.post('/evaluations/master-reset', { confirmText: 'RESET' }, {
+        params: { background: 'true' },
         headers: { 'x-subject-id': resetSubject._id },
       });
-      notify(res.data.message, { type: 'success' });
+      const result = await waitForJob<{ message: string }>(queued.data.job.id);
+      notify(result.message, { type: 'success' });
       setResetSubject(null);
       setResetConfirmCode('');
     } catch (err: unknown) {

@@ -9,6 +9,7 @@ const AuditLog = require('../models/AuditLog');
 const RegistrationLink = require('../models/RegistrationLink');
 const { listProposalFiles, removeProposalFiles } = require('../services/proposalStorage.service');
 const { recordAuditLog } = require('../services/audit.service');
+const { getPagination, paginatedPayload } = require('../utils/pagination');
 
 const serialize = (doc) => {
   const obj = doc?.toObject ? doc.toObject() : doc;
@@ -51,14 +52,22 @@ const backupMap = {
 };
 
 exports.getAuditLogs = async (req, res) => {
-  const limit = Math.min(Number(req.query.limit || 80), 200);
-  const logs = await AuditLog.find()
+  const pagination = getPagination(req, { defaultLimit: 80, maxLimit: 200 });
+  const legacyLimit = Math.min(Number(req.query.limit || 80), 200);
+  const query = AuditLog.find()
     .populate('instructor', 'name email')
     .populate('subject', 'code title')
-    .sort({ createdAt: -1 })
-    .limit(limit)
-    .lean();
-  res.json(logs);
+    .sort({ createdAt: -1 });
+
+  if (!pagination) {
+    return res.json(await query.limit(legacyLimit).lean());
+  }
+
+  const [logs, total] = await Promise.all([
+    query.skip(pagination.skip).limit(pagination.limit).lean(),
+    AuditLog.countDocuments(),
+  ]);
+  return res.json(paginatedPayload(logs, total, pagination));
 };
 
 exports.getActivity = async (_req, res) => {
@@ -207,10 +216,14 @@ exports.getSecurityMonitor = async (_req, res) => {
   });
 };
 
-exports.getInstructorSummary = async (_req, res) => {
-  const instructors = await Admin.find({ role: 'admin' })
+exports.getInstructorSummary = async (req, res) => {
+  const pagination = getPagination(req, { defaultLimit: 25, maxLimit: 100 });
+  const query = Admin.find({ role: 'admin' })
     .populate('assignedSubjects', 'code title')
     .sort({ name: 1 });
+  const total = pagination ? await Admin.countDocuments({ role: 'admin' }) : null;
+  if (pagination) query.skip(pagination.skip).limit(pagination.limit);
+  const instructors = await query;
 
   const summaries = await Promise.all(instructors.map(async (instructor) => {
     const subjectIds = (instructor.assignedSubjects || []).map((subject) => subject._id);
@@ -241,7 +254,8 @@ exports.getInstructorSummary = async (_req, res) => {
     };
   }));
 
-  res.json(summaries);
+  if (!pagination) return res.json(summaries);
+  return res.json(paginatedPayload(summaries, total, pagination));
 };
 
 exports.getProposalOrphans = async (_req, res) => {

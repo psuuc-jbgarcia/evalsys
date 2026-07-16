@@ -4,6 +4,7 @@ const Panel = require('../models/Panel');
 const Group = require('../models/Group');
 const Evaluation = require('../models/Evaluation');
 const RegistrationLink = require('../models/RegistrationLink');
+const { getPagination, paginatedPayload } = require('../utils/pagination');
 
 const getSubjectId = (req) => req.headers['x-subject-id'] || req.query.subject || req.body.subject;
 const getOwnerId = (req) => req.user?.role === 'superadmin'
@@ -137,11 +138,18 @@ exports.getSections = async (req, res) => {
     }
   }
   
-  const sections = await Section.find(filter)
+  const pagination = getPagination(req);
+  const query = Section.find(filter)
     .populate('assignedPanels', 'name email')
     .populate('subject', 'code title')
     .sort({ createdAt: -1 });
-  res.json(sections);
+  if (!pagination) return res.json(await query);
+
+  const [sections, total] = await Promise.all([
+    query.skip(pagination.skip).limit(pagination.limit),
+    Section.countDocuments(filter),
+  ]);
+  return res.json(paginatedPayload(sections, total, pagination));
 };
 
 exports.updateSection = async (req, res) => {

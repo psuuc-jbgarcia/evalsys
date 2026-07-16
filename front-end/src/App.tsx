@@ -22,6 +22,7 @@ import RegisterGroup from './pages/RegisterGroup';
 import Landing from './pages/Landing';
 import AppAlert from './components/AppAlert';
 import UpdateAvailableNotice from './components/UpdateAvailableNotice';
+import InstallAppNotice from './components/InstallAppNotice';
 import SystemNotice from './components/SystemNotice';
 import ChangePassword from './pages/ChangePassword';
 import AccountSecurity from './pages/AccountSecurity';
@@ -32,6 +33,7 @@ export default function App() {
     <AuthProvider>
       <AppAlert />
       <UpdateAvailableNotice />
+      <InstallAppNotice />
       <SystemNotice />
       <BrowserRouter>
         <Routes>

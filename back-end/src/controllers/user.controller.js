@@ -4,6 +4,7 @@ const Evaluation = require('../models/Evaluation');
 const Group = require('../models/Group');
 const Section = require('../models/Section');
 const { recordAuditLog } = require('../services/audit.service');
+const { getPagination, paginatedPayload } = require('../utils/pagination');
 
 const canManageUser = (req, user) => {
   if (req.user.role === 'superadmin') return true;
@@ -231,6 +232,70 @@ exports.bulkCreateUsers = async (req, res) => {
 
 // Get all users from both collections
 exports.getUsers = async (req, res) => {
+  const pagination = getPagination(req, { defaultLimit: 25, maxLimit: 100 });
+  if (pagination) {
+    const search = String(req.query.search || '').trim();
+    const role = String(req.query.role || '').trim().toLowerCase();
+    const status = String(req.query.status || '').trim().toLowerCase();
+    const accountMatch = {};
+
+    if (['superadmin', 'admin', 'panel'].includes(role)) accountMatch.role = role;
+    if (status === 'active') accountMatch.isActive = true;
+    if (status === 'inactive') accountMatch.isActive = false;
+    if (search) {
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      accountMatch.$or = [
+        { name: { $regex: escaped, $options: 'i' } },
+        { email: { $regex: escaped, $options: 'i' } },
+      ];
+    }
+
+    const adminMatch = req.user.role === 'superadmin' ? {} : { _id: null };
+    const panelMatch = req.user.role === 'superadmin' ? {} : { createdBy: req.user._id };
+    const [result] = await Admin.aggregate([
+      { $match: adminMatch },
+      {
+        $unionWith: {
+          coll: 'panel_acc',
+          pipeline: [{ $match: panelMatch }],
+        },
+      },
+      { $match: accountMatch },
+      { $sort: { createdAt: -1, _id: -1 } },
+      {
+        $facet: {
+          items: [
+            { $skip: pagination.skip },
+            { $limit: pagination.limit },
+            {
+              $lookup: {
+                from: 'subjects',
+                localField: 'assignedSubjects',
+                foreignField: '_id',
+                as: 'assignedSubjects',
+                pipeline: [{ $project: { code: 1, title: 1 } }],
+              },
+            },
+            {
+              $lookup: {
+                from: 'admin_acc',
+                localField: 'createdBy',
+                foreignField: '_id',
+                as: 'createdByAccount',
+                pipeline: [{ $project: { name: 1, email: 1 } }],
+              },
+            },
+            { $set: { createdBy: { $first: '$createdByAccount' } } },
+            { $unset: ['password', 'createdByAccount'] },
+          ],
+          total: [{ $count: 'count' }],
+        },
+      },
+    ]);
+    return res.json(paginatedPayload(result?.items || [], result?.total?.[0]?.count || 0, pagination));
+  }
+
+
   const admins = req.user.role === 'superadmin'
     ? await Admin.find().select('-password').populate('assignedSubjects', 'code title').sort({ createdAt: -1 })
     : [];

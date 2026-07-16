@@ -1,5 +1,6 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import { useAuth } from '../context/useAuth';
 import api from '../services/api';
 import { notify } from '../utils/notify';
@@ -36,8 +37,18 @@ export default function Login() {
     try {
       const loggedInUser = await login(email, password);
       navigate(loggedInUser.mustChangePassword ? '/change-password' : '/dashboard', { replace: true });
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Invalid credentials');
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        if (err.response) {
+          setError(err.response.data?.message || 'Sign in failed. Please try again.');
+        } else if (err.request) {
+          setError('Cannot connect to the server. Please make sure the backend is running and try again.');
+        } else {
+          setError('Unable to send the login request. Please try again.');
+        }
+      } else {
+        setError('An unexpected error occurred. Please try again.');
+      }
     } finally {
       setLoading(false);
     }

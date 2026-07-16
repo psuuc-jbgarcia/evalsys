@@ -7,6 +7,7 @@ const {
   createProposalSignedUrl,
   isProposalPathForGroup,
 } = require('../services/proposalStorage.service');
+const { getPagination, paginatedPayload } = require('../utils/pagination');
 
 const getSubjectId = (req) => req.headers['x-subject-id'] || req.query.subject || req.body.subject;
 const getOwnerId = (req) => req.user?.role === 'superadmin'
@@ -261,7 +262,10 @@ exports.getGroups = async (req, res) => {
       return gObj;
     });
       
-    return res.json(groups);
+    const pagination = getPagination(req);
+    if (!pagination) return res.json(groups);
+    const items = groups.slice(pagination.skip, pagination.skip + pagination.limit);
+    return res.json(paginatedPayload(items, groups.length, pagination));
   }
 
   if (subject) {
@@ -279,7 +283,8 @@ exports.getGroups = async (req, res) => {
     filter.createdBy = req.user._id;
   }
 
-  const groups = await Group.find(filter)
+  const pagination = getPagination(req);
+  const query = Group.find(filter)
     .populate({
       path: 'section',
       select: 'name block subject assignedPanels',
@@ -287,7 +292,13 @@ exports.getGroups = async (req, res) => {
     })
     .populate('assignedPanels', 'name email')
     .sort({ createdAt: -1 });
-  res.json(groups);
+  if (!pagination) return res.json(await query);
+
+  const [groups, total] = await Promise.all([
+    query.skip(pagination.skip).limit(pagination.limit),
+    Group.countDocuments(filter),
+  ]);
+  return res.json(paginatedPayload(groups, total, pagination));
 };
 
 exports.getGroup = async (req, res) => {

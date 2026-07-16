@@ -9,15 +9,17 @@ const {
   getSecurityMonitor,
 } = require('../controllers/operations.controller');
 const { protect, superadminOnly } = require('../middleware/auth.middleware');
+const { cacheResponse } = require('../middleware/cache.middleware');
+const { backgroundJob } = require('../middleware/backgroundJob.middleware');
 
 router.use(protect, superadminOnly);
 
-router.get('/audit-logs', getAuditLogs);
-router.get('/activity', getActivity);
-router.get('/security', getSecurityMonitor);
-router.get('/instructor-summary', getInstructorSummary);
-router.get('/proposal-orphans', getProposalOrphans);
+router.get('/audit-logs', cacheResponse('operations:audit-logs', 10000), getAuditLogs);
+router.get('/activity', cacheResponse('operations:activity', 10000), getActivity);
+router.get('/security', cacheResponse('operations:security', 10000), getSecurityMonitor);
+router.get('/instructor-summary', cacheResponse('operations:instructor-summary', 15000), getInstructorSummary);
+router.get('/proposal-orphans', cacheResponse('operations:proposal-orphans', 15000), getProposalOrphans);
 router.delete('/proposal-orphans', cleanupProposalOrphans);
-router.get('/backup/:type', exportBackup);
+router.get('/backup/:type', backgroundJob('backup.export', exportBackup));
 
 module.exports = router;

@@ -317,7 +317,9 @@ exports.getGroupResult = async (req, res) => {
 
 // Admin: get results for all groups in a section
 exports.getSectionResults = async (req, res) => {
-  const section = await Section.findById(req.params.sectionId).select('subject createdBy');
+  const section = await Section.findById(req.params.sectionId)
+    .select('subject createdBy assignedPanels')
+    .populate('assignedPanels', 'name email');
   if (!section) return res.status(404).json({ message: 'Section not found' });
   if (!section.createdBy || section.createdBy.toString() !== getOwnerId(req)?.toString()) {
     return res.status(403).json({ message: 'This block does not belong to the current instructor' });
@@ -335,24 +337,54 @@ exports.getSectionResults = async (req, res) => {
   }
   const activeRubric = await Rubric.findOne(activeRubricFilter);
   const activeCriteria = serializeCriteria(activeRubric?.criteria || []);
-  const groups = await Group.find({ section: req.params.sectionId, createdBy: getOwnerId(req) });
-  const results = await Promise.all(
-    groups.map(async (group) => {
-      const evaluations = await Evaluation.find({
-        group: group._id,
+  const groups = await Group.find({ section: req.params.sectionId, createdBy: getOwnerId(req) })
+    .populate('assignedPanels', 'name email');
+  const groupIds = groups.map((group) => group._id);
+  const sectionEvaluations = groupIds.length ? await Evaluation.aggregate([
+    {
+      $match: {
+        group: { $in: groupIds },
         isSubmitted: true,
         isLegacyArchived: { $ne: true },
-      }).populate('panel', 'name email').populate('rubric');
+      },
+    },
+    {
+      $lookup: {
+        from: 'panel_acc',
+        localField: 'panel',
+        foreignField: '_id',
+        as: 'panel',
+        pipeline: [{ $project: { name: 1, email: 1 } }],
+      },
+    },
+    { $unwind: { path: '$panel', preserveNullAndEmptyArrays: true } },
+    {
+      $lookup: {
+        from: 'rubrics',
+        localField: 'rubric',
+        foreignField: '_id',
+        as: 'rubric',
+        pipeline: [{ $project: { criteria: 1, title: 1 } }],
+      },
+    },
+    { $unwind: { path: '$rubric', preserveNullAndEmptyArrays: true } },
+  ]) : [];
+  const evaluationsByGroup = new Map();
+  sectionEvaluations.forEach((evaluation) => {
+    const key = evaluation.group.toString();
+    if (!evaluationsByGroup.has(key)) evaluationsByGroup.set(key, []);
+    evaluationsByGroup.get(key).push(evaluation);
+  });
+  const results = await Promise.all(
+    groups.map((group) => {
+      const evaluations = evaluationsByGroup.get(group._id.toString()) || [];
 
       // if (!evaluations.length) return { group, averaged: null, finalTotal: null };
 
       // Get the group to find the correct divisor (number of panels assigned to the block)
       let divisor = evaluations.length;
       let assignedPanelDocs = [];
-      const groupDoc = await Group.findById(group._id)
-        .populate({ path: 'section', populate: { path: 'assignedPanels', select: 'name email' } })
-        .populate('assignedPanels', 'name email');
-
+      const groupDoc = { section, assignedPanels: group.assignedPanels };
       if (groupDoc) {
         if (groupDoc.section && groupDoc.section.assignedPanels && groupDoc.section.assignedPanels.length > 0) {
           assignedPanelDocs = groupDoc.section.assignedPanels;

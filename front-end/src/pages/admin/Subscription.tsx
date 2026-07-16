@@ -78,6 +78,26 @@ const downloadCsv = (filename: string, rows: BackupRow[]) => {
   link.click();
   URL.revokeObjectURL(link.href);
 };
+
+interface BackgroundJobResponse<T> {
+  job: { id: string };
+  result?: T;
+}
+
+const waitForJob = async <T,>(jobId: string): Promise<T> => {
+  for (let attempt = 0; attempt < 240; attempt += 1) {
+    const status = await api.get(`/jobs/${jobId}`);
+    if (status.data.status === 'failed') {
+      throw new Error(status.data.error || 'Background job failed');
+    }
+    if (status.data.status === 'completed') {
+      const completed = await api.get<BackgroundJobResponse<T>>(`/jobs/${jobId}/result`);
+      return completed.data.result as T;
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 500));
+  }
+  throw new Error('The operation is still running. Please try again shortly.');
+};
 export default function Subscription() {
   const [loading, setLoading] = useState(true);
   const [instructors, setInstructors] = useState<Instructor[]>([]);
@@ -215,11 +235,13 @@ export default function Subscription() {
   const handleExportBackup = async (scope: 'subject' | 'global') => {
     setDataAction(`export-${scope}`);
     try {
-      const res = await api.get('/evaluations/export-all', {
+      const queued = await api.get('/evaluations/export-all', {
+        params: { background: 'true' },
         headers: { 'x-subject-id': scope === 'subject' ? currentSubjectId : '' },
       });
+      const rows = await waitForJob<BackupRow[]>(queued.data.job.id);
       const label = scope === 'subject' ? currentSubject?.code || 'subject' : 'global';
-      downloadCsv(`evalsys_${label}_backup.csv`, res.data);
+      downloadCsv(`evalsys_${label}_backup.csv`, rows);
     } catch (err: unknown) {
       notify(getErrorMessage(err, 'Failed to export backup'), { type: 'error' });
     } finally {
@@ -243,10 +265,12 @@ export default function Subscription() {
 
     setDataAction(`reset-${scope}`);
     try {
-      const res = await api.post('/evaluations/master-reset', { confirmText: 'RESET' }, {
+      const queued = await api.post('/evaluations/master-reset', { confirmText: 'RESET' }, {
+        params: { background: 'true' },
         headers: { 'x-subject-id': scope === 'subject' ? currentSubjectId : '' },
       });
-      notify(res.data.message || (scope === 'subject' ? 'Current subject data reset complete.' : 'Global reset complete.'), { type: 'success' });
+      const result = await waitForJob<{ message?: string }>(queued.data.job.id);
+      notify(result.message || (scope === 'subject' ? 'Current subject data reset complete.' : 'Global reset complete.'), { type: 'success' });
     } catch (err: unknown) {
       notify(getErrorMessage(err, 'Reset failed'), { type: 'error' });
     } finally {

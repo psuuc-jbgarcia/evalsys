@@ -22,4 +22,6 @@ const rubricSchema = new mongoose.Schema({
   isActive: { type: Boolean, default: true },
 }, { timestamps: true });
 
+rubricSchema.index({ subject: 1, createdBy: 1, isActive: 1 });
+
 module.exports = mongoose.model('Rubric', rubricSchema);

@@ -8,4 +8,7 @@ const sectionSchema = new mongoose.Schema({
   assignedPanels: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Panel' }],
 }, { timestamps: true });
 
+
+sectionSchema.index({ subject: 1, createdBy: 1 });
+sectionSchema.index({ createdBy: 1, createdAt: -1 });
 module.exports = mongoose.model('Section', sectionSchema);

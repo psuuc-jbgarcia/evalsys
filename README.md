@@ -35,9 +35,9 @@ EvalSys is a multi-subject web-based rubric evaluation system for IT/IR project 
 
 ```text
 automated-rubrics/
-├── back-end/       Express API server
-├── front-end/      Vite React application
-└── README.md
++-- back-end/       Express API server
++-- front-end/      Vite React application
+`-- README.md
 ```
 
 ## Backend Setup
@@ -53,6 +53,9 @@ automated-rubrics/
 
    ```env
    PORT=5000
+   FRONTEND_URL=http://localhost:5173
+   # Optional: comma-separated extra allowed frontend origins
+   # CORS_ORIGINS=https://your-vercel-app.vercel.app,https://your-custom-domain.com
    MONGO_URI=your_mongodb_connection_string
    JWT_SECRET=your_long_random_secret
 
@@ -60,6 +63,8 @@ automated-rubrics/
    SUPABASE_SERVICE_ROLE_KEY=your_backend_only_secret_key
    SUPABASE_PROPOSAL_BUCKET=evalsys-proposals
    SUPABASE_STORAGE_LIMIT_MB=1024
+   DB_CACHE_TTL_MS=15000
+   DB_CACHE_MAX_ENTRIES=250
 
    RENDER_API_KEY=optional_render_api_key
    RENDER_SERVICE_ID=optional_render_service_id
@@ -70,6 +75,10 @@ automated-rubrics/
    ```bash
    npm run dev
    ```
+
+Set `FRONTEND_URL` to your deployed frontend origin, for example `https://your-app.vercel.app`. Add more allowed frontend origins in `CORS_ORIGINS` as a comma-separated list when needed.
+
+`DB_CACHE_TTL_MS` controls short-lived backend response caching for repeated database reads. Set it to `0` to disable caching.
 
 Important: never put `SUPABASE_SERVICE_ROLE_KEY` in the frontend or Vercel environment variables. It belongs only in the backend Render service.
 
@@ -232,11 +241,9 @@ npm run build
 
 ## Current Known Follow-ups
 
-- Replace remaining native browser `confirm()` calls with the custom EvalSys modal style.
-- Add a frontend `.env.example`.
-- Add a controlled cleanup action for orphaned Supabase proposal files.
 - Consider frontend code splitting if the production bundle grows much larger.
 
 ## License
 
 MIT License.
+

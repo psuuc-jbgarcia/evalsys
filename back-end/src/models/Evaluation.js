@@ -39,5 +39,8 @@ evaluationSchema.pre('save', function (next) {
 
 // One evaluation per panel per group
 evaluationSchema.index({ group: 1, panel: 1 }, { unique: true });
+evaluationSchema.index({ group: 1, isSubmitted: 1, isLegacyArchived: 1 });
+evaluationSchema.index({ subject: 1, isSubmitted: 1, isLegacyArchived: 1 });
+evaluationSchema.index({ isSubmitted: 1, isLegacyArchived: 1, updatedAt: -1 });
 
 module.exports = mongoose.model('Evaluation', evaluationSchema);

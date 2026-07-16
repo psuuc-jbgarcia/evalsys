@@ -6,6 +6,7 @@ const {
   buildProposalPath,
   uploadProposalFile,
 } = require('../services/proposalStorage.service');
+const { getPagination, paginatedPayload } = require('../utils/pagination');
 
 const getSubjectId = (req) => req.headers['x-subject-id'] || req.query.subject || req.body.subject;
 const getOwnerId = (req) => req.user?.role === 'superadmin'
@@ -40,13 +41,20 @@ exports.getRegistrationLinks = async (req, res) => {
     filter.subject = { $in: req.user.assignedSubjects || [] };
   }
 
-  const links = await RegistrationLink.find(filter)
+  const pagination = getPagination(req);
+  const query = RegistrationLink.find(filter)
     .populate('subject', 'code title')
     .populate('sections', 'block')
     .populate('createdBy', 'name email')
     .sort({ createdAt: -1 });
 
-  res.json(links);
+  if (!pagination) return res.json(await query);
+
+  const [links, total] = await Promise.all([
+    query.skip(pagination.skip).limit(pagination.limit),
+    RegistrationLink.countDocuments(filter),
+  ]);
+  return res.json(paginatedPayload(links, total, pagination));
 };
 
 exports.createRegistrationLink = async (req, res) => {

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import api from '../../services/api';
 import { notify } from '../../utils/notify';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
+import { waitForJob } from '../../services/backgroundJobs';
 
 interface AuditLog {
   _id: string;
@@ -97,8 +98,11 @@ export default function Operations() {
   const handleBackup = async (type: string) => {
     setBackupAction(type);
     try {
-      const res = await api.get(`/operations/backup/${type}`);
-      downloadJson(`evalsys_${type}_backup.json`, res.data);
+      const queued = await api.get(`/operations/backup/${type}`, {
+        params: { background: 'true' },
+      });
+      const result = await waitForJob<unknown>(queued.data.job.id);
+      downloadJson(`evalsys_${type}_backup.json`, result);
       notify(`${type} backup downloaded`, { type: 'success' });
     } catch (err: any) {
       notify(err.response?.data?.message || 'Backup export failed', { type: 'error' });

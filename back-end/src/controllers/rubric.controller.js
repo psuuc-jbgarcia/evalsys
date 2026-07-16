@@ -1,5 +1,6 @@
 const Rubric = require('../models/Rubric');
 const Admin = require('../models/Admin');
+const { getPagination, paginatedPayload } = require('../utils/pagination');
 
 const getSubjectId = (req) => req.headers['x-subject-id'] || req.query.subject || req.body.subject;
 const canAccessSubject = (req, subjectId) => (
@@ -249,8 +250,16 @@ exports.getAllRubrics = async (req, res) => {
     await claimUnownedSubjectRubrics(subject, req.user._id);
     await normalizeActiveRubrics(subject, req.user._id);
   }
-  const rubrics = await Rubric.find(filter).populate('createdBy', 'name email').sort({ createdAt: -1 });
-  res.json(rubrics);
+  const pagination = getPagination(req);
+  const query = Rubric.find(filter)
+    .populate('createdBy', 'name email')
+    .sort({ createdAt: -1 });
+  if (!pagination) return res.json(await query);
+  const [rubrics, total] = await Promise.all([
+    query.skip(pagination.skip).limit(pagination.limit),
+    Rubric.countDocuments(filter),
+  ]);
+  return res.json(paginatedPayload(rubrics, total, pagination));
 };
 
 exports.createRubric = async (req, res) => {

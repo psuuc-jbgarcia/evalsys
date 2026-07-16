@@ -5,6 +5,7 @@ const Group = require('../models/Group');
 const Evaluation = require('../models/Evaluation');
 const Rubric = require('../models/Rubric');
 const RegistrationLink = require('../models/RegistrationLink');
+const { getPagination, paginatedPayload } = require('../utils/pagination');
 
 const isSuperadmin = (user) => user?.role === 'superadmin';
 const isAssignedToSubject = (user, subjectId) => (
@@ -97,8 +98,14 @@ exports.getSubjects = async (req, res) => {
     if (!instructor) return res.json([]);
     filter = { _id: { $in: instructor.assignedSubjects || [] } };
   }
-  const subjects = await Subject.find(filter).sort({ createdAt: -1 });
-  res.json(subjects);
+  const pagination = getPagination(req);
+  const query = Subject.find(filter).sort({ createdAt: -1 });
+  if (!pagination) return res.json(await query);
+  const [subjects, total] = await Promise.all([
+    query.skip(pagination.skip).limit(pagination.limit),
+    Subject.countDocuments(filter),
+  ]);
+  return res.json(paginatedPayload(subjects, total, pagination));
 };
 
 exports.getPublicSubjects = async (_req, res) => {

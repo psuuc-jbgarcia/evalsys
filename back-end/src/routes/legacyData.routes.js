@@ -8,9 +8,10 @@ const {
   deleteLegacySection,
 } = require('../controllers/legacyData.controller');
 const { protect, superadminOnly } = require('../middleware/auth.middleware');
+const { cacheResponse } = require('../middleware/cache.middleware');
 
 router.use(protect, superadminOnly);
-router.get('/', getLegacyData);
+router.get('/', cacheResponse('legacy-data:list', 15000), getLegacyData);
 router.delete('/groups/:id', deleteLegacyGroup);
 router.delete('/panels/:id', deleteLegacyPanel);
 router.delete('/results', deleteAllLegacyResults);

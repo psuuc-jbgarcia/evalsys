@@ -9,15 +9,16 @@ const {
   bulkCreateGroups,
 } = require('../controllers/group.controller');
 const { protect, adminOnly, superadminInstructorContext } = require('../middleware/auth.middleware');
+const { cacheResponse } = require('../middleware/cache.middleware');
 
 router.post('/register', (_req, res) => {
   res.status(403).json({ message: 'Registration requires an instructor registration link.' });
 });
 
 router.use(protect, superadminInstructorContext);
-router.get('/', getGroups);
+router.get('/', cacheResponse('groups:list', 15000), getGroups);
 router.get('/:id/proposal-url', getGroupProposalUrl);
-router.get('/:id', getGroup);
+router.get('/:id', cacheResponse('groups:detail', 15000), getGroup);
 
 router.post('/', adminOnly, createGroup);
 router.post('/bulk', adminOnly, bulkCreateGroups);
