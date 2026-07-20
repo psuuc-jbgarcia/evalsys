@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import api from '../../services/api';
 import { TableSkeleton } from '../../components/LoadingSkeleton';
 import { notify } from '../../utils/notify';
+import { currentSubjectKey, useOperationalScope } from '../../hooks/useOperationalScope';
 
 interface Subject { _id: string; code: string; title: string; }
 interface Section { _id: string; block: string; subject?: string | Subject; }
@@ -16,7 +17,6 @@ interface RegistrationLink {
   createdAt: string;
 }
 
-const currentSubjectKey = 'evalsys_current_subject_id';
 const toDatetimeLocal = (date: Date) => {
   const offset = date.getTimezoneOffset();
   const local = new Date(date.getTime() - offset * 60 * 1000);
@@ -40,6 +40,7 @@ export default function RegistrationLinks() {
   const [copiedToken, setCopiedToken] = useState('');
   const [linkToRemove, setLinkToRemove] = useState<RegistrationLink | null>(null);
   const [removing, setRemoving] = useState(false);
+  const { subjectId: currentSubjectId, version: scopeVersion } = useOperationalScope();
 
   const visibleSections = useMemo(
     () => sections.filter((section) => getSectionSubjectId(section) === selectedSubject),
@@ -62,7 +63,7 @@ export default function RegistrationLinks() {
       api.get('/sections'),
     ]).then(([subjectRes, sectionRes]) => {
       setSections(sectionRes.data);
-      const saved = localStorage.getItem(currentSubjectKey);
+      const saved = currentSubjectId || localStorage.getItem(currentSubjectKey);
       const firstSubject = subjectRes.data[0]?._id || '';
       const nextSubjectDoc = subjectRes.data.find((item: Subject) => item._id === saved) || subjectRes.data[0] || null;
       const nextSubject = nextSubjectDoc?._id || firstSubject;
@@ -71,7 +72,7 @@ export default function RegistrationLinks() {
     }).catch((err) => {
       setError(err.response?.data?.message || 'Failed to load registration setup');
     }).finally(() => setLoading(false));
-  }, []);
+  }, [scopeVersion, currentSubjectId]);
 
   useEffect(() => {
     setSelectedSections([]);

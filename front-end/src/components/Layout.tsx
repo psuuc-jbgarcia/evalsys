@@ -3,23 +3,37 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import api from '../services/api';
 import { useConfirmDialog } from '../hooks/useConfirmDialog';
+import {
+  currentInstructorKey,
+  currentSubjectKey,
+  notifyOperationalScopeChanged,
+} from '../hooks/useOperationalScope';
 
-const adminLinks = [
-  { to: '/dashboard', label: 'Dashboard', icon: '◫' },
-  { to: '/subjects', label: 'Subjects', icon: '📚' },
-  { to: '/sections', label: 'Sections', icon: '☰' },
-  { to: '/groups', label: 'Groups', icon: '⊞' },
-  { to: '/users', label: 'Panel Accounts', superadminLabel: 'Accounts', icon: '⊕' },
-  { to: '/assign-panels', label: 'Assign Panels', icon: '👥' },
-  { to: '/rubrics', label: 'Rubrics', icon: '✎' },
-  { to: '/results', label: 'Results', icon: '▦' },
-  { to: '/ai-insights', label: 'AI Insights', icon: 'AI' },
-  { to: '/registration-links', label: 'Registration Links', icon: 'RL' },
+const superadminLinks = [
+  { to: '/dashboard', label: 'Dashboard' },
+  { to: '/users', label: 'Instructors' },
+  { to: '/subjects', label: 'Subjects' },
+  { to: '/subscription', label: 'Resources' },
+  { to: '/operations', label: 'Operations' },
+  { to: '/security', label: 'Security' },
+  { to: '/system-control', label: 'System Control' },
+  { to: '/legacy-data', label: 'Archive' },
+];
+
+const instructorLinks = [
+  { to: '/dashboard', label: 'Dashboard' },
+  { to: '/subjects', label: 'Subjects' },
+  { to: '/sections', label: 'Sections' },
+  { to: '/groups', label: 'Groups' },
+  { to: '/users', label: 'Panel Accounts' },
+  { to: '/assign-panels', label: 'Assign Panels' },
+  { to: '/rubrics', label: 'Rubrics' },
+  { to: '/registration-links', label: 'Registration Links' },
 ];
 
 const panelLinks = [
-  { to: '/dashboard', label: 'Dashboard', icon: '◫' },
-  { to: '/grade', label: 'Grade Groups', icon: '✎' },
+  { to: '/dashboard', label: 'Dashboard' },
+  { to: '/grade', label: 'Grade Groups' },
 ];
 
 type NavIconName = 'dashboard' | 'sections' | 'groups' | 'users' | 'assign' | 'rubrics' | 'results' | 'ai' | 'link' | 'grade' | 'subjects' | 'subscription' | 'operations' | 'security' | 'system' | 'legacy';
@@ -120,8 +134,6 @@ const getPanelId = (user?: UserRef) => user?.id || user?._id || '';
 const groupNameCacheKey = 'grading_group_names';
 const groupStatusCacheKey = (panelId: string) => `grading_group_status_${panelId}`;
 const selectedRubricCacheKey = (panelId: string) => `grading_selected_rubric_${panelId}`;
-const currentSubjectKey = 'evalsys_current_subject_id';
-const currentInstructorKey = 'evalsys_current_instructor_id';
 const roleLabel = (role?: string) => {
   if (role === 'admin') return 'Instructor';
   if (role === 'superadmin') return 'Super Admin';
@@ -190,9 +202,9 @@ export default function Layout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const links = user?.role === 'admin'
-    ? adminLinks
+    ? instructorLinks
     : user?.role === 'superadmin'
-      ? adminLinks.filter((link) => link.to !== '/rubrics' && link.to !== '/ai-insights')
+      ? superadminLinks
       : panelLinks;
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -225,6 +237,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           localStorage.removeItem(currentSubjectKey);
           setCurrentInstructorId(nextId);
           setCurrentSubjectId('');
+          notifyOperationalScopeChanged();
         }
       })
       .catch(() => undefined);
@@ -245,9 +258,11 @@ export default function Layout({ children }: { children: ReactNode }) {
         if (!savedExists && res.data.length > 0) {
           localStorage.setItem(currentSubjectKey, res.data[0]._id);
           setCurrentSubjectId(res.data[0]._id);
+          notifyOperationalScopeChanged();
         } else if (!res.data.length) {
           localStorage.removeItem(currentSubjectKey);
           setCurrentSubjectId('');
+          notifyOperationalScopeChanged();
         }
       })
       .catch(() => undefined);
@@ -259,6 +274,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     localStorage.removeItem(currentSubjectKey);
     setCurrentInstructorId(instructorId);
     setCurrentSubjectId('');
+    notifyOperationalScopeChanged();
   };
 
   const handleSubjectChange = (subjectId: string) => {
@@ -269,6 +285,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     localStorage.setItem(currentSubjectKey, subjectId);
     setCurrentSubjectId(subjectId);
     setSubjectMenuOpen(false);
+    notifyOperationalScopeChanged();
   };
 
   const handleLogout = async () => {
@@ -432,12 +449,13 @@ export default function Layout({ children }: { children: ReactNode }) {
           )}
           {(!collapsed || mobileOpen) && (
             <div className="px-2 pt-1 pb-1">
-              <span className="text-[9px] font-black uppercase tracking-widest text-white/35">Workspace</span>
+              <span className="text-[9px] font-black uppercase tracking-widest text-white/35">
+                {user?.role === 'superadmin' ? 'Platform' : 'Workspace'}
+              </span>
             </div>
           )}
           {links.map((link) => {
             const isActive = location.pathname === link.to;
-            const linkLabel = user?.role === 'superadmin' && link.to === '/users' ? 'Accounts' : link.label;
             return (
               <Link
                 key={link.to}
@@ -451,89 +469,10 @@ export default function Layout({ children }: { children: ReactNode }) {
                 <span className="w-5 h-5 flex items-center justify-center shrink-0">
                   <NavIcon name={getNavIconName(link.to)} />
                 </span>
-                {(!collapsed || mobileOpen) && <span>{linkLabel}</span>}
+                {(!collapsed || mobileOpen) && <span>{link.label}</span>}
               </Link>
             );
           })}
-          {(user?.role === 'superadmin') && (
-            <>
-              {(!collapsed || mobileOpen) && (
-                <div className="mt-4 mb-1 px-2 pt-3 border-t border-white/10">
-                  <span className="text-[9px] font-black uppercase tracking-widest text-white/35">Super Admin</span>
-                </div>
-              )}
-              <Link
-                to="/subscription"
-                onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-bold transition-all duration-150 ${
-                  location.pathname === '/subscription'
-                    ? 'bg-primary text-white shadow-sm shadow-primary/25'
-                    : 'text-white/70 hover:text-white hover:bg-white/[0.07]'
-                }`}
-              >
-                <span className="w-5 h-5 flex items-center justify-center shrink-0">
-                  <NavIcon name="subscription" />
-                </span>
-                {(!collapsed || mobileOpen) && <span>Resources</span>}
-              </Link>
-              <Link
-                to="/operations"
-                onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-bold transition-all duration-150 ${
-                  location.pathname === '/operations'
-                    ? 'bg-primary text-white shadow-sm shadow-primary/25'
-                    : 'text-white/70 hover:text-white hover:bg-white/[0.07]'
-                }`}
-              >
-                <span className="w-5 h-5 flex items-center justify-center shrink-0">
-                  <NavIcon name="operations" />
-                </span>
-                {(!collapsed || mobileOpen) && <span>Operations</span>}
-              </Link>
-              <Link
-                to="/security"
-                onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-bold transition-all duration-150 ${
-                  location.pathname === '/security'
-                    ? 'bg-primary text-white shadow-sm shadow-primary/25'
-                    : 'text-white/70 hover:text-white hover:bg-white/[0.07]'
-                }`}
-              >
-                <span className="w-5 h-5 flex items-center justify-center shrink-0">
-                  <NavIcon name="security" />
-                </span>
-                {(!collapsed || mobileOpen) && <span>Security</span>}
-              </Link>
-              <Link
-                to="/system-control"
-                onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-bold transition-all duration-150 ${
-                  location.pathname === '/system-control'
-                    ? 'bg-primary text-white shadow-sm shadow-primary/25'
-                    : 'text-white/70 hover:text-white hover:bg-white/[0.07]'
-                }`}
-              >
-                <span className="w-5 h-5 flex items-center justify-center shrink-0">
-                  <NavIcon name="system" />
-                </span>
-                {(!collapsed || mobileOpen) && <span>System Control</span>}
-              </Link>
-              <Link
-                to="/legacy-data"
-                onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-bold transition-all duration-150 ${
-                  location.pathname === '/legacy-data'
-                    ? 'bg-primary text-white shadow-sm shadow-primary/25'
-                    : 'text-white/70 hover:text-white hover:bg-white/[0.07]'
-                }`}
-              >
-                <span className="w-5 h-5 flex items-center justify-center shrink-0">
-                  <NavIcon name="legacy" />
-                </span>
-                {(!collapsed || mobileOpen) && <span>Archive</span>}
-              </Link>
-            </>
-          )}
         </nav>
 
         {/* User info */}

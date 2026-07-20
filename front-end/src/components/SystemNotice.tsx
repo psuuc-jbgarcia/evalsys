@@ -4,6 +4,7 @@ import api from '../services/api';
 
 interface PublicSettings {
   isMaintenanceMode: boolean;
+  maintenanceStartsAt?: string | null;
   maintenanceMessage?: string;
   announcement?: {
     isActive?: boolean;
@@ -15,6 +16,7 @@ interface PublicSettings {
 export default function SystemNotice() {
   const { user, logout } = useAuth();
   const [settings, setSettings] = useState<PublicSettings | null>(null);
+  const [now, setNow] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -24,7 +26,10 @@ export default function SystemNotice() {
           params: { t: Date.now() },
           headers: { 'Cache-Control': 'no-cache' },
         });
-        if (active) setSettings(res.data);
+        if (active) {
+          setNow(Date.now());
+          setSettings(res.data);
+        }
       } catch {
         // The notice should never block app usage if the status check fails.
       }
@@ -34,12 +39,13 @@ export default function SystemNotice() {
       setSettings((current) => ({
         ...(current || { announcement: { isActive: false, title: '', message: '' } }),
         isMaintenanceMode: true,
+        maintenanceStartsAt: null,
         maintenanceMessage: detail?.message || current?.maintenanceMessage,
       }));
     };
     load();
     window.addEventListener('evalsys:maintenance-mode', handleMaintenanceMode);
-    const timer = window.setInterval(load, 60000);
+    const timer = window.setInterval(load, 10000);
     return () => {
       active = false;
       window.removeEventListener('evalsys:maintenance-mode', handleMaintenanceMode);
@@ -47,11 +53,30 @@ export default function SystemNotice() {
     };
   }, []);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const isUserAudience = user?.role === 'admin' || user?.role === 'panel';
-  const showMaintenance = settings?.isMaintenanceMode && user?.role !== 'superadmin';
+  const maintenanceStartsAt = settings?.maintenanceStartsAt
+    ? new Date(settings.maintenanceStartsAt).getTime()
+    : null;
+  const scheduledMaintenanceStarted = maintenanceStartsAt !== null && maintenanceStartsAt <= now;
+  const showMaintenance = Boolean(settings?.isMaintenanceMode || scheduledMaintenanceStarted)
+    && user?.role !== 'superadmin';
+  const showMaintenanceWarning = maintenanceStartsAt !== null
+    && maintenanceStartsAt > now
+    && user?.role !== 'superadmin';
   const showAnnouncement = isUserAudience && settings?.announcement?.isActive && settings.announcement.message;
 
-  if (!showMaintenance && !showAnnouncement) return null;
+  const remainingSeconds = maintenanceStartsAt
+    ? Math.max(0, Math.ceil((maintenanceStartsAt - now) / 1000))
+    : 0;
+  const remainingMinutes = Math.floor(remainingSeconds / 60);
+  const remainingClockSeconds = String(remainingSeconds % 60).padStart(2, '0');
+
+  if (!showMaintenance && !showMaintenanceWarning && !showAnnouncement) return null;
 
   return (
     <>
@@ -79,8 +104,19 @@ export default function SystemNotice() {
         </div>
       )}
 
-      {showAnnouncement && (
+      {showMaintenanceWarning && (
         <div className="fixed top-3 left-1/2 z-[60] w-[min(720px,calc(100vw-24px))] -translate-x-1/2 pointer-events-none">
+          <div className="pointer-events-auto rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 shadow-lg">
+            <p className="text-xs font-black uppercase tracking-widest text-amber-700">Scheduled Maintenance</p>
+            <p className="text-sm font-bold text-text mt-1">
+              Maintenance begins in {remainingMinutes}:{remainingClockSeconds}. Please save and finish your current work.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {showAnnouncement && (
+        <div className={`fixed ${showMaintenanceWarning ? 'top-24' : 'top-3'} left-1/2 z-[60] w-[min(720px,calc(100vw-24px))] -translate-x-1/2 pointer-events-none`}>
           <div className="pointer-events-auto rounded-lg border border-primary/20 bg-white px-4 py-3 shadow-lg">
             <p className="text-xs font-black uppercase tracking-widest text-primary">
               {settings?.announcement?.title || 'System Announcement'}

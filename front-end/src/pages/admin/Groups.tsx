@@ -4,6 +4,7 @@ import { TableSkeleton } from '../../components/LoadingSkeleton';
 import { formatMemberList, memberSearchText, type Member, type StructuredMember } from '../../utils/members';
 import { notify } from '../../utils/notify';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
+import { useOperationalScope } from '../../hooks/useOperationalScope';
 
 interface Section { _id: string; name: string; block: string; }
 interface ProposalFile { path?: string; originalName?: string; mimeType?: string; size?: number; uploadedAt?: string; }
@@ -107,6 +108,7 @@ export default function Groups() {
   const [editMemberRows, setEditMemberRows] = useState<MemberFormRow[]>([emptyMember()]);
   const [loading, setLoading] = useState(true);
   const { confirm, ConfirmDialog } = useConfirmDialog();
+  const { version: scopeVersion } = useOperationalScope();
 
 
 
@@ -118,9 +120,13 @@ export default function Groups() {
   };
 
   useEffect(() => {
+    setForm({ name: '', section: '' });
+    setEditingGroup(null);
+    setFilterBlock('');
+    setPage(1);
     load();
     api.get('/sections').then((r) => setSections(r.data));
-  }, []);
+  }, [scopeVersion]);
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();

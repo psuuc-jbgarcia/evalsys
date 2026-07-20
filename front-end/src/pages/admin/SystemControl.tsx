@@ -4,6 +4,7 @@ import { notify } from '../../utils/notify';
 
 interface SystemSettings {
   isMaintenanceMode: boolean;
+  maintenanceStartsAt?: string | null;
   maintenanceMessage: string;
   announcement?: {
     isActive?: boolean;
@@ -23,6 +24,7 @@ interface ConfirmAction {
 
 const defaultSettings: SystemSettings = {
   isMaintenanceMode: false,
+  maintenanceStartsAt: null,
   maintenanceMessage: 'EvalSys is temporarily unavailable while maintenance is in progress.',
   announcement: {
     isActive: false,
@@ -36,13 +38,17 @@ export default function SystemControl() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+  const [maintenanceDelayMinutes, setMaintenanceDelayMinutes] = useState(5);
+  const [now, setNow] = useState(0);
 
   const load = async () => {
     setLoading(true);
     try {
       const res = await api.get('/settings');
+      setNow(Date.now());
       setSettings({
         isMaintenanceMode: Boolean(res.data.isMaintenanceMode),
+        maintenanceStartsAt: res.data.maintenanceStartsAt || null,
         maintenanceMessage: res.data.maintenanceMessage || defaultSettings.maintenanceMessage,
         announcement: {
           isActive: Boolean(res.data.announcement?.isActive),
@@ -62,12 +68,21 @@ export default function SystemControl() {
     load();
   }, []);
 
-  const updateSettings = async (next: SystemSettings, successMessage: string) => {
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const updateSettings = async (
+    next: Partial<SystemSettings> & { maintenanceDelayMinutes?: number },
+    successMessage: string,
+  ) => {
     setSaving(true);
     try {
       const res = await api.patch('/settings/system-controls', next);
       setSettings({
         isMaintenanceMode: Boolean(res.data.isMaintenanceMode),
+        maintenanceStartsAt: res.data.maintenanceStartsAt || null,
         maintenanceMessage: res.data.maintenanceMessage || defaultSettings.maintenanceMessage,
         announcement: {
           isActive: Boolean(res.data.announcement?.isActive),
@@ -88,7 +103,6 @@ export default function SystemControl() {
     const title = settings.announcement?.title?.trim() || '';
     const message = settings.announcement?.message?.trim() || '';
     updateSettings({
-      ...settings,
       announcement: {
         isActive: Boolean(settings.announcement?.isActive),
         title,
@@ -117,7 +131,6 @@ export default function SystemControl() {
 
   const applyClearAnnouncement = () => {
     updateSettings({
-      ...settings,
       announcement: { isActive: false, title: '', message: '' },
     }, 'Announcement cleared');
   };
@@ -133,23 +146,37 @@ export default function SystemControl() {
   };
 
   const applyToggleMaintenance = () => {
-    const nextEnabled = !settings.isMaintenanceMode;
+    const nextEnabled = !settings.isMaintenanceMode && !settings.maintenanceStartsAt;
     const message = settings.maintenanceMessage.trim() || defaultSettings.maintenanceMessage;
     updateSettings({
-      ...settings,
       isMaintenanceMode: nextEnabled,
+      maintenanceDelayMinutes: nextEnabled ? maintenanceDelayMinutes : undefined,
       maintenanceMessage: message,
-    }, nextEnabled ? 'Maintenance mode enabled' : 'Maintenance mode disabled');
+    }, nextEnabled
+      ? maintenanceDelayMinutes === 0
+        ? 'Maintenance mode enabled'
+        : `Maintenance scheduled in ${maintenanceDelayMinutes} minutes`
+      : 'Maintenance mode disabled');
   };
 
   const toggleMaintenance = () => {
-    const nextEnabled = !settings.isMaintenanceMode;
+    const nextEnabled = !settings.isMaintenanceMode && !settings.maintenanceStartsAt;
+    const maintenanceStarted = settings.isMaintenanceMode || Boolean(
+      settings.maintenanceStartsAt
+      && new Date(settings.maintenanceStartsAt).getTime() <= Date.now()
+    );
     setConfirmAction({
-      title: nextEnabled ? 'Enable Maintenance Mode?' : 'Disable Maintenance Mode?',
+      title: nextEnabled
+        ? maintenanceDelayMinutes === 0 ? 'Enable Maintenance Now?' : 'Schedule Maintenance?'
+        : maintenanceStarted ? 'Disable Maintenance Mode?' : 'Cancel Scheduled Maintenance?',
       message: nextEnabled
-        ? 'Instructors and panels will be blocked from logging in and saving actions until you disable maintenance mode.'
+        ? maintenanceDelayMinutes === 0
+          ? 'Instructors and panels will be blocked immediately from logging in and saving actions.'
+          : `Users will have ${maintenanceDelayMinutes} minutes to save and finish their current work before access is paused.`
         : 'Instructors and panels will be able to use EvalSys again.',
-      confirmLabel: nextEnabled ? 'Enable Maintenance' : 'Disable Maintenance',
+      confirmLabel: nextEnabled
+        ? maintenanceDelayMinutes === 0 ? 'Start Now' : 'Schedule Maintenance'
+        : maintenanceStarted ? 'Disable Maintenance' : 'Cancel Schedule',
       danger: nextEnabled,
       onConfirm: applyToggleMaintenance,
     });
@@ -174,6 +201,19 @@ export default function SystemControl() {
       </div>
     );
   }
+
+  const maintenanceStartMs = settings.maintenanceStartsAt
+    ? new Date(settings.maintenanceStartsAt).getTime()
+    : null;
+  const hasMaintenanceStarted = settings.isMaintenanceMode
+    || (maintenanceStartMs !== null && maintenanceStartMs <= now);
+  const isMaintenanceScheduled = !hasMaintenanceStarted
+    && maintenanceStartMs !== null
+    && maintenanceStartMs > now;
+  const remainingSeconds = maintenanceStartMs
+    ? Math.max(0, Math.ceil((maintenanceStartMs - now) / 1000))
+    : 0;
+  const remainingTime = `${Math.floor(remainingSeconds / 60)}:${String(remainingSeconds % 60).padStart(2, '0')}`;
 
   return (
     <div>
@@ -249,24 +289,42 @@ export default function SystemControl() {
           </div>
         </section>
 
-        <section className={`evl-card p-6 ${settings.isMaintenanceMode ? 'border-red-200 bg-red-50/60' : ''}`}>
+        <section className={`evl-card p-6 ${(hasMaintenanceStarted || isMaintenanceScheduled) ? 'border-red-200 bg-red-50/60' : ''}`}>
           <div className="flex items-start justify-between gap-4 mb-5">
             <div>
               <p className="text-xs font-black uppercase tracking-widest text-red-500 mb-1">Maintenance Mode</p>
               <h3 className="text-xl font-black text-text">Pause instructor and panel access</h3>
               <p className="text-sm text-text/70 mt-1">Super Admin can still sign in and manage this page.</p>
             </div>
-            <span className={settings.isMaintenanceMode ? 'evl-badge-danger' : 'evl-badge-success'}>
-              {settings.isMaintenanceMode ? 'Enabled' : 'Disabled'}
+            <span className={hasMaintenanceStarted ? 'evl-badge-danger' : isMaintenanceScheduled ? 'evl-badge-primary' : 'evl-badge-success'}>
+              {hasMaintenanceStarted ? 'Enabled' : isMaintenanceScheduled ? 'Scheduled' : 'Disabled'}
             </span>
           </div>
 
           <div className="space-y-4">
-            <div className={settings.isMaintenanceMode ? 'evl-alert-error' : 'evl-alert-info'}>
-              {settings.isMaintenanceMode
+            <div className={hasMaintenanceStarted ? 'evl-alert-error' : 'evl-alert-info'}>
+              {hasMaintenanceStarted
                 ? 'Instructors and panels cannot log in or save actions while maintenance mode is enabled.'
+                : isMaintenanceScheduled
+                  ? `Maintenance begins in ${remainingTime}. Users can continue working and saving until then.`
                 : 'System is open. Instructors and panels can use EvalSys normally.'}
             </div>
+
+            {!hasMaintenanceStarted && !isMaintenanceScheduled && (
+              <div>
+                <label className="evl-label">Start Maintenance</label>
+                <select
+                  value={maintenanceDelayMinutes}
+                  onChange={(e) => setMaintenanceDelayMinutes(Number(e.target.value))}
+                  className="evl-input"
+                >
+                  <option value={0}>Immediately</option>
+                  <option value={5}>In 5 minutes (recommended)</option>
+                  <option value={15}>In 15 minutes</option>
+                  <option value={30}>In 30 minutes</option>
+                </select>
+              </div>
+            )}
 
             <div>
               <label className="evl-label">Maintenance Message</label>
@@ -283,9 +341,13 @@ export default function SystemControl() {
             <button
               disabled={saving}
               onClick={toggleMaintenance}
-              className={settings.isMaintenanceMode ? 'evl-btn-primary' : 'evl-btn-danger'}
+              className={(hasMaintenanceStarted || isMaintenanceScheduled) ? 'evl-btn-primary' : 'evl-btn-danger'}
             >
-              {settings.isMaintenanceMode ? 'Disable Maintenance Mode' : 'Enable Maintenance Mode'}
+              {hasMaintenanceStarted
+                ? 'Disable Maintenance Mode'
+                : isMaintenanceScheduled
+                  ? 'Cancel Scheduled Maintenance'
+                  : maintenanceDelayMinutes === 0 ? 'Enable Maintenance Now' : 'Schedule Maintenance'}
             </button>
           </div>
         </section>

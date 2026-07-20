@@ -265,7 +265,10 @@ export default function Subscription() {
 
     setDataAction(`reset-${scope}`);
     try {
-      const queued = await api.post('/evaluations/master-reset', { confirmText: 'RESET' }, {
+      const confirmText = scope === 'subject'
+        ? `RESET ${currentSubject?.code || ''}`
+        : 'RESET GLOBAL';
+      const queued = await api.post('/evaluations/master-reset', { confirmText }, {
         params: { background: 'true' },
         headers: { 'x-subject-id': scope === 'subject' ? currentSubjectId : '' },
       });

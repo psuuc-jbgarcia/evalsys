@@ -176,7 +176,9 @@ export default function Subjects() {
     if (deleteConfirmCode !== subjectToDelete.code) return;
     setDeleting(true);
     try {
-      await api.delete(`/subjects/${subjectToDelete._id}`);
+      await api.delete(`/subjects/${subjectToDelete._id}`, {
+        data: { confirmText: `DELETE ${subjectToDelete.code}` },
+      });
       await fetchSubjects();
       if (isSuperadmin) await fetchAdmins();
       setSubjectToDelete(null);
@@ -203,7 +205,7 @@ export default function Subjects() {
     if (!resetSubject || resetConfirmCode !== resetSubject.code) return;
     setResetting(true);
     try {
-      const queued = await api.post('/evaluations/master-reset', { confirmText: 'RESET' }, {
+      const queued = await api.post('/evaluations/master-reset', { confirmText: `RESET ${resetSubject.code}` }, {
         params: { background: 'true' },
         headers: { 'x-subject-id': resetSubject._id },
       });

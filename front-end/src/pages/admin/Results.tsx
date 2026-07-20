@@ -3,6 +3,7 @@ import api from '../../services/api';
 import { TableSkeleton } from '../../components/LoadingSkeleton';
 import { formatMemberList, type Member, type StructuredMember } from '../../utils/members';
 import { useAuth } from '../../context/useAuth';
+import { useOperationalScope } from '../../hooks/useOperationalScope';
 
 interface Section { _id: string; name: string; block: string; }
 interface EvaluationRecord { _id: string; panelId: string; panelName: string; }
@@ -102,6 +103,7 @@ export default function Results() {
   const [clearModal, setClearModal] = useState<{ group: GroupResult } | null>(null);
   const [clearingId, setClearingId] = useState<string | null>(null);
   const [confirmClearId, setConfirmClearId] = useState<string | null>(null);
+  const { version: scopeVersion } = useOperationalScope();
 
   const criteriaColumns = useMemo(() => {
     const byKey = new Map<string, RubricCriteria>();
@@ -118,6 +120,9 @@ export default function Results() {
   const maxTotal = criteriaColumns.reduce((sum, criteria) => sum + criteria.maxScore, 0);
 
   useEffect(() => {
+    setSelected(null);
+    setResults([]);
+    setViewFeedback(null);
     Promise.all([
       api.get('/sections'),
       api.get('/auth/me'),
@@ -125,7 +130,7 @@ export default function Results() {
       setSections(secRes.data);
       setAccountCsvLocked(Boolean(meRes.data.csvExportLocked));
     }).finally(() => setLoadingSections(false));
-  }, []);
+  }, [scopeVersion]);
 
   const loadResults = async (section: Section) => {
     setSelected(section);

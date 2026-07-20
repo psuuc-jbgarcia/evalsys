@@ -4,6 +4,7 @@ import { CardSkeleton } from '../../components/LoadingSkeleton';
 import { notify } from '../../utils/notify';
 import { useAuth } from '../../context/useAuth';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
+import { useOperationalScope } from '../../hooks/useOperationalScope';
 
 interface Level {
   label: string;
@@ -131,6 +132,7 @@ export default function Rubrics() {
   const [expandedRubric, setExpandedRubric] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const { confirm, ConfirmDialog } = useConfirmDialog();
+  const { version: scopeVersion } = useOperationalScope();
 
   const load = () => {
     setLoading(true);
@@ -139,10 +141,11 @@ export default function Rubrics() {
       .finally(() => setLoading(false));
   };
   useEffect(() => {
+    resetForm();
     api.get('/rubrics')
       .then((r) => setRubrics(r.data))
       .finally(() => setLoading(false));
-  }, []);
+  }, [scopeVersion]);
 
   const resetForm = () => {
     setTitle('');

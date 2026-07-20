@@ -123,7 +123,16 @@ export default function LegacyData() {
                 ? 'panels'
                 : 'results'
         }/${deleteTarget.id}`;
-      const res = await api.delete(path);
+      const confirmText = deleteTarget.type === 'all-results'
+        ? 'DELETE ARCHIVE'
+        : deleteTarget.type === 'section'
+          ? `DELETE BLOCK ${deleteTarget.id}`
+          : deleteTarget.type === 'group'
+            ? `DELETE GROUP ${deleteTarget.id}`
+            : deleteTarget.type === 'panel'
+              ? `DELETE PANEL ${deleteTarget.id}`
+              : `DELETE RESULT ${deleteTarget.id}`;
+      const res = await api.delete(path, { data: { confirmText } });
       notify(res.data.message, { type: 'success' });
       setDeleteTarget(null);
       await load();

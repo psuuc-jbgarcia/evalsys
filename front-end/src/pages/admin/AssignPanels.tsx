@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import api from '../../services/api';
 import { notify } from '../../utils/notify';
 import { useAuth } from '../../context/useAuth';
+import { useOperationalScope } from '../../hooks/useOperationalScope';
 
 interface OwnerRef { _id: string; name: string; email: string; }
 interface PanelUser {
@@ -13,9 +14,6 @@ interface PanelUser {
   createdBy?: string | OwnerRef | null;
 }
 interface Section { _id: string; name: string; block: string; assignedPanels: PanelUser[] }
-const currentInstructorKey = 'evalsys_current_instructor_id';
-const currentSubjectKey = 'evalsys_current_subject_id';
-
 const getPanelOwnerLabel = (panel: PanelUser) => {
   if (!panel.createdBy) return 'No created by';
   if (typeof panel.createdBy === 'string') return 'Unknown instructor';
@@ -25,8 +23,7 @@ const getPanelOwnerLabel = (panel: PanelUser) => {
 export default function AssignPanels() {
   const { user } = useAuth();
   const isSuperadmin = user?.role === 'superadmin';
-  const currentInstructorId = localStorage.getItem(currentInstructorKey) || '';
-  const currentSubjectId = localStorage.getItem(currentSubjectKey) || '';
+  const { instructorId: currentInstructorId, subjectId: currentSubjectId, version: scopeVersion } = useOperationalScope();
   const [panels, setPanels] = useState<PanelUser[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
   const [selectedPanel, setSelectedPanel] = useState<PanelUser | null>(null);
@@ -50,8 +47,11 @@ export default function AssignPanels() {
   };
 
   useEffect(() => {
+    setSelectedPanel(null);
+    setCheckedBlocks([]);
+    setSuccessMsg('');
     loadData();
-  }, []);
+  }, [scopeVersion]);
 
   const selectPanel = (panel: PanelUser) => {
     setSelectedPanel(panel);

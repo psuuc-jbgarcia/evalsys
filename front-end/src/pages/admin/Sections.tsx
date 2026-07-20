@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import api from '../../services/api';
 import { TableSkeleton } from '../../components/LoadingSkeleton';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
+import { useOperationalScope } from '../../hooks/useOperationalScope';
 
 interface Section { _id: string; name: string; block: string; }
 
@@ -13,6 +14,7 @@ export default function Sections() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const { confirm, ConfirmDialog } = useConfirmDialog();
+  const { version: scopeVersion } = useOperationalScope();
 
   const load = () => {
     setLoading(true);
@@ -20,7 +22,7 @@ export default function Sections() {
       .then((r) => setSections(r.data))
       .finally(() => setLoading(false));
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [scopeVersion]);
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
