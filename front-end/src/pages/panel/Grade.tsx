@@ -30,7 +30,24 @@ const groupStatusCacheKey = (panelId: string) => `grading_group_status_${panelId
 const hasScoreValues = (scores: Record<string, number | ''>) =>
   Object.values(scores).some((value) => value !== '' && value !== null && value !== undefined);
 
-const getRefId = (value: any) => value?._id || value || '';
+interface ExistingEvaluation {
+  _id: string;
+  group: string;
+  panel: string;
+  rubric?: Rubric | string;
+  scores: Record<string, number>;
+  total?: number;
+  comments?: string;
+  isSubmitted?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+const getRefId = (value: { _id?: string } | string | null | undefined): string => {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  return value._id || '';
+};
 const getSubjectLabel = (section?: Section | null) => {
   const subject = section?.subject;
   if (!subject || typeof subject === 'string') return 'Subject not linked';
@@ -64,7 +81,7 @@ export default function Grade() {
 
   const [scores, setScores] = useState<Record<string, number | ''>>({});
   const [comments, setComments] = useState('');
-  const [existing, setExisting] = useState<any>(null);
+  const [existing, setExisting] = useState<ExistingEvaluation | null>(null);
 
   const [loadingRubrics, setLoadingRubrics] = useState(false);
   const [success, setSuccess] = useState('');

@@ -580,16 +580,16 @@ function MemberRowsEditor({
 }
 
 function EditModal({ group, form, setForm, memberRows, setMemberRows, onAddMember, onRemoveMember, sections, onSave, onCancel }: { 
-  group: Group, 
-  form: any, 
-  setForm: any, 
-  memberRows: MemberFormRow[],
-  setMemberRows: React.Dispatch<React.SetStateAction<MemberFormRow[]>>,
-  onAddMember: () => void,
-  onRemoveMember: (index: number) => void,
-  sections: Section[], 
-  onSave: (e: React.FormEvent) => void, 
-  onCancel: () => void 
+  group: Group;
+  form: { name: string; section: string };
+  setForm: React.Dispatch<React.SetStateAction<{ name: string; section: string }>>;
+  memberRows: MemberFormRow[];
+  setMemberRows: React.Dispatch<React.SetStateAction<MemberFormRow[]>>;
+  onAddMember: () => void;
+  onRemoveMember: (index: number) => void;
+  sections: Section[];
+  onSave: (e: React.FormEvent) => void;
+  onCancel: () => void;
 }) {
   return (
     <div className="fixed inset-0 bg-dark/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">

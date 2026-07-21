@@ -38,8 +38,10 @@ const protect = async (req, res, next) => {
     ].includes(req.originalUrl.split('?')[0]);
 
     if (user.role !== 'superadmin' && !passwordChangeAllowed) {
-      const settings = await Settings.findOne().select('isMaintenanceMode maintenanceMessage');
-    if (settings?.isMaintenanceMode) {
+      const settings = await Settings.findOne().select('isMaintenanceMode maintenanceStartsAt maintenanceMessage');
+      const scheduledMaintenanceStarted = settings?.maintenanceStartsAt
+        && settings.maintenanceStartsAt.getTime() <= Date.now();
+      if (settings?.isMaintenanceMode || scheduledMaintenanceStarted) {
         await recordAuditLog(req, {
           action: 'security.maintenance.access_attempt',
           status: 'failed',

@@ -3,6 +3,7 @@ const Group = require('../models/Group');
 const Section = require('../models/Section');
 const Rubric = require('../models/Rubric');
 const Admin = require('../models/Admin');
+const Subject = require('../models/Subject');
 const RegistrationLink = require('../models/RegistrationLink');
 const { recordAuditLog } = require('../services/audit.service');
 
@@ -62,6 +63,11 @@ const mergeCriteria = (...criteriaLists) => {
   });
 
   return Array.from(criteriaByKey.values());
+};
+
+const requireConfirmation = (req, expected, message = 'Invalid confirmation text') => {
+  const actual = String(req.body?.confirmText || '').trim();
+  return actual === expected ? null : { message, expected };
 };
 
 const archiveSubjectEvaluations = async (groupIds, instructor) => {
@@ -454,71 +460,117 @@ exports.getSectionResults = async (req, res) => {
 exports.exportAllResults = async (req, res) => {
   const subject = getSubjectId(req);
   if (subject && !canAccessSubject(req, subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
-  const sectionFilter = subject
-    ? { subject, createdBy: getOwnerId(req) }
+
+  const ownerId = getOwnerId(req);
+
+  const sectionMatch = subject
+    ? { subject: new (require('mongoose').Types.ObjectId)(subject), createdBy: ownerId }
     : req.user.role === 'admin'
       ? { subject: { $in: req.user.assignedSubjects || [] }, createdBy: req.user._id }
       : {};
-  const sections = await Section.find(sectionFilter);
-  const allResults = [];
 
-  for (const section of sections) {
-    const groups = await Group.find({ section: section._id, createdBy: getOwnerId(req) })
-      .populate({ path: 'section', populate: { path: 'assignedPanels', select: 'name email' } })
-      .populate('assignedPanels', 'name email');
+  // Single aggregation pipeline: sections → groups → evaluations
+  const rows = await Section.aggregate([
+    { $match: sectionMatch },
+    {
+      $lookup: {
+        from: 'groups',
+        let: { sectionId: '$_id', ownerId: '$createdBy' },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ['$section', '$$sectionId'] },
+                  { $eq: ['$createdBy', '$$ownerId'] },
+                ],
+              },
+            },
+          },
+          {
+            $lookup: {
+              from: 'evaluations',
+              let: { groupId: '$_id' },
+              pipeline: [
+                {
+                  $match: {
+                    $expr: { $eq: ['$group', '$$groupId'] },
+                    isSubmitted: true,
+                    isLegacyArchived: { $ne: true },
+                  },
+                },
+                {
+                  $lookup: {
+                    from: 'panel_acc',
+                    localField: 'panel',
+                    foreignField: '_id',
+                    as: 'panelDoc',
+                    pipeline: [{ $project: { name: 1 } }],
+                  },
+                },
+                { $unwind: { path: '$panelDoc', preserveNullAndEmptyArrays: true } },
+              ],
+              as: 'evaluations',
+            },
+          },
+        ],
+        as: 'groups',
+      },
+    },
+    { $unwind: '$groups' },
+    { $match: { 'groups.evaluations.0': { $exists: true } } },
+    {
+      $lookup: {
+        from: 'panel_acc',
+        localField: 'assignedPanels',
+        foreignField: '_id',
+        as: 'assignedPanelDocs',
+        pipeline: [{ $project: { name: 1 } }],
+      },
+    },
+  ]);
 
-    for (const group of groups) {
-      const evaluations = await Evaluation.find({
-        group: group._id,
-        isSubmitted: true,
-        isLegacyArchived: { $ne: true },
-      }).populate('panel', 'name');
-      
-      if (evaluations.length === 0) continue;
+  const allResults = rows.map((row) => {
+    const group = row.groups;
+    const evaluations = group.evaluations || [];
+    const assignedPanelDocs = row.assignedPanelDocs || group.assignedPanels || [];
+    const divisor = Math.max(assignedPanelDocs.length, evaluations.length, 1);
 
-      let assignedPanelDocs = [];
-      if (group.section?.assignedPanels?.length) {
-        assignedPanelDocs = group.section.assignedPanels;
-      } else if (group.assignedPanels?.length) {
-        assignedPanelDocs = group.assignedPanels;
+    const evaluatedPanelIds = evaluations.map((ev) => (ev.panelDoc?._id || ev.panel)?.toString() || '');
+    const missingPanels = assignedPanelDocs
+      .filter((p) => p && !evaluatedPanelIds.includes(p._id.toString()))
+      .map((p) => p.name || 'Unknown');
+    const isIncomplete = missingPanels.length > 0;
+
+    let totalScore = 0;
+    evaluations.forEach((ev) => {
+      if (typeof ev.total === 'number') {
+        totalScore += ev.total;
+        return;
       }
+      const scores = ev.scores instanceof Map ? Object.fromEntries(ev.scores) : ev.scores || {};
+      totalScore += Object.values(scores).reduce((a, b) => a + Number(b || 0), 0);
+    });
 
-      const divisor = Math.max(assignedPanelDocs.length, evaluations.length, 1);
-      const evaluatedPanelIds = evaluations.map(ev => ev.panel?._id?.toString() || '');
-      const missingPanels = assignedPanelDocs
-        .filter(panel => panel && !evaluatedPanelIds.includes(panel._id.toString()))
-        .map(panel => panel.name || 'Unknown');
-      const isIncomplete = missingPanels.length > 0;
+    const avgScore = Math.round((totalScore / divisor) * 100) / 100;
+    const panelNames = evaluations.map((ev) => ev.panelDoc?.name || ev.legacySnapshot?.panelName || 'Deleted panel');
 
-      let totalScore = 0;
-      evaluations.forEach(ev => {
-        if (typeof ev.total === 'number') {
-          totalScore += ev.total;
-          return;
-        }
-        const scores = ev.scores instanceof Map ? Object.fromEntries(ev.scores) : ev.scores || {};
-        totalScore += Object.values(scores).reduce((a, b) => a + Number(b || 0), 0);
-      });
-
-      const avgScore = Math.round((totalScore / divisor) * 100) / 100;
-
-      allResults.push({
-        Section: section.block,
-        GroupName: group.name,
-        Members: formatMemberList(group.members),
-        AverageScore: isIncomplete ? 'Pending Complete Evaluation' : avgScore,
-        EvaluatedBy: evaluations.map(getPanelName).join(', '),
-        MissingPanels: missingPanels.join(', '),
-        Status: isIncomplete ? 'Incomplete' : 'Complete',
-        Comments: evaluations.map(ev => ev.comments).filter(Boolean).join(' | ')
-      });
-    }
-  }
+    return {
+      Section: row.block,
+      GroupName: group.name,
+      Members: formatMemberList(group.members),
+      AverageScore: isIncomplete ? 'Pending Complete Evaluation' : avgScore,
+      EvaluatedBy: panelNames.join(', '),
+      MissingPanels: missingPanels.join(', '),
+      Status: isIncomplete ? 'Incomplete' : 'Complete',
+      Comments: evaluations.map((ev) => ev.comments).filter(Boolean).join(' | '),
+    };
+  });
 
   await recordAuditLog(req, {
     action: 'results.export',
     entity: { type: 'results', name: subject ? 'subject' : 'all' },
-    instructor: getOwnerId(req),
+    instructor: ownerId,
     subject,
     metadata: { rows: allResults.length },
   });
@@ -528,17 +580,16 @@ exports.exportAllResults = async (req, res) => {
 
 // Admin: Master Reset - Wipe all event data
 exports.masterReset = async (req, res) => {
-  const { confirmText } = req.body;
-  if (confirmText !== 'RESET') {
-    return res.status(400).json({ message: 'Invalid confirmation text' });
-  }
-
   try {
     const subject = getSubjectId(req);
     if (subject) {
       if (!canAccessSubject(req, subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
       const ownerId = getOwnerId(req);
       if (!ownerId) return res.status(400).json({ message: 'Instructor owner is required for subject reset' });
+      const subjectDoc = await Subject.findById(subject).select('code title');
+      if (!subjectDoc) return res.status(404).json({ message: 'Subject not found' });
+      const confirmationError = requireConfirmation(req, `RESET ${subjectDoc.code}`);
+      if (confirmationError) return res.status(400).json(confirmationError);
       const sections = await Section.find({ subject, createdBy: ownerId }).select('_id');
       const sectionIds = sections.map((section) => section._id);
       const groups = await Group.find({ section: { $in: sectionIds }, createdBy: ownerId }).select('_id');
@@ -556,6 +607,9 @@ exports.masterReset = async (req, res) => {
         instructor: ownerId,
         subject,
         metadata: {
+          confirmation: `RESET ${subjectDoc.code}`,
+          subjectCode: subjectDoc.code,
+          subjectTitle: subjectDoc.title,
           deletedBlocks: sectionIds.length,
           deletedGroups: groupIds.length,
           archivedResults,
@@ -569,23 +623,34 @@ exports.masterReset = async (req, res) => {
         deletedGroups: groupIds.length,
         archivedResults,
       });
-    } else {
-      if (req.user.role !== 'superadmin') return res.status(403).json({ message: 'Global reset requires super admin access' });
-      await Evaluation.deleteMany({});
-      await Group.deleteMany({});
-      await Section.deleteMany({});
     }
-    // We keep Users (Admins/Panels) and Rubrics (usually reused)
-    // But we could also delete Rubrics if preferred. 
-    // Let's stick to event data: Evaluations, Groups, Sections.
-    
-    await recordAuditLog(req, {
-      action: subject ? 'subject.reset' : 'global.reset',
-      instructor: subject ? getOwnerId(req) : undefined,
-      subject,
-    });
 
-    res.json({ message: 'System has been master reset successfully.' });
+    if (req.user.role !== 'superadmin') return res.status(403).json({ message: 'Global reset requires super admin access' });
+    const confirmationError = requireConfirmation(req, 'RESET GLOBAL');
+    if (confirmationError) return res.status(400).json(confirmationError);
+    const [evaluationsCount, groupsCount, sectionsCount] = await Promise.all([
+      Evaluation.countDocuments({}),
+      Group.countDocuments({}),
+      Section.countDocuments({}),
+    ]);
+    await Evaluation.deleteMany({});
+    await Group.deleteMany({});
+    await Section.deleteMany({});
+    await recordAuditLog(req, {
+      action: 'global.reset',
+      metadata: {
+        confirmation: 'RESET GLOBAL',
+        deletedEvaluations: evaluationsCount,
+        deletedGroups: groupsCount,
+        deletedBlocks: sectionsCount,
+      },
+    });
+    return res.json({
+      message: 'System has been master reset successfully.',
+      deletedEvaluations: evaluationsCount,
+      deletedGroups: groupsCount,
+      deletedBlocks: sectionsCount,
+    });
   } catch (err) {
     res.status(500).json({ message: 'Reset failed', error: err.message });
   }

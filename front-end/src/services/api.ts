@@ -30,7 +30,9 @@ api.interceptors.response.use(
     }
     if (err.response?.status === 401 && !err.config.url?.includes('/auth/login')) {
       localStorage.removeItem('token');
-      window.location.href = '/login';
+      // Dispatch an event so the app can handle navigation via React Router
+      // instead of a hard browser redirect that bypasses router state.
+      window.dispatchEvent(new CustomEvent('evalsys:unauthorized'));
     }
     return Promise.reject(err);
   }

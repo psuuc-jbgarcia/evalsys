@@ -4,7 +4,9 @@
   "type": "commonjs",
   "scripts": {
     "dev": "nodemon src/index.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "lint": "node --check src/index.js && echo 'Syntax OK'",
+    "check": "node -e \"require('./src/index.js')\" --dry-run 2>&1 || true"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.107.0",

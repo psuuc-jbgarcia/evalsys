@@ -182,8 +182,10 @@ exports.login = async (req, res) => {
     return res.status(403).json({ message: 'Account is deactivated' });
   }
 
-  const settings = await Settings.findOne().select('isMaintenanceMode maintenanceMessage');
-  if (settings?.isMaintenanceMode && user.role !== 'superadmin') {
+  const settings = await Settings.findOne().select('isMaintenanceMode maintenanceStartsAt maintenanceMessage');
+  const scheduledMaintenanceStarted = settings?.maintenanceStartsAt
+    && settings.maintenanceStartsAt.getTime() <= Date.now();
+  if ((settings?.isMaintenanceMode || scheduledMaintenanceStarted) && user.role !== 'superadmin') {
     await recordAuditLog(req, {
       action: 'login.failed',
       status: 'failed',

@@ -5,6 +5,7 @@ const Group = require('../models/Group');
 const Evaluation = require('../models/Evaluation');
 const Rubric = require('../models/Rubric');
 const RegistrationLink = require('../models/RegistrationLink');
+const { recordAuditLog } = require('../services/audit.service');
 const { getPagination, paginatedPayload } = require('../utils/pagination');
 
 const isSuperadmin = (user) => user?.role === 'superadmin';
@@ -12,6 +13,11 @@ const isAssignedToSubject = (user, subjectId) => (
   isSuperadmin(user) ||
   (user?.assignedSubjects || []).some((id) => id.toString() === subjectId.toString())
 );
+
+const requireConfirmation = (req, expected, message = 'Invalid confirmation text') => {
+  const actual = String(req.body?.confirmText || '').trim();
+  return actual === expected ? null : { message, expected };
+};
 
 const archiveSubjectEvaluations = async (groupIds, subject) => {
   const evaluations = await Evaluation.find({
@@ -180,6 +186,8 @@ exports.deleteSubject = async (req, res) => {
   try {
     const subject = await Subject.findById(req.params.id);
     if (!subject) return res.status(404).json({ message: 'Subject not found' });
+    const confirmationError = requireConfirmation(req, `DELETE ${subject.code}`);
+    if (confirmationError) return res.status(400).json(confirmationError);
 
     // 1. Find all sections belonging to this subject
     const sections = await Section.find({ subject: subject._id }).select('_id');
@@ -212,6 +220,22 @@ exports.deleteSubject = async (req, res) => {
 
     // 9. Delete the subject itself
     await Subject.findByIdAndDelete(subject._id);
+
+    await recordAuditLog(req, {
+      action: 'subject.delete',
+      entity: { type: 'subject', id: subject._id, name: `${subject.code} - ${subject.title}` },
+      subject: subject._id,
+      metadata: {
+        confirmation: `DELETE ${subject.code}`,
+        subjectCode: subject.code,
+        subjectTitle: subject.title,
+        deletedBlocks: sectionIds.length,
+        deletedGroups: groupIds.length,
+        archivedResults,
+        deletedRubrics: 'all for subject',
+        deletedRegistrationLinks: 'all for subject',
+      },
+    });
 
     res.json({
       message: `Subject "${subject.code} - ${subject.title}" deleted. Submitted results were moved to Archive.`,

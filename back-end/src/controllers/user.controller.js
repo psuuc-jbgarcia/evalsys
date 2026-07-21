@@ -5,6 +5,7 @@ const Group = require('../models/Group');
 const Section = require('../models/Section');
 const { recordAuditLog } = require('../services/audit.service');
 const { getPagination, paginatedPayload } = require('../utils/pagination');
+const { validateBody, userCreateSchema, subjectLimitSchema, gradingLockSchema } = require('../utils/validate');
 
 const canManageUser = (req, user) => {
   if (req.user.role === 'superadmin') return true;
@@ -112,6 +113,8 @@ const normalizeLegacyAccountEmails = async (accounts = []) => {
 // Admin: create panel account
 exports.createUser = async (req, res) => {
   const { name, email, password, role, assignedSubjects = [], subjectLimit, createdBy } = req.body;
+  const schemaError = validateBody(req.body, userCreateSchema);
+  if (schemaError) return res.status(400).json({ message: schemaError });
   const normalizedEmail = normalizeEvalsysEmail(email);
   if (!name || !normalizedEmail || !password || !role)
     return res.status(400).json({ message: 'All fields required' });
@@ -357,10 +360,9 @@ exports.updateSubjectLimit = async (req, res) => {
     return res.status(403).json({ message: 'Only super admin can update instructor subject limits' });
   }
 
+  const schemaError = validateBody(req.body, subjectLimitSchema);
+  if (schemaError) return res.status(400).json({ message: schemaError });
   const val = parseInt(req.body.subjectLimit, 10);
-  if (!val || val < 1) {
-    return res.status(400).json({ message: 'subjectLimit must be at least 1' });
-  }
 
   const instructor = await Admin.findOne({ _id: req.params.id, role: 'admin' }).select('-password');
   if (!instructor) return res.status(404).json({ message: 'Instructor not found' });
@@ -404,12 +406,8 @@ exports.updateGradingLock = async (req, res) => {
     return res.status(403).json({ message: 'Admin access required' });
   }
 
-  if (typeof req.body.gradingLocked !== 'boolean') {
-    return res.status(400).json({ message: 'gradingLocked must be true or false' });
-  }
-  if (!req.body.subject) {
-    return res.status(400).json({ message: 'subject is required for instructor grading lock' });
-  }
+  const schemaError = validateBody(req.body, gradingLockSchema);
+  if (schemaError) return res.status(400).json({ message: schemaError });
 
   if (req.user.role !== 'superadmin' && req.params.id !== req.user._id.toString()) {
     return res.status(403).json({ message: 'You can only update grading access for your own subjects' });

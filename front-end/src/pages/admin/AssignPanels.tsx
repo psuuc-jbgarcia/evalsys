@@ -33,7 +33,7 @@ export default function AssignPanels() {
 
   const loadData = async () => {
     const pRes = await api.get('/users');
-    setPanels(pRes.data.filter((u: any) => u.role === 'panel' && u.isActive));
+    setPanels(pRes.data.filter((u: PanelUser) => u.role === 'panel' && u.isActive));
 
     if (isSuperadmin && !currentSubjectId) {
       setSections([]);

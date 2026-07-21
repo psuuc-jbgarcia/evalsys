@@ -5,6 +5,7 @@ const Group = require('../models/Group');
 const Evaluation = require('../models/Evaluation');
 const RegistrationLink = require('../models/RegistrationLink');
 const { getPagination, paginatedPayload } = require('../utils/pagination');
+const { validateBody, sectionSchema } = require('../utils/validate');
 
 const getSubjectId = (req) => req.headers['x-subject-id'] || req.query.subject || req.body.subject;
 const getOwnerId = (req) => req.user?.role === 'superadmin'
@@ -97,7 +98,8 @@ const validatePanelAssignments = async (req, panelIds = [], subject) => {
 exports.createSection = async (req, res) => {
   const { name, block, assignedPanels } = req.body;
   const subject = getSubjectId(req);
-  if (!name || !block) return res.status(400).json({ message: 'Name and block required' });
+  const schemaError = validateBody(req.body, sectionSchema);
+  if (schemaError) return res.status(400).json({ message: schemaError });
   if (!subject) return res.status(400).json({ message: 'Subject required' });
   if (!canAccessSubject(req, subject)) return res.status(403).json({ message: 'You are not assigned to this subject' });
   const assignmentError = await validatePanelAssignments(req, assignedPanels, subject);

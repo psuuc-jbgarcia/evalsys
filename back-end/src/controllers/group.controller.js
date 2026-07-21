@@ -8,6 +8,7 @@ const {
   isProposalPathForGroup,
 } = require('../services/proposalStorage.service');
 const { getPagination, paginatedPayload } = require('../utils/pagination');
+const { validateBody, groupSchema } = require('../utils/validate');
 
 const getSubjectId = (req) => req.headers['x-subject-id'] || req.query.subject || req.body.subject;
 const getOwnerId = (req) => req.user?.role === 'superadmin'
@@ -115,7 +116,8 @@ const validatePanelAssignments = async (req, panelIds = [], subject) => {
 
 exports.createGroup = async (req, res) => {
   const { name, section, members, assignedPanels } = req.body;
-  if (!name || !section) return res.status(400).json({ message: 'Name and section required' });
+  const schemaError = validateBody(req.body, groupSchema);
+  if (schemaError) return res.status(400).json({ message: schemaError });
   const sectionDoc = await Section.findById(section);
   if (!sectionDoc) return res.status(404).json({ message: 'Section not found' });
   const selectedSubject = getSubjectId(req);

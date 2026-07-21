@@ -4,6 +4,7 @@ const Group = require('../models/Group');
 const Panel = require('../models/Panel');
 const RegistrationLink = require('../models/RegistrationLink');
 const Section = require('../models/Section');
+const { recordAuditLog } = require('../services/audit.service');
 
 const archiveEvaluations = async (filter, fallback = {}) => {
   const evaluations = await Evaluation.find({
@@ -44,6 +45,11 @@ const archiveEvaluations = async (filter, fallback = {}) => {
   }
 
   return evaluations.length;
+};
+
+const requireConfirmation = (req, expected, message = 'Invalid confirmation text') => {
+  const actual = String(req.body?.confirmText || '').trim();
+  return actual === expected ? null : { message, expected };
 };
 
 const getLegacyFilter = async () => {
@@ -132,12 +138,19 @@ exports.deleteLegacyGroup = async (req, res) => {
   const { filter: legacyFilter } = await getLegacyFilter();
   const group = await Group.findOne({ _id: req.params.id, ...legacyFilter });
   if (!group) return res.status(404).json({ message: 'Old group not found' });
+  const confirmationError = requireConfirmation(req, `DELETE GROUP ${group._id}`);
+  if (confirmationError) return res.status(400).json(confirmationError);
 
   const preservedResults = await archiveEvaluations({ group: group._id }, {
     groupName: group.name,
     members: group.members,
   });
   await group.deleteOne();
+  await recordAuditLog(req, {
+    action: 'legacy.group.delete',
+    entity: { type: 'group', id: group._id, name: group.name },
+    metadata: { confirmation: `DELETE GROUP ${group._id}`, preservedResults },
+  });
   res.json({
     message: 'Old group deleted. Its results remain in Archive.',
     preservedResults,
@@ -148,6 +161,8 @@ exports.deleteLegacySection = async (req, res) => {
   const { filter: legacyFilter } = await getLegacyFilter();
   const section = await Section.findOne({ _id: req.params.id, ...legacyFilter });
   if (!section) return res.status(404).json({ message: 'Old block not found' });
+  const confirmationError = requireConfirmation(req, `DELETE BLOCK ${section._id}`);
+  if (confirmationError) return res.status(400).json(confirmationError);
 
   const groups = await Group.find({ section: section._id }).select('_id');
   const groupIds = groups.map((group) => group._id);
@@ -163,6 +178,16 @@ exports.deleteLegacySection = async (req, res) => {
   );
   await section.deleteOne();
 
+  await recordAuditLog(req, {
+    action: 'legacy.section.delete',
+    entity: { type: 'section', id: section._id, name: section.block || section.name },
+    metadata: {
+      confirmation: `DELETE BLOCK ${section._id}`,
+      deletedGroups: groupIds.length,
+      preservedResults,
+    },
+  });
+
   res.json({
     message: 'Old block and groups deleted. Their results remain in Archive.',
     deletedGroups: groupIds.length,
@@ -173,6 +198,8 @@ exports.deleteLegacySection = async (req, res) => {
 exports.deleteLegacyPanel = async (req, res) => {
   const panel = await Panel.findById(req.params.id).select('name email createdBy');
   if (!panel) return res.status(404).json({ message: 'Old panel account not found' });
+  const confirmationError = requireConfirmation(req, `DELETE PANEL ${panel._id}`);
+  if (confirmationError) return res.status(400).json(confirmationError);
 
   const ownerExists = panel.createdBy
     ? await Admin.exists({ _id: panel.createdBy, role: 'admin' })
@@ -195,6 +222,12 @@ exports.deleteLegacyPanel = async (req, res) => {
   );
   await panel.deleteOne();
 
+  await recordAuditLog(req, {
+    action: 'legacy.panel.delete',
+    entity: { type: 'panel', id: panel._id, name: panel.name },
+    metadata: { confirmation: `DELETE PANEL ${panel._id}`, preservedResults },
+  });
+
   res.json({
     message: 'Old panel account and assignments deleted. Its results remain in Archive.',
     preservedResults,
@@ -202,16 +235,29 @@ exports.deleteLegacyPanel = async (req, res) => {
 };
 
 exports.deleteLegacyResult = async (req, res) => {
+  const confirmationError = requireConfirmation(req, `DELETE RESULT ${req.params.id}`);
+  if (confirmationError) return res.status(400).json(confirmationError);
   const result = await Evaluation.findOneAndDelete({
     _id: req.params.id,
     isLegacyArchived: true,
   });
   if (!result) return res.status(404).json({ message: 'Old result not found' });
+  await recordAuditLog(req, {
+    action: 'legacy.result.delete',
+    entity: { type: 'evaluation', id: result._id },
+    metadata: { confirmation: `DELETE RESULT ${req.params.id}` },
+  });
   res.json({ message: 'Old result permanently deleted' });
 };
 
-exports.deleteAllLegacyResults = async (_req, res) => {
+exports.deleteAllLegacyResults = async (req, res) => {
+  const confirmationError = requireConfirmation(req, 'DELETE ARCHIVE');
+  if (confirmationError) return res.status(400).json(confirmationError);
   const deleted = await Evaluation.deleteMany({ isLegacyArchived: true });
+  await recordAuditLog(req, {
+    action: 'legacy.results.delete_all',
+    metadata: { confirmation: 'DELETE ARCHIVE', deletedResults: deleted.deletedCount },
+  });
   res.json({
     message: `${deleted.deletedCount} old result${deleted.deletedCount === 1 ? '' : 's'} permanently deleted`,
     deletedResults: deleted.deletedCount,

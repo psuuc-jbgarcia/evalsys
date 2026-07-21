@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
@@ -28,6 +29,18 @@ import ChangePassword from './pages/ChangePassword';
 import AccountSecurity from './pages/AccountSecurity';
 import ProposalViewer from './pages/ProposalViewer';
 
+// Handles router-aware redirect when the API interceptor fires evalsys:unauthorized.
+// Must live inside BrowserRouter so useNavigate is available.
+function AuthGuard() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    const handleUnauthorized = () => navigate('/login', { replace: true });
+    window.addEventListener('evalsys:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('evalsys:unauthorized', handleUnauthorized);
+  }, [navigate]);
+  return null;
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -36,6 +49,7 @@ export default function App() {
       <InstallAppNotice />
       <SystemNotice />
       <BrowserRouter>
+        <AuthGuard />
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
